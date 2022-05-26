@@ -1,5 +1,3 @@
-#![cfg_attr(feature = "has_specialization", feature(specialization))]
-
 mod ptr;
 pub use ptr::*;
 mod token;
