@@ -54,14 +54,14 @@ impl StdError for Error {
 #[derive(Clone)]
 pub struct UnresolvableError {
     pub unresolved: JsonPointer,
-    pub terminated_at: serde_json::Value,
+    // pub terminated_at: serde_json::Value,
 }
 
 impl Debug for UnresolvableError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("UnresolvableError")
             .field("unresolved", &self.unresolved)
-            .field("terminated_at", &self.terminated_at)
+            // .field("terminated_at", &self.terminated_at)
             .finish()
     }
 }
