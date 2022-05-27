@@ -49,7 +49,7 @@ fn resolve_ptr_mut<'a>(
 
     match cur_val {
         Value::Null => {
-            cur_ptr.push_back(token.clone());
+            cur_ptr.push_back(token);
             ControlFlow::Break(Ok((cur_val, cur_ptr)))
         }
 
@@ -58,22 +58,28 @@ fn resolve_ptr_mut<'a>(
                 unresolved: cur_ptr.clone(),
             })))
         }
-        Value::Array(arr) => {
-            let idx = match token.as_index(arr.len(), None) {
-                Ok(idx) if idx < arr.len() => idx,
+        Value::Array(_) => {
+            let idx = match token.as_index(cur_val.as_array_mut().unwrap().len(), None) {
+                Ok(idx) if idx < cur_val.as_array_mut().unwrap().len() => idx,
                 Ok(_) => {
-                    cur_ptr.push_back(token.clone());
+                    cur_ptr.push_back(token);
                     return ControlFlow::Break(Ok((cur_val, cur_ptr)));
                 }
                 Err(e) => return ControlFlow::Break(Err(Error::from(e))),
             };
-            cur_ptr.push_back(token.clone());
-            ControlFlow::Continue(Ok((arr.get_mut(idx).unwrap(), cur_ptr)))
+            cur_ptr.push_back(token);
+            ControlFlow::Continue(Ok((
+                cur_val.as_array_mut().unwrap().get_mut(idx).unwrap(),
+                cur_ptr,
+            )))
         }
-        Value::Object(obj) => {
-            if obj.contains_key(&*token) {
+        Value::Object(_) => {
+            if cur_val.as_object_mut().unwrap().contains_key(&*token) {
                 cur_ptr.push_back(token.clone());
-                ControlFlow::Continue(Ok((obj.get_mut(&*token).unwrap(), cur_ptr)))
+                ControlFlow::Continue(Ok((
+                    cur_val.as_object_mut().unwrap().get_mut(&*token).unwrap(),
+                    cur_ptr,
+                )))
             } else {
                 ControlFlow::Break(Ok((cur_val, cur_ptr)))
             }
