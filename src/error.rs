@@ -1,4 +1,4 @@
-use crate::{JsonPointer, Token};
+use crate::{Pointer, Token};
 use std::{
     error::Error as StdError,
     fmt::{Debug, Display, Formatter},
@@ -21,7 +21,11 @@ impl From<serde_json::Error> for Error {
         Error::Serde(err)
     }
 }
-
+impl From<UnresolvableError> for Error {
+    fn from(err: UnresolvableError) -> Self {
+        Error::Unresolvable(err)
+    }
+}
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -53,7 +57,7 @@ impl StdError for Error {
 
 #[derive(Clone)]
 pub struct UnresolvableError {
-    pub unresolved: JsonPointer,
+    pub unresolved: Pointer,
     // pub terminated_at: serde_json::Value,
 }
 
@@ -69,9 +73,11 @@ impl Display for UnresolvableError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{} is not capable of being resolved due to {} being a leaf node",
+            "can not resolve \"{}\" due to \"{}\" being a leaf node",
             self.unresolved,
-            self.unresolved.front().map_or("/", |t| t.as_str())
+            self.unresolved
+                .front()
+                .map_or("/".to_string(), |t| t.to_string())
         )
     }
 }

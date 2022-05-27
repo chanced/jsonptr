@@ -137,7 +137,6 @@ impl<'de> Deserialize<'de> for Token {
         Ok(Token::new(s))
     }
 }
-
 impl Eq for Token {}
 impl Deref for Token {
     type Target = str;

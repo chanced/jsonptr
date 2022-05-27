@@ -1,20 +1,19 @@
-use crate::Token;
+use crate::{Token, MALFORMED_TOKEN_ERR};
 use std::{
     borrow::Borrow,
     cmp::Ordering,
     fmt::{Debug, Display},
     hash::{Hash, Hasher},
     ops::Deref,
+    str::Split,
 };
 
-const MALFORMED_TOKEN_ERR:&str = "the Json Pointer was empty which should never happen.\nPlease report this bug: https://github.com/chanced/jsonptr/issues/new.";
-
 #[derive(Clone)]
-pub struct JsonPointer {
+pub struct Pointer {
     inner: String,
 }
 
-impl JsonPointer {
+impl Pointer {
     pub fn new(tokens: &[impl AsRef<str>]) -> Self {
         let mut inner = String::new();
         for t in tokens.iter().map(Token::new) {
@@ -24,11 +23,11 @@ impl JsonPointer {
         if inner.is_empty() {
             inner.push('/');
         }
-        JsonPointer { inner }
+        Pointer { inner }
     }
 
     pub fn default() -> Self {
-        JsonPointer {
+        Pointer {
             inner: String::from("/"),
         }
     }
@@ -48,30 +47,18 @@ impl JsonPointer {
         self.inner.push_str(token.into().encoded());
     }
     pub fn pop_back(&mut self) -> Option<Token> {
-        let split = || {
-            let (front, back) = self.inner.rsplit_once('/').expect(MALFORMED_TOKEN_ERR);
-            (front.to_owned(), back.to_owned())
-        };
-        if self.inner == "/" {
-            return None;
-        }
-        let (rest, last) = split();
-        self.inner = rest;
-        Some(last.into())
+        self.rsplit_once().map(|(rest, last)| {
+            self.inner = rest;
+            last.into()
+        })
     }
     pub fn pop_front(&mut self) -> Option<Token> {
-        if self.inner == "/" {
-            return None;
-        }
-        let split = |s: &str| {
-            let (front, back) = s.split_once('/').expect(MALFORMED_TOKEN_ERR);
-            (front.to_owned(), back.to_owned())
-        };
-
-        let (front, rest) = split(&self.inner[1..]);
-        self.inner = "/".to_string() + &rest;
-        Some(front.into())
+        self.split_once().map(|(front, rest)| {
+            self.inner = "/".to_string() + &rest;
+            front.into()
+        })
     }
+
     /// Returns the number of tokens in the Json Pointer.
     pub fn count(&self) -> usize {
         if self.inner == "/" {
@@ -79,126 +66,159 @@ impl JsonPointer {
         }
         self.inner.matches('/').count()
     }
+
     pub fn is_empty(&self) -> bool {
-        self.len() == 0
+        self.len() == 1
     }
     pub fn is_root(&self) -> bool {
-        // self.tokens.is_empty()
-        todo!()
+        self.inner.len() == 1
     }
-    pub fn back(&self) -> Option<&Token> {
-        // self.tokens.back()
-        todo!()
+    pub fn back(&self) -> Option<Token> {
+        self.rsplit_once().map(|(_, last)| last.into())
     }
-    pub fn front(&self) -> Option<&Token> {
-        // self.tokens.front()
-        todo!()
+    pub fn front(&self) -> Option<Token> {
+        self.split_once().map(|(front, _)| front.into())
     }
-    pub fn append(&mut self, other: &mut JsonPointer) {
-        todo!()
+    pub fn append(&mut self, other: &Pointer) {
+        if !other.is_root() {
+            self.inner.push_str(other)
+        }
     }
+
     pub fn clear(&mut self) {
         self.inner = "/".to_string()
     }
+
+    pub fn tokens(&self) -> Tokens {
+        Tokens {
+            inner: self.split(),
+        }
+    }
+
+    fn split(&self) -> Split<'_, char> {
+        let mut s = self.inner.split('/');
+        // skipping the first '/'
+        s.next();
+        s
+    }
+
+    fn split_once(&self) -> Option<(String, String)> {
+        if self.is_root() {
+            None
+        } else {
+            let (front, back) = self.inner[1..].split_once('/').expect(MALFORMED_TOKEN_ERR);
+            Some((front.to_owned(), back.to_owned()))
+        }
+    }
+
+    fn rsplit_once(&self) -> Option<(String, String)> {
+        if self.is_root() {
+            None
+        } else {
+            let (front, back) = self.inner.rsplit_once('/').expect(MALFORMED_TOKEN_ERR);
+            Some((front.to_owned(), back.to_owned()))
+        }
+    }
 }
 
-impl Eq for JsonPointer {}
-impl Deref for JsonPointer {
+impl Eq for Pointer {}
+impl Deref for Pointer {
     type Target = str;
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
 
-impl AsRef<str> for JsonPointer {
+impl AsRef<str> for Pointer {
     fn as_ref(&self) -> &str {
         &self.inner
     }
 }
-impl Borrow<str> for JsonPointer {
+impl Borrow<str> for Pointer {
     fn borrow(&self) -> &str {
         &self.inner
     }
 }
-impl From<Token> for JsonPointer {
+impl From<Token> for Pointer {
     fn from(t: Token) -> Self {
-        JsonPointer::new(&[t])
+        Pointer::new(&[t])
     }
 }
 
-impl PartialEq<&str> for JsonPointer {
+impl PartialEq<&str> for Pointer {
     fn eq(&self, other: &&str) -> bool {
         &self.inner == other
     }
 }
 
-impl PartialEq<JsonPointer> for JsonPointer {
-    fn eq(&self, other: &JsonPointer) -> bool {
+impl PartialEq<Pointer> for Pointer {
+    fn eq(&self, other: &Pointer) -> bool {
         self.inner == other.inner
     }
 }
 
-impl PartialEq<JsonPointer> for str {
-    fn eq(&self, other: &JsonPointer) -> bool {
+impl PartialEq<Pointer> for str {
+    fn eq(&self, other: &Pointer) -> bool {
         self == other.inner
     }
 }
-impl PartialEq<String> for JsonPointer {
+impl PartialEq<String> for Pointer {
     fn eq(&self, other: &String) -> bool {
         &self.inner == other
     }
 }
-impl PartialOrd<&str> for JsonPointer {
+impl PartialOrd<&str> for Pointer {
     fn partial_cmp(&self, other: &&str) -> Option<Ordering> {
         PartialOrd::partial_cmp(&self.inner[..], &other[..])
     }
 }
-impl PartialOrd<String> for JsonPointer {
+impl PartialOrd<String> for Pointer {
     fn partial_cmp(&self, other: &String) -> Option<Ordering> {
         self.inner.partial_cmp(other)
     }
 }
-impl PartialOrd<JsonPointer> for JsonPointer {
-    fn partial_cmp(&self, other: &JsonPointer) -> Option<Ordering> {
+impl PartialOrd<Pointer> for Pointer {
+    fn partial_cmp(&self, other: &Pointer) -> Option<Ordering> {
         self.inner.partial_cmp(&other.inner)
     }
 }
-impl PartialEq<JsonPointer> for String {
-    fn eq(&self, other: &JsonPointer) -> bool {
+impl PartialEq<Pointer> for String {
+    fn eq(&self, other: &Pointer) -> bool {
         PartialEq::eq(&self[..], &other.inner[..])
     }
 }
 
-impl PartialOrd<JsonPointer> for String {
-    fn partial_cmp(&self, other: &JsonPointer) -> Option<Ordering> {
+impl PartialOrd<Pointer> for String {
+    fn partial_cmp(&self, other: &Pointer) -> Option<Ordering> {
         self.partial_cmp(&other.inner)
     }
 }
-impl Hash for JsonPointer {
+impl Hash for Pointer {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.inner.hash(state)
     }
 }
 
-impl Debug for JsonPointer {
+impl Debug for Pointer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.inner)
     }
 }
-impl Display for JsonPointer {
+impl Display for Pointer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.inner)
     }
 }
 
-pub struct Iter {
-    inner: std::str::Split<'static, char>,
+/// An iterator over the tokens in a Pointer.
+pub struct Tokens<'a> {
+    inner: Split<'a, char>,
 }
 
-impl Iterator for Iter {
+impl<'a> Iterator for Tokens<'a> {
     type Item = Token;
     fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next().map(|s| s.into())
+        self.inner.next().map(Into::into)
     }
 }
 
@@ -217,11 +237,11 @@ impl Iterator for Iter {
 
 #[cfg(test)]
 mod test {
-    use crate::JsonPointer;
+    use crate::Pointer;
 
     #[test]
     fn test_mutation() {
-        let mut ptr = JsonPointer::default();
+        let mut ptr = Pointer::default();
         assert_eq!(ptr, "/");
 
         assert_eq!(ptr.count(), 0);
@@ -250,12 +270,12 @@ mod test {
 
     #[test]
     fn test_formatting() {
-        assert_eq!(JsonPointer::new(&["foo", "bar"]), "/foo/bar");
+        assert_eq!(Pointer::new(&["foo", "bar"]), "/foo/bar");
         assert_eq!(
-            JsonPointer::new(&["~/foo", "~bar", "/baz"]),
+            Pointer::new(&["~/foo", "~bar", "/baz"]),
             "/~0~1foo/~0bar/~1baz"
         );
-        assert_eq!(JsonPointer::new(&["field", "", "baz"]), "/field//baz");
-        assert_eq!(JsonPointer::default(), "/");
+        assert_eq!(Pointer::new(&["field", "", "baz"]), "/field//baz");
+        assert_eq!(Pointer::default(), "/");
     }
 }

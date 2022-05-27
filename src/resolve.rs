@@ -1,20 +1,24 @@
-use crate::{Error, JsonPointer, Token, UnresolvableError};
+use crate::{Error, Pointer, Token, UnresolvableError};
 use serde_json::Value;
+use std::ops::ControlFlow;
 use std::{cell::RefCell, mem};
-
 pub trait Resolve {}
 
 fn resolve_token<'v, 't>(
     value: &'v mut Value,
     token: &'t Token,
-    ptr: &JsonPointer,
+    ptr: &Pointer,
 ) -> Result<Option<&'v mut Value>, Error> {
     match value {
         Value::Null => Ok(None),
         Value::Number(_) | Value::String(_) | Value::Bool(_) => {
-            Err(Error::Unresolvable(UnresolvableError {
-                unresolved: ptr.clone(),
-            }))
+            if ptr.is_root() {
+                Err(Error::Unresolvable(UnresolvableError {
+                    unresolved: ptr.clone(),
+                }))
+            } else {
+                Ok(Some(value))
+            }
         }
         Value::Array(arr) => {
             let idx = token.as_index(arr.len(), None)?;
@@ -33,33 +37,66 @@ fn resolve_token<'v, 't>(
         }
     }
 }
+
+fn resolve_ptr_mut<'a>(
+    acc: Result<(&'a mut Value, Pointer), Error>,
+    token: Token,
+) -> ControlFlow<
+    Result<(&'a mut serde_json::Value, Pointer), Error>,
+    Result<(&'a mut serde_json::Value, Pointer), Error>,
+> {
+    let (cur_val, mut cur_ptr) = acc.unwrap();
+
+    match cur_val {
+        Value::Null => {
+            cur_ptr.push_back(token.clone());
+            ControlFlow::Break(Ok((cur_val, cur_ptr)))
+        }
+
+        Value::Number(_) | Value::String(_) | Value::Bool(_) => {
+            ControlFlow::Break(Err(Error::Unresolvable(UnresolvableError {
+                unresolved: cur_ptr.clone(),
+            })))
+        }
+        Value::Array(arr) => {
+            let idx = match token.as_index(arr.len(), None) {
+                Ok(idx) if idx < arr.len() => idx,
+                Ok(_) => {
+                    cur_ptr.push_back(token.clone());
+                    return ControlFlow::Break(Ok((cur_val, cur_ptr)));
+                }
+                Err(e) => return ControlFlow::Break(Err(Error::from(e))),
+            };
+            cur_ptr.push_back(token.clone());
+            ControlFlow::Continue(Ok((arr.get_mut(idx).unwrap(), cur_ptr)))
+        }
+        Value::Object(obj) => {
+            if obj.contains_key(&*token) {
+                cur_ptr.push_back(token.clone());
+                ControlFlow::Continue(Ok((obj.get_mut(&*token).unwrap(), cur_ptr)))
+            } else {
+                ControlFlow::Break(Ok((cur_val, cur_ptr)))
+            }
+        }
+    }
+}
+
 /// `resolve_mut` resolves a pointer as far as possible. If it encounters an an
 /// array without the given index, an object without the given key, or a null
 /// value then the pointer is returned at the last resolved location along with
 /// the last resolved value.
 ///
-/// If a leaf node is found (`String`, `Number`, `Boolean`) then an error is
-/// returned.
+/// If a leaf node is found (`String`, `Number`, `Boolean`) and the pointer is
+/// not at the root, an error is returned.
 ///
 /// If the resolution is successful, the pointer will be empty.
-pub(crate) fn resolve_mut(
-    mut value: &mut Value,
-    mut ptr: JsonPointer,
-) -> Result<(&mut Value, JsonPointer), Error> {
-    loop {
-        if let Some(token) = ptr.pop_front() {
-            match resolve_token(value, &token, &ptr) {
-                Ok(Some(v)) => value = v,
-                Ok(None) => {
-                    ptr.push_front(token);
-                    break;
-                }
-                Err(err) => return Err(err),
-            };
-        } else {
-            break;
-        }
-    }
+pub(crate) fn resolve_mut<'v, 'p>(
+    value: &'v mut Value,
+    ptr: &'p Pointer,
+) -> Result<(&'v mut Value, Pointer), Error> {
+    let mut tokens = ptr.tokens();
+    tokens.try_fold(Ok((value, Pointer::default())), resolve_ptr_mut);
+    todo!()
 
-    Ok((value, ptr))
+    // loop {
 }
