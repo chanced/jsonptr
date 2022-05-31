@@ -4,10 +4,12 @@ use std::{
     fmt::{Debug, Display, Formatter},
     num::ParseIntError,
 };
+#[derive(Debug)]
 pub enum Error {
     IndexError(IndexError),
     Serde(serde_json::Error),
     Unresolvable(UnresolvableError),
+    OutOfBounds(OutOfBoundsError),
 }
 
 impl From<IndexError> for Error {
@@ -26,31 +28,25 @@ impl From<UnresolvableError> for Error {
         Error::Unresolvable(err)
     }
 }
+
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Error::IndexError(err) => Display::fmt(err, f),
             Error::Serde(err) => Display::fmt(err, f),
-            Error::Unresolvable(_) => todo!(),
+            Error::Unresolvable(err) => Display::fmt(err, f),
+            Error::OutOfBounds(err) => Display::fmt(err, f),
         }
     }
 }
 
-impl Debug for Error {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::IndexError(err) => f.debug_tuple("IndexError").field(err).finish(),
-            Self::Serde(err) => f.debug_tuple("Serde").field(err).finish(),
-            Self::Unresolvable(err) => f.debug_tuple("Unresolvable").field(err).finish(),
-        }
-    }
-}
 impl StdError for Error {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match self {
             Self::IndexError(err) => Some(err),
             Self::Serde(err) => Some(err),
             Error::Unresolvable(_) => None,
+            Error::OutOfBounds(_) => None,
         }
     }
 }
@@ -58,9 +54,12 @@ impl StdError for Error {
 #[derive(Clone)]
 pub struct UnresolvableError {
     pub unresolved: Pointer,
-    // pub terminated_at: serde_json::Value,
 }
-
+impl UnresolvableError {
+    pub fn new(unresolved: Pointer) -> Self {
+        Self { unresolved }
+    }
+}
 impl Debug for UnresolvableError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("UnresolvableError")
@@ -81,7 +80,7 @@ impl Display for UnresolvableError {
         )
     }
 }
-#[derive(Clone, PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum IndexError {
     Parse(ParseError<ParseIntError>),
     OutOfBounds(OutOfBoundsError),
@@ -101,7 +100,7 @@ impl Debug for IndexError {
 }
 impl std::error::Error for IndexError {}
 
-#[derive(Clone, PartialEq)]
+#[derive(PartialEq, Eq)]
 pub struct ParseError<T> {
     pub source: T,
     pub token: Token,
@@ -135,7 +134,7 @@ where
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct OutOfBoundsError {
     pub len: usize,
     pub index: usize,
@@ -148,11 +147,21 @@ impl Display for OutOfBoundsError {
         write!(f, "index {} out of bounds", self.index)
     }
 }
-impl Debug for OutOfBoundsError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("OutOfBoundsError")
-            .field("len", &self.len)
-            .field("index", &self.index)
-            .finish()
+
+/// Indicates that a Pointer was malformed.
+#[derive(Debug, PartialEq, Eq)]
+pub struct MalformedPointerError {
+    pub value: String,
+}
+impl MalformedPointerError {
+    pub fn new(value: String) -> Self {
+        MalformedPointerError { value }
     }
 }
+impl Display for MalformedPointerError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "the json pointer \"{}\" is malformed", self.value)
+    }
+}
+
+impl StdError for MalformedPointerError {}

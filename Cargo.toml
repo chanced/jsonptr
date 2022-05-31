@@ -12,3 +12,4 @@ authors = ["chance dinkins"]
 [dependencies]
 serde = "1.0"
 serde_json = "1.0"
+url = "2"

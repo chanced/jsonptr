@@ -30,18 +30,18 @@ impl Token {
             value: Value::parse(val.as_ref()),
         }
     }
-    /// Create a new token from `val`. The token should be encoded per
+    /// Create a new token from `encoded`. The token should be encoded per
     /// [RFC 6901](https://datatracker.ietf.org/doc/html/rfc6901)
-    fn from_str(val: impl AsRef<str>) -> Self {
+    pub fn from_encoded(val: impl AsRef<str>) -> Self {
         Token {
-            value: Value::from(val.as_ref()),
+            value: Value::from_encoded(val.as_ref()),
         }
     }
 
     /// Returns the decoded `&str` representation of the `Token`.
     ///
     /// ```
-    /// use grill_json_pointer::Token;
+    /// use jsonptr::Token;
     /// assert_eq!(Token::new("/foo/~bar").decoded(), "/foo/~bar");
     pub fn decoded(&self) -> &str {
         self.value.decoded()
@@ -49,7 +49,7 @@ impl Token {
     /// Returns the encoded `&str` representation of the `Token`.
     ///
     /// ```
-    /// use grill_json_pointer::Token;
+    /// use jsonptr::Token;
     /// assert_eq!(Token::new("/foo/~bar").encoded(), "~1foo~1~0bar");
     /// ```
     pub fn encoded(&self) -> &str {
@@ -80,21 +80,9 @@ impl Token {
     /// assert_eq!(Token::new("1").as_index(1, None).unwrap(), 1);
     /// assert_eq!(Token::new("2").as_index(2, Some(2)).unwrap(), 2);
     /// ```
-    pub fn as_index(&self, len: usize, max_size: Option<usize>) -> Result<usize, IndexError> {
+    pub fn as_index(&self, len: usize) -> Result<usize, IndexError> {
         if self.decoded() == "-" {
-            if let Some(max_size) = max_size {
-                if len >= max_size {
-                    Err(IndexError::OutOfBounds(OutOfBoundsError {
-                        len,
-                        index: len,
-                        token: self.clone(),
-                    }))
-                } else {
-                    Ok(len)
-                }
-            } else {
-                Ok(len)
-            }
+            Ok(len)
         } else {
             match self.decoded().parse().map_err(Into::into) {
                 Ok(idx) => {
@@ -147,12 +135,12 @@ impl Deref for Token {
 
 impl From<&str> for Token {
     fn from(s: &str) -> Self {
-        Token::from_str(s)
+        Token::new(s)
     }
 }
 impl From<String> for Token {
     fn from(value: String) -> Self {
-        Token::from_str(value)
+        Token::new(value)
     }
 }
 impl AsRef<str> for Token {
@@ -295,7 +283,7 @@ impl Value {
         }
     }
 
-    fn from(s: &str) -> Self {
+    fn from_encoded(s: &str) -> Self {
         let mut uncoded = String::with_capacity(s.len());
         let mut encoded = String::with_capacity(s.len());
 
@@ -402,9 +390,15 @@ impl Into<&str> for Escaped {
 #[cfg(test)]
 mod test {
     use super::*;
+
     #[test]
     fn test_from() {
-        assert_eq!(Token::from("/"), "/");
-        assert_eq!(Token::from("~0~1"), "~/");
+        assert_eq!(Token::from("/").encoded(), "~1");
+        assert_eq!(Token::from("~/").encoded(), "~0~1");
+    }
+    #[test]
+    fn test_from_encoded() {
+        assert_eq!(Token::from_encoded("~1").encoded(), "~1");
+        assert_eq!(Token::from_encoded("~0~1").encoded(), "~0~1");
     }
 }
