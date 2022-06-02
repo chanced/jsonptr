@@ -4,12 +4,12 @@ use std::{
     fmt::{Debug, Display, Formatter},
     num::ParseIntError,
 };
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Error {
     IndexError(IndexError),
-    Serde(serde_json::Error),
     Unresolvable(UnresolvableError),
     OutOfBounds(OutOfBoundsError),
+    NotFound(NotFoundError),
 }
 
 impl From<IndexError> for Error {
@@ -17,12 +17,16 @@ impl From<IndexError> for Error {
         Error::IndexError(err)
     }
 }
-
-impl From<serde_json::Error> for Error {
-    fn from(err: serde_json::Error) -> Self {
-        Error::Serde(err)
+impl From<NotFoundError> for Error {
+    fn from(err: NotFoundError) -> Self {
+        Error::NotFound(err)
     }
 }
+// impl From<serde_json::Error> for Error {
+//     fn from(err: serde_json::Error) -> Self {
+//         Error::Serde(err)
+//     }
+// }
 impl From<UnresolvableError> for Error {
     fn from(err: UnresolvableError) -> Self {
         Error::Unresolvable(err)
@@ -33,9 +37,9 @@ impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Error::IndexError(err) => Display::fmt(err, f),
-            Error::Serde(err) => Display::fmt(err, f),
             Error::Unresolvable(err) => Display::fmt(err, f),
             Error::OutOfBounds(err) => Display::fmt(err, f),
+            Error::NotFound(err) => Display::fmt(err, f),
         }
     }
 }
@@ -44,14 +48,14 @@ impl StdError for Error {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match self {
             Self::IndexError(err) => Some(err),
-            Self::Serde(err) => Some(err),
             Error::Unresolvable(_) => None,
             Error::OutOfBounds(_) => None,
+            Error::NotFound(_) => None,
         }
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct UnresolvableError {
     pub unresolved: Pointer,
 }
@@ -165,3 +169,22 @@ impl Display for MalformedPointerError {
 }
 
 impl StdError for MalformedPointerError {}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct NotFoundError {
+    pub pointer: Pointer,
+}
+impl NotFoundError {
+    pub fn new(pointer: Pointer) -> Self {
+        NotFoundError { pointer }
+    }
+}
+impl Display for NotFoundError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "the resource at json pointer \"{}\" was not found",
+            self.pointer
+        )
+    }
+}

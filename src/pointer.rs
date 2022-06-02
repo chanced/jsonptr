@@ -1,6 +1,7 @@
+use serde_json::Value;
 use url::Url;
 
-use crate::{MalformedPointerError, Token, Tokens};
+use crate::{Error, MalformedPointerError, Resolve, ResolveMut, Token, Tokens};
 use std::{
     borrow::Borrow,
     cmp::Ordering,
@@ -123,13 +124,22 @@ impl Pointer {
         Tokens::new(self.split())
     }
 
+    /// Attempts to resolve this `Pointer` against `value` by calling
+    /// `value.resolve`.
+    pub fn resolve<'v>(&self, value: &'v Value) -> Result<&'v Value, Error> {
+        value.resolve(self)
+    }
+
+    pub fn resolve_mut<'v>(&self, value: &'v mut Value) -> Result<&'v mut Value, Error> {
+        value.resolve_mut(self)
+    }
+
     fn split(&self) -> Split<'_, char> {
         let mut s = self.inner.split('/');
         // skipping the first '/'
         s.next();
         s
     }
-
     fn split_once(&self) -> Option<(String, String)> {
         if self.is_root() {
             None
