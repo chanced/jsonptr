@@ -10,6 +10,7 @@ pub enum Error {
     Unresolvable(UnresolvableError),
     OutOfBounds(OutOfBoundsError),
     NotFound(NotFoundError),
+    MalformedPointer(MalformedError),
 }
 
 impl From<IndexError> for Error {
@@ -40,6 +41,7 @@ impl Display for Error {
             Error::Unresolvable(err) => Display::fmt(err, f),
             Error::OutOfBounds(err) => Display::fmt(err, f),
             Error::NotFound(err) => Display::fmt(err, f),
+            Error::MalformedPointer(err) => Display::fmt(err, f),
         }
     }
 }
@@ -51,34 +53,28 @@ impl StdError for Error {
             Error::Unresolvable(_) => None,
             Error::OutOfBounds(_) => None,
             Error::NotFound(_) => None,
+            Error::MalformedPointer(_) => todo!(),
         }
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct UnresolvableError {
-    pub unresolved: Pointer,
+    pub unresolvable: Pointer,
 }
 impl UnresolvableError {
-    pub fn new(unresolved: Pointer) -> Self {
-        Self { unresolved }
+    pub fn new(unresolvable: Pointer) -> Self {
+        Self { unresolvable }
     }
 }
-impl Debug for UnresolvableError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("UnresolvableError")
-            .field("unresolved", &self.unresolved)
-            // .field("terminated_at", &self.terminated_at)
-            .finish()
-    }
-}
+
 impl Display for UnresolvableError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "can not resolve \"{}\" due to \"{}\" being a leaf node",
-            self.unresolved,
-            self.unresolved
+            self.unresolvable,
+            self.unresolvable
                 .front()
                 .map_or("/".to_string(), |t| t.to_string())
         )
@@ -154,21 +150,29 @@ impl Display for OutOfBoundsError {
 
 /// Indicates that a Pointer was malformed.
 #[derive(Debug, PartialEq, Eq)]
-pub struct MalformedPointerError {
-    pub value: String,
+pub enum MalformedError {
+    NoLeadingSlash(String),
+    InvalidEncoding(String),
 }
-impl MalformedPointerError {
-    pub fn new(value: String) -> Self {
-        MalformedPointerError { value }
-    }
-}
-impl Display for MalformedPointerError {
+
+impl Display for MalformedError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "the json pointer \"{}\" is malformed", self.value)
+        match self {
+            MalformedError::NoLeadingSlash(s) => {
+                write!(
+                    f,
+                    "json pointer \"{}\" is malformed due to missing starting slash",
+                    s
+                )
+            }
+            MalformedError::InvalidEncoding(s) => {
+                write!(f, "json pointer \"{}\" is improperly encoded", s)
+            }
+        }
     }
 }
 
-impl StdError for MalformedPointerError {}
+impl StdError for MalformedError {}
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct NotFoundError {

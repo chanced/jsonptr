@@ -103,11 +103,16 @@ impl Token {
             }
         }
     }
+    /// Returns `&String` for usage as a key for `serde_json::Map`
+    pub fn as_key(&self) -> &String {
+        self.value.as_key()
+    }
 
     pub fn as_str(&self) -> &str {
         self.value.decoded()
     }
 }
+
 impl Serialize for Token {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -282,7 +287,12 @@ impl Value {
             Value::Encoded(e) => &e.encoded,
         }
     }
-
+    fn as_key(&self) -> &String {
+        match self {
+            Value::Uncoded(u) => &u,
+            Value::Encoded(e) => &e.decoded,
+        }
+    }
     fn from_encoded(s: &str) -> Self {
         let mut uncoded = String::with_capacity(s.len());
         let mut encoded = String::with_capacity(s.len());
