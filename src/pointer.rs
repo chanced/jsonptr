@@ -1,8 +1,14 @@
+#[cfg(test)]
+mod pointer_test;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use url::Url;
 
-use crate::{Assignment, Error, MalformedError, NotFoundError, Token, Tokens, UnresolvableError};
+use crate::{
+    Assignment, Error, IndexError, MalformedError, NotFoundError, OutOfBoundsError,
+    ReplaceTokenError, Token, Tokens, UnresolvableError,
+};
 use std::{
     borrow::{Borrow, Cow},
     cmp::Ordering,
@@ -12,6 +18,13 @@ use std::{
     ops::{ControlFlow, Deref},
     str::Split,
 };
+
+/// Used internally as a response from `try_resolve`
+struct Resolved<'a> {
+    value: &'a mut Value,
+    remaining: Pointer,
+    resolved: Pointer,
+}
 
 #[derive(Clone)]
 /// A JSON Pointer is a string containing a sequence of zero or more reference
@@ -189,6 +202,33 @@ impl Pointer {
         tokens.get(index).cloned()
     }
 
+    pub fn replace_token(
+        &mut self,
+        index: usize,
+        token: Token,
+    ) -> Result<Option<Token>, ReplaceTokenError> {
+        let mut tokens = self.tokens().collect::<Vec<_>>();
+        if index > tokens.len() {
+            return Err(ReplaceTokenError {
+                count: tokens.len(),
+                index,
+                pointer: self.clone(),
+            });
+        }
+        let old = tokens.get(index).cloned();
+
+        tokens[index] = token;
+
+        self.inner = prepend(
+            &tokens
+                .iter()
+                .map(|t| t.encoded())
+                .collect::<Vec<_>>()
+                .join("/"),
+        );
+        Ok(old)
+    }
+
     /// Clears the `Pointer`, setting it to root (`"/"`).
     pub fn clear(&mut self) {
         self.inner = prepend("")
@@ -210,11 +250,17 @@ impl Pointer {
 
     /// Attempts to resolve a mutable `Value` based on the path in this `Pointer`.
     pub fn resolve_mut<'v>(&self, value: &'v mut Value) -> Result<&'v mut Value, Error> {
-        let (res, ptr, _) = self.try_resolve_mut(value)?;
-        if ptr.is_root() {
-            Ok(res)
+        let Resolved {
+            value,
+            remaining,
+            resolved,
+        } = self.try_resolve_mut(value)?;
+        if remaining.is_root() {
+            Ok(value)
         } else {
-            Err(NotFoundError::new(ptr).into())
+            dbg!(&value);
+            dbg!(&remaining);
+            Err(NotFoundError::new(remaining).into())
         }
     }
     /// Finds the commonality between this and another `Pointer`.
@@ -236,7 +282,11 @@ impl Pointer {
 
     pub fn assign<'d>(&self, dest: &'d mut Value, src: Value) -> Result<Assignment<'d>, Error> {
         match self.try_resolve_mut(dest) {
-            Ok((dest, mut remaining, mut resolved)) => {
+            Ok(Resolved {
+                value: dest,
+                mut remaining,
+                mut resolved,
+            }) => {
                 if remaining.is_root() {
                     let replaced = mem::replace(dest, src);
                     Ok(Assignment {
@@ -258,22 +308,6 @@ impl Pointer {
                         created_or_mutated: remaining,
                         assigned_to: self.clone(),
                     })
-                }
-            }
-            Err(Error::Unresolvable(err)) => {
-                if err.unresolvable.is_root() {
-                    let replaced = mem::replace(dest, src);
-                    Ok(Assignment {
-                        replaced,
-                        assigned: Cow::Borrowed(dest),
-                        created_or_mutated: self.clone(),
-                        assigned_to: self.clone(),
-                    })
-                } else {
-                    let mut ptr = err.unresolvable.clone();
-                    let last_token = ptr.pop_back();
-                    let (new_dest, _, mut resolved) = ptr.try_resolve_mut(dest).unwrap();
-                    todo!()
                 }
             }
             Err(err) => Err(err),
@@ -395,10 +429,7 @@ impl Pointer {
     /// not at the root, an error is returned.
     ///
     /// If the resolution is successful, the pointer will be empty.
-    pub(crate) fn try_resolve_mut<'v, 'p>(
-        &'p self,
-        value: &'v mut Value,
-    ) -> Result<(&'v mut Value, Pointer, Pointer), Error> {
+    fn try_resolve_mut<'v, 'p>(&'p self, value: &'v mut Value) -> Result<Resolved<'v>, Error> {
         let mut tokens = self.tokens();
         let mut resolved = Pointer::default();
         let res = tokens.try_fold((value, self.clone()), |(v, mut p), token| match v {
@@ -434,24 +465,49 @@ impl Pointer {
             }
         });
         match res {
-            ControlFlow::Continue((v, p)) => Ok((v, p, resolved)),
-            ControlFlow::Break((v, p)) => match v {
-                Value::Null | Value::Object(_) => Ok((v, p, resolved)),
-                Value::Array(_) => match p.first() {
-                    Some(i) => {
-                        let len = v.as_array().unwrap().len();
-                        let idx = i.as_index(len)?;
+            ControlFlow::Continue((v, remaining)) => Ok(Resolved {
+                value: v,
+                remaining,
+                resolved,
+            }),
+            ControlFlow::Break((value, remaining)) => match value {
+                Value::Null | Value::Object(_) => Ok(Resolved {
+                    value,
+                    remaining,
+                    resolved,
+                }),
+                Value::Array(_) => match remaining.first() {
+                    Some(token) => {
+                        let len = value.as_array().unwrap().len();
+                        let idx = token.as_index(len)?;
                         if idx <= len {
-                            Ok((v, p, resolved))
+                            Ok(Resolved {
+                                value,
+                                remaining,
+                                resolved,
+                            })
                         } else {
-                            Err(UnresolvableError::new(resolved).into())
+                            Err(OutOfBoundsError {
+                                index: idx,
+                                len,
+                                token,
+                            }
+                            .into())
                         }
                     }
-                    None => Ok((v, p, resolved)),
+                    None => Ok(Resolved {
+                        value,
+                        remaining,
+                        resolved,
+                    }),
                 },
-                Value::Bool(_) | Value::Number(_) | Value::String(_) => {
-                    Err(UnresolvableError::new(resolved).into())
-                }
+                // this should return `UnresovableError` but currently makes
+                // `assign` impossible without unsafe code.
+                Value::Bool(_) | Value::Number(_) | Value::String(_) => Ok(Resolved {
+                    value,
+                    remaining,
+                    resolved,
+                }),
             },
         }
     }
@@ -736,397 +792,4 @@ fn prepend(s: &str) -> String {
 struct Assigned<'a> {
     assigned: &'a mut Value,
     replaced: Value,
-}
-
-// ================================================================================================== //
-// ================================================================================================== //
-//                                                Tests                                               //
-// ================================================================================================== //
-// ================================================================================================== //
-
-#[cfg(test)]
-mod test {
-    use serde_json::{json, Value};
-
-    use crate::{Pointer, UnresolvableError};
-
-    #[test]
-    fn test_push_pop_back() {
-        let mut ptr = Pointer::default();
-        assert_eq!(ptr, "/", "default pointer should equal \"/\"");
-        assert_eq!(ptr.count(), 0, "default pointer should have 0 tokens");
-
-        ptr.push_back("foo".into());
-        assert_eq!(ptr, "/foo", "pointer should equal \"/foo\" after push_back");
-
-        ptr.push_back("bar".into());
-        assert_eq!(
-            ptr, "/foo/bar",
-            "pointer should equal \"/foo/bar\" after push_back"
-        );
-        ptr.push_back("/baz".into());
-        assert_eq!(
-            ptr, "/foo/bar/~1baz",
-            "pointer should equal \"/foo/bar/~1baz\" after push_back"
-        );
-    }
-
-    #[test]
-    fn test_push_pop_front() {
-        let mut ptr = Pointer::default();
-        assert_eq!(ptr, "/");
-        assert_eq!(ptr.count(), 0);
-        ptr.push_front("bar".into());
-        assert_eq!(ptr, "/bar");
-        assert_eq!(ptr.count(), 1);
-
-        ptr.push_front("foo".into());
-        assert_eq!(ptr, "/foo/bar");
-        assert_eq!(ptr.count(), 2);
-
-        ptr.push_front("too".into());
-        assert_eq!(ptr, "/too/foo/bar");
-        assert_eq!(ptr.count(), 3);
-
-        assert_eq!(ptr.pop_front(), Some("too".into()));
-        assert_eq!(ptr, "/foo/bar");
-        assert_eq!(ptr.count(), 2);
-
-        assert_eq!(ptr.pop_back(), Some("bar".into()));
-        assert_eq!(ptr, "/foo");
-        assert_eq!(ptr.count(), 1);
-
-        ptr.pop_front();
-    }
-
-    #[test]
-    fn test_formatting() {
-        assert_eq!(Pointer::new(&["foo", "bar"]), "/foo/bar");
-        assert_eq!(
-            Pointer::new(&["~/foo", "~bar", "/baz"]),
-            "/~0~1foo/~0bar/~1baz"
-        );
-        assert_eq!(Pointer::new(&["field", "", "baz"]), "/field//baz");
-        assert_eq!(Pointer::default(), "/");
-    }
-
-    #[test]
-    fn test_last() {
-        let ptr = Pointer::try_from("/foo/bar").unwrap();
-
-        assert_eq!(ptr.last(), Some("bar".into()));
-
-        let ptr = Pointer::try_from("/foo/bar/-").unwrap();
-        assert_eq!(ptr.last(), Some("-".into()));
-
-        let ptr = Pointer::try_from("/-").unwrap();
-        assert_eq!(ptr.last(), Some("-".into()));
-    }
-    #[test]
-    fn test_first() {
-        let ptr = Pointer::try_from("/foo/bar").unwrap();
-
-        assert_eq!(ptr.first(), Some("foo".into()));
-
-        let ptr = Pointer::try_from("/foo/bar/-").unwrap();
-        assert_eq!(ptr.first(), Some("foo".into()));
-
-        let ptr = Pointer::try_from("/").unwrap();
-        assert_eq!(ptr.first(), None);
-    }
-
-    fn test_data() -> serde_json::Value {
-        json!({
-            "foo": {
-                "bar": {
-                    "baz": {
-                        "qux": "quux"
-                    }
-                },
-                "strings": ["zero", "one", "two"],
-                "nothing": null,
-                "bool": true,
-                "objects": [{
-                    "field": "zero"
-                }, {
-                    "field": "one"
-                }, {
-                    "field": "two"
-                }]
-            }
-        })
-    }
-
-    #[test]
-    fn test_try_resolve_mut() {
-        let mut data = test_data();
-        let ptr = Pointer::try_from("/foo/bar/baz/qux").unwrap();
-        let (val_res, ptr_res, _) = ptr.try_resolve_mut(&mut data).unwrap();
-        assert_eq!(&ptr_res, "/");
-        assert_eq!(val_res, &mut json!("quux"));
-
-        let ptr = Pointer::try_from("/foo/bar/does_not_exist/derp").unwrap();
-        let (val_res, ptr_res, _) = ptr.try_resolve_mut(&mut data).unwrap();
-        assert_eq!(ptr_res, "/does_not_exist/derp");
-
-        assert_eq!(
-            val_res,
-            &mut json!({
-                "baz": {
-                    "qux": "quux"
-                }
-            })
-        );
-
-        let ptr = Pointer::try_from("/foo/strings/0").unwrap();
-        let (val_res, ptr_res, _) = ptr.try_resolve_mut(&mut data).unwrap();
-        assert_eq!(ptr_res, "/");
-        assert_eq!(val_res, &mut json!("zero"));
-
-        let ptr = Pointer::try_from("/foo/strings/1").unwrap();
-        let (val_res, ptr_res, _) = ptr.try_resolve_mut(&mut data).unwrap();
-        assert_eq!(ptr_res, "/");
-        assert_eq!(val_res, &mut json!("one"));
-
-        let ptr = Pointer::try_from("/foo/strings/2").unwrap();
-        let (val_res, ptr_res, _) = ptr.try_resolve_mut(&mut data).unwrap();
-        assert_eq!(ptr_res, "/");
-        assert_eq!(val_res, &mut json!("two"));
-
-        let ptr = Pointer::try_from("/foo/strings/-").unwrap();
-        let (val_res, ptr_res, _) = ptr.try_resolve_mut(&mut data).unwrap();
-        assert_eq!(ptr_res, "/-");
-        assert_eq!(val_res, &mut json!(["zero", "one", "two"]));
-
-        let ptr = Pointer::try_from("/foo/strings/0").unwrap();
-        let (val_res, ptr_res, _) = ptr.try_resolve_mut(&mut data).unwrap();
-        assert_eq!(ptr_res, "/");
-        assert_eq!(val_res, &mut json!("zero"));
-    }
-
-    #[test]
-    fn test_try_resolve_mut_overflow_error() {
-        let mut data = test_data();
-        let ptr = Pointer::try_from("/foo/strings/7").unwrap();
-        let res = ptr.try_resolve_mut(&mut data);
-        assert!(res.is_err());
-    }
-    #[test]
-    fn test_try_resolve_mut_unreachable_error() {
-        let mut data = test_data();
-        let ptr = Pointer::try_from("/foo/bool/unreachable").unwrap();
-        let res = ptr.try_resolve_mut(&mut data);
-        assert!(res.is_err());
-
-        assert_eq!(
-            res.err().unwrap(),
-            UnresolvableError::new("/foo/bool".try_into().unwrap()).into()
-        )
-    }
-    #[test]
-    fn test_try_from() {
-        let ptr = Pointer::new(&["foo", "bar", "~/"]);
-
-        assert_eq!(Pointer::try_from("/foo/bar/~0~1").unwrap(), ptr);
-        let into: Pointer = "/foo/bar/~0~1".try_into().unwrap();
-        assert_eq!(ptr, into);
-    }
-
-    #[test]
-    fn test_try_resolve() {
-        let data = test_data();
-        let ptr = Pointer::try_from("/foo/bar/baz/qux").unwrap();
-        let (val_res, ptr_res) = ptr.try_resolve(&data).unwrap();
-        assert_eq!(&ptr_res, "/");
-        assert_eq!(val_res, &mut json!("quux"));
-
-        let ptr = Pointer::try_from("/foo/bar/does_not_exist/derp").unwrap();
-        let (val_res, ptr_res) = ptr.try_resolve(&data).unwrap();
-        assert_eq!(ptr_res, "/does_not_exist/derp");
-
-        assert_eq!(
-            val_res,
-            &mut json!({
-                "baz": {
-                    "qux": "quux"
-                }
-            })
-        );
-
-        let ptr = Pointer::try_from("/foo/strings/0").unwrap();
-        let (val_res, ptr_res) = ptr.try_resolve(&data).unwrap();
-        assert_eq!(ptr_res, "/");
-        assert_eq!(val_res, &mut json!("zero"));
-
-        let ptr = Pointer::try_from("/foo/strings/1").unwrap();
-        let (val_res, ptr_res) = ptr.try_resolve(&data).unwrap();
-        assert_eq!(ptr_res, "/");
-        assert_eq!(val_res, &mut json!("one"));
-
-        let ptr = Pointer::try_from("/foo/strings/2").unwrap();
-        let (val_res, ptr_res) = ptr.try_resolve(&data).unwrap();
-        assert_eq!(ptr_res, "/");
-        assert_eq!(val_res, &mut json!("two"));
-
-        let ptr = Pointer::try_from("/foo/strings/-").unwrap();
-        let (val_res, ptr_res) = ptr.try_resolve(&data).unwrap();
-        assert_eq!(ptr_res, "/-");
-        assert_eq!(val_res, &mut json!(["zero", "one", "two"]));
-
-        let ptr = Pointer::try_from("/foo/strings/0").unwrap();
-        let (val_res, ptr_res) = ptr.try_resolve(&data).unwrap();
-        assert_eq!(ptr_res, "/");
-        assert_eq!(val_res, &mut json!("zero"));
-    }
-
-    #[test]
-    fn test_try_resolve_overflow_error() {
-        let data = test_data();
-        let ptr = Pointer::try_from("/foo/strings/7").unwrap();
-        let res = ptr.try_resolve(&data);
-        assert!(res.is_err());
-    }
-    #[test]
-    fn test_try_resolve_unreachable_error() {
-        let data = test_data();
-        let ptr = Pointer::try_from("/foo/bool/unreachable").unwrap();
-        let res = ptr.try_resolve(&data);
-        assert!(res.is_err());
-
-        assert_eq!(
-            res.err().unwrap(),
-            UnresolvableError::new("/foo/bool".try_into().unwrap()).into()
-        )
-    }
-    #[test]
-    fn test_assign() {
-        let mut data = json!({});
-        let ptr = Pointer::try_from("/foo").unwrap();
-        let val = json!("bar");
-        let assignment = ptr.assign(&mut data, val.clone()).unwrap();
-        assert_eq!(assignment.replaced, Value::Null);
-        assert_eq!(assignment.assigned.clone().into_owned(), val);
-        assert_eq!(assignment.assigned_to, "/foo");
-
-        // now testing replacement
-        let val2 = json!("baz");
-        let assignment = ptr.assign(&mut data, val2.clone()).unwrap();
-        dbg!(&assignment);
-        assert_eq!(assignment.replaced, Value::String("bar".to_string()));
-        assert_eq!(assignment.assigned.clone().into_owned(), val2);
-        assert_eq!(assignment.assigned_to, "/foo");
-    }
-    #[test]
-    fn test_assign_with_array_path() {
-        let mut data = json!({});
-        let ptr = Pointer::try_from("/foo/0/bar").unwrap();
-        let val = json!("baz");
-
-        let assignment = ptr.assign(&mut data, val).unwrap();
-        assert_eq!(assignment.replaced, Value::Null);
-        assert_eq!(assignment.assigned_to, "/foo/0/bar");
-        assert_eq!(assignment.replaced, Value::Null);
-        assert_eq!(
-            json!({
-                "foo": [
-                    {
-                        "bar": "baz"
-                    }
-                ]
-            }),
-            data.clone()
-        );
-        let mut data = json!({});
-        let ptr = Pointer::try_from("/foo/-/bar").unwrap();
-        let val = json!("baz");
-        let assignment = ptr.assign(&mut data, val).unwrap();
-        assert_eq!(assignment.replaced, Value::Null);
-        assert_eq!(assignment.assigned_to, "/foo/-/bar"); // i think this should actually be /foo/0/bar
-        assert_eq!(assignment.replaced, Value::Null);
-        assert_eq!(
-            json!({
-                "foo": [
-                    {
-                        "bar": "baz"
-                    }
-                ]
-            }),
-            data.clone()
-        );
-        let val = json!("baz2");
-        let assignment = ptr.assign(&mut data, val).unwrap();
-        assert_eq!(assignment.replaced, Value::Null);
-        assert_eq!(assignment.assigned_to, "/foo/-/bar"); // i think this should actually be /foo/0/bar
-        assert_eq!(assignment.replaced, Value::Null);
-        assert_eq!(
-            json!({
-                "foo": [
-                    {
-                        "bar": "baz"
-                    },
-                    {
-                        "bar": "baz2"
-                    }
-                ]
-            }),
-            data.clone()
-        );
-        let val = json!("qux");
-        let assignment = ptr.assign(&mut data, val).unwrap();
-        assert_eq!(assignment.replaced, Value::Null);
-        assert_eq!(assignment.assigned_to, "/foo/0/bar");
-        assert_eq!(assignment.replaced, Value::Null);
-        assert_eq!(
-            json!({
-                "foo": [
-                    {
-                        "bar": "qux"
-                    },
-                    {
-                        "bar": "baz2"
-                    }
-                ]
-            }),
-            data.clone()
-        );
-    }
-    #[test]
-    fn test_assign_with_obj_path() {
-        let mut data = json!({});
-        let ptr = Pointer::try_from("/foo/bar").unwrap();
-        let val = json!("baz");
-
-        let assignment = ptr.assign(&mut data, val).unwrap();
-        assert_eq!(assignment.assigned_to, "/foo/bar");
-        assert_eq!(assignment.replaced, Value::Null);
-        assert_eq!(
-            json!({
-                "foo": {
-                    "bar": "baz"
-                }
-            }),
-            data.clone()
-        );
-    }
-    #[test]
-    fn test_assign_with_scalar_replace() {
-        let mut data = json!({
-            "foo": "bar"
-        });
-
-        let ptr = Pointer::try_from("/foo/bar/baz").unwrap();
-        let val = json!("qux");
-
-        ptr.assign(&mut data, val).unwrap();
-        assert_eq!(
-            json!({
-                "foo": {
-                    "bar": {
-                        "baz": "qux"
-                    }
-                }
-            }),
-            data.clone()
-        );
-    }
 }

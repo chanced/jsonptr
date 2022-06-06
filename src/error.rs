@@ -1,3 +1,5 @@
+use serde_json::value::Index;
+
 use crate::{Pointer, Token};
 use std::{
     error::Error as StdError,
@@ -8,7 +10,6 @@ use std::{
 pub enum Error {
     IndexError(IndexError),
     Unresolvable(UnresolvableError),
-    OutOfBounds(OutOfBoundsError),
     NotFound(NotFoundError),
     MalformedPointer(MalformedError),
 }
@@ -23,6 +24,13 @@ impl From<NotFoundError> for Error {
         Error::NotFound(err)
     }
 }
+
+impl From<OutOfBoundsError> for Error {
+    fn from(err: OutOfBoundsError) -> Self {
+        Error::IndexError(IndexError::from(err))
+    }
+}
+
 // impl From<serde_json::Error> for Error {
 //     fn from(err: serde_json::Error) -> Self {
 //         Error::Serde(err)
@@ -39,7 +47,6 @@ impl Display for Error {
         match self {
             Error::IndexError(err) => Display::fmt(err, f),
             Error::Unresolvable(err) => Display::fmt(err, f),
-            Error::OutOfBounds(err) => Display::fmt(err, f),
             Error::NotFound(err) => Display::fmt(err, f),
             Error::MalformedPointer(err) => Display::fmt(err, f),
         }
@@ -51,7 +58,6 @@ impl StdError for Error {
         match self {
             Self::IndexError(err) => Some(err),
             Error::Unresolvable(_) => None,
-            Error::OutOfBounds(_) => None,
             Error::NotFound(_) => None,
             Error::MalformedPointer(_) => todo!(),
         }
@@ -99,6 +105,12 @@ impl Debug for IndexError {
     }
 }
 impl std::error::Error for IndexError {}
+
+impl From<OutOfBoundsError> for IndexError {
+    fn from(err: OutOfBoundsError) -> Self {
+        IndexError::OutOfBounds(err)
+    }
+}
 
 #[derive(PartialEq, Eq)]
 pub struct ParseError<T> {
@@ -189,6 +201,23 @@ impl Display for NotFoundError {
             f,
             "the resource at json pointer \"{}\" was not found",
             self.pointer
+        )
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct ReplaceTokenError {
+    pub index: usize,
+    pub count: usize,
+    pub pointer: Pointer,
+}
+impl StdError for ReplaceTokenError {}
+impl Display for ReplaceTokenError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "index {} is out of bounds ({}) for the pointer {}",
+            self.index, self.count, self.pointer
         )
     }
 }
