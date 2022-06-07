@@ -425,7 +425,6 @@ impl Pointer {
                         to,
                     } = remaining.assign_value(dest, src)?;
                     resolved.append(&to);
-                    dbg!(to);
                     Ok(Assignment {
                         replaced,
                         assigned: Cow::Borrowed(assigned),
