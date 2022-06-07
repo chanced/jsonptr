@@ -1,6 +1,6 @@
 # jsonptr - JSON Pointers for Rust
 
-[![Crate](https://img.shields.io/crates/v/jsonptr.svge)](https://crates.io/crates/jsonptr)
+[![Crate](https://img.shields.io/crates/v/jsonptr.svg)](https://crates.io/crates/jsonptr)
 [![Documentation](https://docs.rs/jsonptr/badge.svg)](https://docs.rs/jsonptr)
 
 Data structures and logic for resolving, assigning, and deleting by JSON Pointers ([RFC
