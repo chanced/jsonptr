@@ -155,7 +155,7 @@ fn test_try_resolve_mut() {
     let Resolved {
         value,
         remaining,
-        resolved,
+        resolved: _resolved,
     } = ptr.try_resolve_mut(&mut data).unwrap();
     assert_eq!(&remaining, "/");
     assert_eq!(value, &mut json!("quux"));
@@ -164,7 +164,7 @@ fn test_try_resolve_mut() {
     let Resolved {
         value,
         remaining,
-        resolved,
+        resolved: _resolved,
     } = ptr.try_resolve_mut(&mut data).unwrap();
     assert_eq!(remaining, "/does_not_exist/derp");
 

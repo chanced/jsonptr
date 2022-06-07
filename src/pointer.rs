@@ -6,8 +6,8 @@ use serde_json::Value;
 use url::Url;
 
 use crate::{
-    Assignment, Error, IndexError, MalformedPointerError, NotFoundError, OutOfBoundsError,
-    ReplaceTokenError, Token, Tokens, UnresolvableError,
+    Assignment, Error, MalformedPointerError, NotFoundError, OutOfBoundsError, ReplaceTokenError,
+    Token, Tokens, UnresolvableError,
 };
 use std::{
     borrow::{Borrow, Cow},

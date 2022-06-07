@@ -295,7 +295,7 @@ impl Value {
     }
     fn as_key(&self) -> &String {
         match self {
-            Value::Uncoded(u) => &u,
+            Value::Uncoded(u) => u,
             Value::Encoded(e) => &e.decoded,
         }
     }

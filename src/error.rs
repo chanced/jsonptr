@@ -1,5 +1,3 @@
-use serde_json::value::Index;
-
 use crate::{Pointer, Token};
 use std::{
     error::Error as StdError,
@@ -240,4 +238,3 @@ impl Display for ReplaceTokenError {
         )
     }
 }
-

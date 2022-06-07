@@ -1,4 +1,4 @@
-use crate::{Error, MalformedPointerError, Pointer};
+use crate::{Error, Pointer};
 use serde_json::Value;
 
 pub trait Resolve {
