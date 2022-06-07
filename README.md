@@ -2,7 +2,6 @@
 
 [![Crate](https://img.shields.io/crates/v/jsonptr.svg?style=flat-square)](https://crates.io/crates/jsonptr)
 [![Documentation](https://docs.rs/jsonptr/badge.svg?style=flat-square)](https://docs.rs/jsonptr)
-[![Minimum rustc version](https://img.shields.io/badge/rustc-1.36+-lightgray.svg?style=flat-square)](https://github.com/rust-random/rand#rust-version-requirements)
 
 Data structures and logic for resolving, assigning, and deleting by JSON Pointers ([RFC
 6901](https://datatracker.ietf.org/doc/html/rfc6901)).
