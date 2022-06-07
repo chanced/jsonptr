@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod token_test;
+
 use std::{
     borrow::Borrow,
     fmt::{Debug, Display},
@@ -5,9 +8,8 @@ use std::{
     ops::Deref,
 };
 
-use serde::{Deserialize, Serialize};
-
 use crate::{IndexError, OutOfBoundsError, ParseError};
+use serde::{Deserialize, Serialize};
 
 const ENCODED_TILDE: &str = "~0";
 const ENCODED_SLASH: &str = "~1";
@@ -76,9 +78,9 @@ impl Token {
     /// ## Examples
     ///```
     /// use jsonptr::Token;
-    /// assert_eq!(Token::new("-").as_index(1, Some(2)).unwrap(), 1);
-    /// assert_eq!(Token::new("1").as_index(1, None).unwrap(), 1);
-    /// assert_eq!(Token::new("2").as_index(2, Some(2)).unwrap(), 2);
+    /// assert_eq!(Token::new("-").as_index(1).unwrap(), 1);
+    /// assert_eq!(Token::new("1").as_index(1).unwrap(), 1);
+    /// assert_eq!(Token::new("2").as_index(2).unwrap(), 2);
     /// ```
     pub fn as_index(&self, len: usize) -> Result<usize, IndexError> {
         if self.decoded() == "-" {
@@ -137,7 +139,11 @@ impl Deref for Token {
         self.decoded()
     }
 }
-
+impl From<usize> for Token {
+    fn from(v: usize) -> Self {
+        Token::new(v.to_string())
+    }
+}
 impl From<&str> for Token {
     fn from(s: &str) -> Self {
         Token::new(s)
@@ -394,21 +400,5 @@ impl Into<&str> for Escaped {
             Escaped::Tilde => ENCODED_TILDE,
             Escaped::Slash => ENCODED_SLASH,
         }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test_from() {
-        assert_eq!(Token::from("/").encoded(), "~1");
-        assert_eq!(Token::from("~/").encoded(), "~0~1");
-    }
-    #[test]
-    fn test_from_encoded() {
-        assert_eq!(Token::from_encoded("~1").encoded(), "~1");
-        assert_eq!(Token::from_encoded("~0~1").encoded(), "~0~1");
     }
 }

@@ -1,11 +1,13 @@
-use crate::{Error, Pointer};
+use crate::{Error, MalformedPointerError, Pointer};
 use serde_json::Value;
 
 pub trait Resolve {
+    type Error: std::error::Error + Send + Sync + 'static;
     fn resolve(&self, ptr: &Pointer) -> Result<&Value, Error>;
 }
 impl Resolve for Value {
-    fn resolve(&self, ptr: &Pointer) -> Result<&Value, Error> {
+    type Error = Error;
+    fn resolve(&self, ptr: &Pointer) -> Result<&Value, Self::Error> {
         ptr.resolve(self)
     }
 }

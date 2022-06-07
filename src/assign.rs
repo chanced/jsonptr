@@ -9,7 +9,7 @@ use crate::{Error, Pointer};
 pub trait Assign {
     type Error: std::error::Error + Send + Sync + 'static;
     /// Assign a value of based on the path provided by a JSON Pointer.
-    fn assign(&mut self, ptr: &Pointer, value: Value) -> Result<Assignment, Error>;
+    fn assign(&mut self, ptr: &Pointer, value: Value) -> Result<Assignment, Self::Error>;
 }
 
 impl Assign for Value {
@@ -18,7 +18,7 @@ impl Assign for Value {
         ptr.assign(self, value)
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Assignment<'a> {
     /// The value that was assigned.
     ///
@@ -62,7 +62,7 @@ pub struct Assignment<'a> {
     /// { "foo:" "bar" }
     /// ```
     /// and you assigned `"new_value"` to `"/foo/bar/baz"`, then `created` would
-    /// be `Some("/foo/bar")` as `"/foo/bar"` is the new path object..
+    /// be `Some("/foo/bar")` as `"/foo/bar"` is the new path object.
     pub created_or_mutated: Pointer,
     pub assigned_to: Pointer,
 }

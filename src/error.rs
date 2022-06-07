@@ -8,15 +8,34 @@ use std::{
 };
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error {
-    IndexError(IndexError),
+    Index(IndexError),
     Unresolvable(UnresolvableError),
     NotFound(NotFoundError),
-    MalformedPointer(MalformedError),
+    MalformedPointer(MalformedPointerError),
 }
 
+impl Error {
+    pub fn is_index(&self) -> bool {
+        matches!(self, Error::Index(_))
+    }
+    pub fn is_unresolvable(&self) -> bool {
+        matches!(self, Error::Unresolvable(_))
+    }
+    pub fn is_not_found(&self) -> bool {
+        matches!(self, Error::NotFound(_))
+    }
+    pub fn is_malformed_pointer(&self) -> bool {
+        matches!(self, Error::MalformedPointer(_))
+    }
+}
+impl From<MalformedPointerError> for Error {
+    fn from(err: MalformedPointerError) -> Self {
+        Error::MalformedPointer(err)
+    }
+}
 impl From<IndexError> for Error {
     fn from(err: IndexError) -> Self {
-        Error::IndexError(err)
+        Error::Index(err)
     }
 }
 impl From<NotFoundError> for Error {
@@ -27,7 +46,7 @@ impl From<NotFoundError> for Error {
 
 impl From<OutOfBoundsError> for Error {
     fn from(err: OutOfBoundsError) -> Self {
-        Error::IndexError(IndexError::from(err))
+        Error::Index(IndexError::from(err))
     }
 }
 
@@ -45,7 +64,7 @@ impl From<UnresolvableError> for Error {
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::IndexError(err) => Display::fmt(err, f),
+            Error::Index(err) => Display::fmt(err, f),
             Error::Unresolvable(err) => Display::fmt(err, f),
             Error::NotFound(err) => Display::fmt(err, f),
             Error::MalformedPointer(err) => Display::fmt(err, f),
@@ -56,7 +75,7 @@ impl Display for Error {
 impl StdError for Error {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match self {
-            Self::IndexError(err) => Some(err),
+            Self::Index(err) => Some(err),
             Error::Unresolvable(_) => None,
             Error::NotFound(_) => None,
             Error::MalformedPointer(_) => todo!(),
@@ -161,30 +180,30 @@ impl Display for OutOfBoundsError {
 }
 
 /// Indicates that a Pointer was malformed.
-#[derive(Debug, PartialEq, Eq)]
-pub enum MalformedError {
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum MalformedPointerError {
     NoLeadingSlash(String),
     InvalidEncoding(String),
 }
 
-impl Display for MalformedError {
+impl Display for MalformedPointerError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            MalformedError::NoLeadingSlash(s) => {
+            MalformedPointerError::NoLeadingSlash(s) => {
                 write!(
                     f,
                     "json pointer \"{}\" is malformed due to missing starting slash",
                     s
                 )
             }
-            MalformedError::InvalidEncoding(s) => {
+            MalformedPointerError::InvalidEncoding(s) => {
                 write!(f, "json pointer \"{}\" is improperly encoded", s)
             }
         }
     }
 }
 
-impl StdError for MalformedError {}
+impl StdError for MalformedPointerError {}
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct NotFoundError {
@@ -221,3 +240,4 @@ impl Display for ReplaceTokenError {
         )
     }
 }
+

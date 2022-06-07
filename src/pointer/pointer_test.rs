@@ -1,6 +1,29 @@
 use super::Resolved;
-use crate::{Pointer, UnresolvableError};
+use crate::{Error, MalformedPointerError, Pointer, UnresolvableError};
 use serde_json::{json, Value};
+
+#[test]
+fn test_try_from_validation() {
+    assert!(Pointer::try_from("").is_ok());
+    assert!(Pointer::try_from("/").is_ok());
+    assert!(Pointer::try_from("/foo").is_ok());
+
+    let res = Pointer::try_from("/foo~");
+    assert!(res.is_err());
+    let err = res.unwrap_err();
+    assert_eq!(
+        err,
+        MalformedPointerError::InvalidEncoding("/foo~".to_string())
+    );
+
+    let res = Pointer::try_from("foo");
+    assert!(res.is_err());
+    let err = res.unwrap_err();
+    assert_eq!(
+        err,
+        MalformedPointerError::NoLeadingSlash("foo".to_string())
+    );
+}
 
 #[test]
 fn test_push_pop_back() {
@@ -26,6 +49,17 @@ fn test_push_pop_back() {
 #[test]
 fn test_replace_token() {
     let mut ptr = Pointer::try_from("/test/token").unwrap();
+
+    let res = ptr.replace_token(0, "new".into());
+    assert!(res.is_ok());
+    assert_eq!(
+        ptr, "/new/token",
+        "pointer should equal \"/new/token\" after replace_token"
+    );
+
+    let res = ptr.replace_token(3, "invalid".into());
+
+    assert!(res.is_err());
 }
 
 #[test]
@@ -177,16 +211,40 @@ fn test_try_resolve_mut_overflow_error() {
     assert!(res.is_err());
 }
 #[test]
-fn test_try_resolve_mut_unreachable_error() {
+fn test_resolve_unreachable() {
     let mut data = test_data();
     let ptr = Pointer::try_from("/foo/bool/unreachable").unwrap();
-    let res = ptr.try_resolve_mut(&mut data);
-    assert!(res.is_err());
+    let res = ptr.resolve_mut(&mut data);
 
-    assert_eq!(
-        res.err().unwrap(),
-        UnresolvableError::new("/foo/bool".try_into().unwrap()).into()
-    )
+    assert!(res.is_err());
+    let err = res.unwrap_err();
+    assert!(err.is_unresolvable());
+}
+#[test]
+fn test_resolve_not_found() {
+    let mut data = test_data();
+    let ptr = Pointer::new(&["foo", "not_found", "nope"]);
+    let res = ptr.resolve_mut(&mut data);
+    assert!(res.is_err());
+    let err = res.unwrap_err();
+    assert!(err.is_not_found());
+    match err {
+        Error::NotFound(err) => {
+            assert_eq!(err.pointer, "/foo/not_found");
+        }
+        _ => panic!("expected NotFound"),
+    }
+}
+
+#[test]
+fn test_try_resolve_mut_unreachable() {
+    let mut data = test_data();
+    let ptr = Pointer::try_from("/foo/bool/unreachable").unwrap();
+    let res = ptr.try_resolve_mut(&mut data).unwrap();
+
+    assert_eq!(res.remaining, "/unreachable");
+    assert_eq!(res.resolved, "/foo/bool");
+    assert!(res.value.is_boolean());
 }
 #[test]
 fn test_try_from() {
@@ -282,7 +340,7 @@ fn test_assign() {
     assert_eq!(assignment.assigned_to, "/foo");
 }
 #[test]
-fn test_assign_with_array_path() {
+fn test_assign_with_explicit_array_path() {
     let mut data = json!({});
     let ptr = Pointer::try_from("/foo/0/bar").unwrap();
     let val = json!("baz");
@@ -301,12 +359,18 @@ fn test_assign_with_array_path() {
         }),
         data.clone()
     );
+}
+#[test]
+fn test_assign_array_with_next_token() {
     let mut data = json!({});
     let ptr = Pointer::try_from("/foo/-/bar").unwrap();
     let val = json!("baz");
     let assignment = ptr.assign(&mut data, val).unwrap();
     assert_eq!(assignment.replaced, Value::Null);
-    assert_eq!(assignment.assigned_to, "/foo/-/bar"); // i think this should actually be /foo/0/bar
+    assert_eq!(
+        assignment.assigned_to, "/foo/0/bar",
+        "`assigned_to` should equal \"/foo/0/bar\""
+    );
     assert_eq!(assignment.replaced, Value::Null);
     assert_eq!(
         json!({
@@ -321,7 +385,10 @@ fn test_assign_with_array_path() {
     let val = json!("baz2");
     let assignment = ptr.assign(&mut data, val).unwrap();
     assert_eq!(assignment.replaced, Value::Null);
-    assert_eq!(assignment.assigned_to, "/foo/-/bar"); // i think this should actually be /foo/0/bar
+    assert_eq!(
+        assignment.assigned_to, "/foo/1/bar",
+        "`assigned_to` should equal \"/foo/1/bar\""
+    );
     assert_eq!(assignment.replaced, Value::Null);
     assert_eq!(
         json!({
@@ -336,11 +403,11 @@ fn test_assign_with_array_path() {
         }),
         data.clone()
     );
+    let ptr = Pointer::try_from("/foo/0/bar").unwrap();
     let val = json!("qux");
     let assignment = ptr.assign(&mut data, val).unwrap();
-    assert_eq!(assignment.replaced, Value::Null);
-    assert_eq!(assignment.assigned_to, "/foo/0/bar");
-    assert_eq!(assignment.replaced, Value::Null);
+    // assert_eq!(assignment.assigned_to, "/foo/0/bar");
+    assert_eq!(assignment.replaced, Value::String("baz".to_string()));
     assert_eq!(
         json!({
             "foo": [

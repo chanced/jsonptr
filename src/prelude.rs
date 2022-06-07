@@ -1,1 +1,1 @@
-pub use crate::{Resolve, ResolveMut};
+pub use crate::{Assign, Delete, Resolve, ResolveMut};

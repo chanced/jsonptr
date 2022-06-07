@@ -1,28 +1,15 @@
-// use serde::Serialize;
-// use serde_json::value::{Serializer, Value};
+use serde_json::Value;
 
-// use crate::{resolve_mut, Error, JsonPointer};
+use crate::{MalformedPointerError, Pointer};
 
-// pub trait Delete {
-//     fn delete(&mut self, ptr: &JsonPointer) -> Result<Deletion, Error>;
-// }
+pub trait Delete {
+    type Error;
+    fn delete(&mut self, ptr: &Pointer) -> Result<Option<Value>, Self::Error>;
+}
 
-// pub struct Deletion {
-//     pub value: Value,
-//     pub deleted: Option<Value>,
-// }
-
-// impl<T> Delete for T
-// where
-//     T: Serialize,
-// {
-//     fn delete(&mut self, pointer: &JsonPointer) -> Result<Deletion, Error> {
-//         let mut value = self.serialize(Serializer).map_err(Into::into)?;
-//         let mut ptr = pointer.clone();
-//         let last = pointer.pop_back();
-//         let res = resolve_mut(&mut value, &mut ptr)?;
-//     }
-// }
-
-// #[cfg(feature="has_specialization")]
-// impl<T> Delete
+impl Delete for Value {
+    type Error = MalformedPointerError;
+    fn delete(&mut self, ptr: &Pointer) -> Result<Option<Value>, Self::Error> {
+        ptr.delete(self)
+    }
+}

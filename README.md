@@ -11,6 +11,7 @@ JSON Pointers can be created either with a slice of strings or directly from a p
 
 ```rust
 use jsonptr::{Pointer};
+use jsonptr::prelude::*; // for Assign, Resolve, ResolveMut, Delete traits
 use serde_json::{json, Value};
 
 fn main() {
@@ -27,7 +28,7 @@ fn main() {
 
 
     let ptr = Pointer::try_from("/foo/bar").unwrap();
-    let mut bar = pointer.resolve_mut(&ptr).unwrap();
+    let mut bar = data.resolve_mut(&ptr).unwrap();
     assert_eq!(bar, "baz");
 }
 
