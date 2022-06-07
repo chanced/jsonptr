@@ -1,6 +1,6 @@
 [package]
 name = "jsonptr"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2021"
 description = "JSON Pointers (RFC 6901)"
 license = "MIT OR Apache-2.0"
