@@ -124,6 +124,9 @@ impl Display for UnresolvableError {
         )
     }
 }
+
+/// Indicates an error occurred while parsing a `usize` (`ParseError`) or the
+/// parsed value was out of bounds for the targeted array.
 #[derive(PartialEq, Eq)]
 pub enum IndexError {
     Parse(ParseError),
@@ -150,6 +153,7 @@ impl From<OutOfBoundsError> for IndexError {
     }
 }
 
+/// ParseError represents an that an error occurred when parsing an index.
 #[derive(PartialEq, Eq)]
 pub struct ParseError {
     pub source: ParseIntError,
