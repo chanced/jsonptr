@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 mod pointer;
 pub use pointer::*;
 mod token;

@@ -4,8 +4,8 @@ use serde_json::Value;
 
 use crate::{Error, Pointer};
 
-/// Assign is implemented by types which can internally mutate data based on a
-/// `serde_json::Value`.
+/// Assign is implemented by types which can internally assign a
+/// `serde_json::Value` by a JSON Pointer.
 pub trait Assign {
     type Error: std::error::Error + Send + Sync + 'static;
     /// Assign a value of based on the path provided by a JSON Pointer.
@@ -19,6 +19,7 @@ impl Assign for Value {
     }
 }
 #[derive(Debug)]
+/// The data structure returned from a successful call to `assign`.
 pub struct Assignment<'a> {
     /// The value that was assigned.
     ///
@@ -64,5 +65,16 @@ pub struct Assignment<'a> {
     /// and you assigned `"new_value"` to `"/foo/bar/baz"`, then `created` would
     /// be `Some("/foo/bar")` as `"/foo/bar"` is the new path object.
     pub created_or_mutated: Pointer,
+    /// A `Pointer` consisting of the path which was assigned.
+    ///
+    /// ## Example
+    /// ```rust
+    /// use serde_json::json;
+    /// use jsonptr::{Pointer, Assign};
+    /// let mut data = json!({ "foo": ["zero"] });
+    /// let mut ptr = Pointer::try_from("/foo/-").unwrap();
+    /// let assignment = data.assign(&mut ptr, "one".into()).unwrap();
+    /// assert_eq!(assignment.assigned_to, Pointer::try_from("/foo/1").unwrap());
+    /// ```
     pub assigned_to: Pointer,
 }

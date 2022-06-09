@@ -16,15 +16,8 @@ use std::{
     hash::{Hash, Hasher},
     mem,
     ops::{ControlFlow, Deref},
-    str::Split,
+    str::{FromStr, Split},
 };
-
-/// Used internally as a response from `try_resolve`
-struct Resolved<'a> {
-    value: &'a mut Value,
-    remaining: Pointer,
-    resolved: Pointer,
-}
 
 #[derive(Clone)]
 /// A JSON Pointer is a string containing a sequence of zero or more reference
@@ -52,32 +45,8 @@ struct Resolved<'a> {
 /// ```
 pub struct Pointer {
     inner: String,
+    count: usize,
     err: Option<Box<MalformedPointerError>>,
-}
-
-impl Serialize for Pointer {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        String::serialize(&self.inner, serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for Pointer {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        match Pointer::try_from(s.as_str()) {
-            Ok(p) => Ok(p),
-            Err(err) => Ok(Pointer {
-                inner: s,
-                err: Some(Box::new(err)),
-            }),
-        }
-    }
 }
 
 impl Pointer {
@@ -95,7 +64,11 @@ impl Pointer {
         if inner.is_empty() {
             inner.push('/');
         }
-        Pointer { inner, err: None }
+        Pointer {
+            inner,
+            err: None,
+            count: tokens.len(),
+        }
     }
 
     /// Returns `true` if the `Pointer` is valid. The only way an invalid
@@ -108,6 +81,7 @@ impl Pointer {
 
     /// Pushes a `Token` onto the front of this `Pointer`.
     pub fn push_front(&mut self, token: Token) {
+        self.count += 1;
         if self.inner == "/" {
             self.inner.push_str(token.encoded());
             return;
@@ -117,6 +91,7 @@ impl Pointer {
     }
     /// Pushes a `Token` onto the back of this `Pointer`.
     pub fn push_back(&mut self, token: Token) {
+        self.count += 1;
         if !self.inner.ends_with('/') {
             self.inner.push('/');
         }
@@ -128,6 +103,10 @@ impl Pointer {
         if self.inner.len() == 1 {
             return None;
         }
+        if self.count > 0 {
+            self.count -= 1;
+        }
+
         self.rsplit_once().map(|(front, back)| {
             self.inner = prepend(&front);
             Token::from_encoded(back)
@@ -135,6 +114,13 @@ impl Pointer {
     }
     /// Removes and returns the first `Token` in the `Pointer` if it exists.
     pub fn pop_front(&mut self) -> Option<Token> {
+        if self.inner.len() == 1 {
+            return None;
+        }
+        if self.count > 0 {
+            self.count -= 1;
+        }
+
         self.split_once().map(|(front, rest)| {
             self.inner = prepend(&rest);
             front.into()
@@ -142,10 +128,7 @@ impl Pointer {
     }
     /// Returns the number of tokens in the `Pointer`.
     pub fn count(&self) -> usize {
-        if self.inner == "/" {
-            return 0;
-        }
-        self.inner.matches('/').count()
+        self.count
     }
     /// Returns `true` if the JSON Pointer equals `"/"`.
     pub fn is_root(&self) -> bool {
@@ -180,6 +163,10 @@ impl Pointer {
     }
     /// Merges two `Pointer`s by appending `other` onto `self`.
     pub fn append(&mut self, other: &Pointer) -> &Pointer {
+        self.count += other.count;
+        if self.err.is_none() && other.err.is_some() {
+            self.err = other.err.clone();
+        }
         if self.is_root() {
             self.inner = other.inner.clone();
         } else if !other.is_root() {
@@ -239,21 +226,13 @@ impl Pointer {
 
     /// Clears the `Pointer`, setting it to root (`"/"`).
     pub fn clear(&mut self) {
+        self.count = 0;
         self.inner = prepend("")
     }
 
     /// Returns an iterator of `Token`s in the `Pointer`.
     pub fn tokens(&self) -> Tokens {
         Tokens::new(self.split())
-    }
-    /// Attempts to resolve a `Value` based on the path in this `Pointer`.
-    pub fn resolve<'v>(&self, value: &'v Value) -> Result<&'v Value, Error> {
-        let (res, ptr) = self.try_resolve(value)?;
-        if ptr.is_root() {
-            Ok(res)
-        } else {
-            Err(NotFoundError::new(ptr).into())
-        }
     }
 
     /// Returns the validation error which occurred during deserialization.
@@ -264,14 +243,14 @@ impl Pointer {
             Ok(())
         }
     }
-
-    /// Attempts to resolve a mutable `Value` based on the path in this `Pointer`.
-    pub fn resolve_mut<'v>(&self, value: &'v mut Value) -> Result<&'v mut Value, Error> {
+    /// Attempts to resolve a `Value` based on the path in this `Pointer`.
+    pub fn resolve<'v>(&self, value: &'v Value) -> Result<&'v Value, Error> {
         let Resolved {
             value,
             remaining,
             mut resolved,
-        } = self.try_resolve_mut(value)?;
+        } = self.try_resolve(value)?;
+
         if remaining.is_root() {
             Ok(value)
         } else {
@@ -294,7 +273,51 @@ impl Pointer {
                     }
                     Err(NotFoundError::new(resolved).into())
                 }
-                _ => Err(UnresolvableError::new(resolved).into()),
+                _ => {
+                    if let Some(t) = remaining.front() {
+                        resolved.push_back(t);
+                    }
+                    Err(UnresolvableError::new(resolved).into())
+                }
+            }
+        }
+    }
+    /// Attempts to resolve a mutable `Value` based on the path in this `Pointer`.
+    pub fn resolve_mut<'v>(&self, value: &'v mut Value) -> Result<&'v mut Value, Error> {
+        let ResolvedMut {
+            value,
+            remaining,
+            mut resolved,
+        } = self.try_resolve_mut(value)?;
+
+        if remaining.is_root() {
+            Ok(value)
+        } else {
+            match value {
+                Value::Object(_) => {
+                    if !remaining.is_root() {
+                        resolved.push_back(remaining.front().unwrap());
+                    }
+                    Err(NotFoundError::new(resolved).into())
+                }
+                Value::Array(_) => {
+                    if !remaining.is_root() {
+                        resolved.push_back(remaining.front().unwrap());
+                    }
+                    Err(NotFoundError::new(resolved).into())
+                }
+                Value::Null => {
+                    if !remaining.is_root() {
+                        resolved.push_back(remaining.front().unwrap());
+                    }
+                    Err(NotFoundError::new(resolved).into())
+                }
+                _ => {
+                    if let Some(t) = remaining.front() {
+                        resolved.push_back(t);
+                    }
+                    Err(UnresolvableError::new(resolved).into())
+                }
             }
         }
     }
@@ -362,7 +385,7 @@ impl Pointer {
         let last_token = ptr.pop_back().unwrap();
 
         match ptr.try_resolve_mut(value) {
-            Ok(Resolved {
+            Ok(ResolvedMut {
                 remaining,
                 resolved: _resolved,
                 value,
@@ -405,7 +428,7 @@ impl Pointer {
     /// ```
     pub fn assign<'d>(&self, dest: &'d mut Value, src: Value) -> Result<Assignment<'d>, Error> {
         match self.try_resolve_mut(dest) {
-            Ok(Resolved {
+            Ok(ResolvedMut {
                 value: dest,
                 mut remaining,
                 mut resolved,
@@ -570,7 +593,7 @@ impl Pointer {
     /// not at the root, an error is returned.
     ///
     /// If the resolution is successful, the pointer will be empty.
-    fn try_resolve_mut<'v, 'p>(&'p self, value: &'v mut Value) -> Result<Resolved<'v>, Error> {
+    fn try_resolve_mut<'v, 'p>(&'p self, value: &'v mut Value) -> Result<ResolvedMut<'v>, Error> {
         self.validate()?;
         let mut tokens = self.tokens();
         let mut resolved = Pointer::default();
@@ -601,6 +624,95 @@ impl Pointer {
                         v.as_object_mut().unwrap().get_mut(token.as_key()).unwrap(),
                         p,
                     ))
+                } else {
+                    ControlFlow::Break((v, p))
+                }
+            }
+        });
+        match res {
+            ControlFlow::Continue((v, remaining)) => Ok(ResolvedMut {
+                value: v,
+                remaining,
+                resolved,
+            }),
+            ControlFlow::Break((value, remaining)) => match value {
+                Value::Null | Value::Object(_) => Ok(ResolvedMut {
+                    value,
+                    remaining,
+                    resolved,
+                }),
+                Value::Array(_) => match remaining.first() {
+                    Some(token) => {
+                        let len = value.as_array().unwrap().len();
+                        let idx = token.as_index(len)?;
+                        if idx <= len {
+                            Ok(ResolvedMut {
+                                value,
+                                remaining,
+                                resolved,
+                            })
+                        } else {
+                            Err(OutOfBoundsError {
+                                index: idx,
+                                len,
+                                token,
+                            }
+                            .into())
+                        }
+                    }
+                    None => Ok(ResolvedMut {
+                        value,
+                        remaining,
+                        resolved,
+                    }),
+                },
+                // this should return `UnresovableError` but currently makes
+                // `assign` impossible without unsafe code.
+                Value::Bool(_) | Value::Number(_) | Value::String(_) => Ok(ResolvedMut {
+                    value,
+                    remaining,
+                    resolved,
+                }),
+            },
+        }
+    }
+
+    /// Resolves a `Pointer` as far as possible. If it encounters an an
+    /// array without the given index, an object without the given key, or a null
+    /// value then the pointer is returned at the last resolved location along with
+    /// the last resolved value.
+    ///
+    /// If a leaf node is found (`String`, `Number`, `Boolean`) and the pointer is
+    /// not at the root, an error is returned.
+    ///
+    /// If the resolution is successful, the pointer will be empty.
+    fn try_resolve<'v, 'p>(&'p self, value: &'v Value) -> Result<Resolved<'v>, Error> {
+        let mut tokens = self.tokens();
+        let mut resolved = Pointer::default();
+        let res = tokens.try_fold((value, self.clone()), |(v, mut p), token| match v {
+            Value::Null => ControlFlow::Break((v, p)),
+            Value::Number(_) | Value::String(_) | Value::Bool(_) => ControlFlow::Break((v, p)),
+            Value::Array(_) => match token.as_index(v.as_array().unwrap().len()) {
+                Ok(idx) => {
+                    if idx < v.as_array().unwrap().len() {
+                        let t = p.pop_front();
+                        if let Some(t) = t {
+                            resolved.push_back(t);
+                        }
+                        ControlFlow::Continue((v.as_array().unwrap().get(idx).unwrap(), p))
+                    } else {
+                        ControlFlow::Break((v, p))
+                    }
+                }
+                Err(_) => ControlFlow::Break((v, p)),
+            },
+            Value::Object(_) => {
+                if v.as_object().unwrap().contains_key(&*token) {
+                    let t = p.pop_front();
+                    if let Some(t) = t {
+                        resolved.push_back(t);
+                    }
+                    ControlFlow::Continue((v.as_object().unwrap().get(&*token).unwrap(), p))
                 } else {
                     ControlFlow::Break((v, p))
                 }
@@ -654,73 +766,6 @@ impl Pointer {
         }
     }
 
-    /// Resolves a `Pointer` as far as possible. If it encounters an an
-    /// array without the given index, an object without the given key, or a null
-    /// value then the pointer is returned at the last resolved location along with
-    /// the last resolved value.
-    ///
-    /// If a leaf node is found (`String`, `Number`, `Boolean`) and the pointer is
-    /// not at the root, an error is returned.
-    ///
-    /// If the resolution is successful, the pointer will be empty.
-    pub(crate) fn try_resolve<'v, 'p>(
-        &'p self,
-        value: &'v Value,
-    ) -> Result<(&'v Value, Pointer), Error> {
-        let mut tokens = self.tokens();
-        let mut resolved = Pointer::default();
-        let res = tokens.try_fold((value, self.clone()), |(v, mut p), token| match v {
-            Value::Null => ControlFlow::Break((v, p)),
-            Value::Number(_) | Value::String(_) | Value::Bool(_) => ControlFlow::Break((v, p)),
-            Value::Array(_) => match token.as_index(v.as_array().unwrap().len()) {
-                Ok(idx) => {
-                    if idx < v.as_array().unwrap().len() {
-                        let t = p.pop_front();
-                        if let Some(t) = t {
-                            resolved.push_back(t);
-                        }
-                        ControlFlow::Continue((v.as_array().unwrap().get(idx).unwrap(), p))
-                    } else {
-                        ControlFlow::Break((v, p))
-                    }
-                }
-                Err(_) => ControlFlow::Break((v, p)),
-            },
-            Value::Object(_) => {
-                if v.as_object().unwrap().contains_key(&*token) {
-                    let t = p.pop_front();
-                    if let Some(t) = t {
-                        resolved.push_back(t);
-                    }
-                    ControlFlow::Continue((v.as_object().unwrap().get(&*token).unwrap(), p))
-                } else {
-                    ControlFlow::Break((v, p))
-                }
-            }
-        });
-        match res {
-            ControlFlow::Continue((v, p)) => Ok((v, p)),
-            ControlFlow::Break((v, p)) => match v {
-                Value::Null | Value::Object(_) => Ok((v, p)),
-                Value::Array(_) => match p.first() {
-                    Some(i) => {
-                        let len = v.as_array().unwrap().len();
-                        let idx = i.as_index(len)?;
-                        if idx <= len {
-                            Ok((v, p))
-                        } else {
-                            Err(UnresolvableError::new(resolved).into())
-                        }
-                    }
-                    None => Ok((v, p)),
-                },
-                Value::Bool(_) | Value::Number(_) | Value::String(_) => {
-                    Err(UnresolvableError::new(resolved).into())
-                }
-            },
-        }
-    }
-
     fn split(&self) -> Split<'_, char> {
         let mut s = self.inner.split('/');
         // skipping the first '/'
@@ -755,6 +800,7 @@ impl Default for Pointer {
         Self {
             inner: "/".to_owned(),
             err: None,
+            count: 0,
         }
     }
 }
@@ -764,6 +810,32 @@ impl Deref for Pointer {
     type Target = str;
     fn deref(&self) -> &Self::Target {
         &self.inner
+    }
+}
+
+impl Serialize for Pointer {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        String::serialize(&self.inner, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Pointer {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        match Pointer::try_from(s.as_str()) {
+            Ok(p) => Ok(p),
+            Err(err) => Ok(Pointer {
+                inner: s,
+                count: 0,
+                err: Some(Box::new(err)),
+            }),
+        }
     }
 }
 
@@ -835,36 +907,39 @@ impl From<usize> for Pointer {
 impl TryFrom<&str> for Pointer {
     type Error = MalformedPointerError;
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        if value.is_empty() {
-            Ok(Pointer::default())
-        } else {
-            let inner = validate_and_format(value)?;
-            Ok(Pointer { err: None, inner })
-        }
+        let (count, inner) = validate_and_format(value)?;
+        Ok(Pointer {
+            err: None,
+            count,
+            inner,
+        })
     }
 }
 
-fn validate_and_format(value: &str) -> Result<String, MalformedPointerError> {
-    let mut value = value;
-    let mut res = String::with_capacity(value.len());
+fn validate_and_format(value: &str) -> Result<(usize, String), MalformedPointerError> {
     let mut chars = value.chars();
-    let mut had_hash = false;
-    if value.starts_with('#') {
-        had_hash = true;
-        value = &value[1..];
-    }
-    if value.is_empty() {
-        return Ok("/".to_string());
-    }
-    if !value.starts_with('/') {
-        if had_hash {
-            return Err(MalformedPointerError::NoLeadingSlash(
-                "#".to_string() + value,
-            ));
-        } else {
-            return Err(MalformedPointerError::NoLeadingSlash(value.to_string()));
+    let mut next = chars.next();
+    match next {
+        Some('#') => {
+            next = chars.next();
+            if next.is_none() {
+                return Ok((0, "/".into()));
+            }
+            if next != Some('/') {
+                return Err(MalformedPointerError::NoLeadingSlash(value.into()));
+            }
+        }
+        Some('/') => {}
+        Some(_) => {
+            return Err(MalformedPointerError::NoLeadingSlash(value.into()));
+        }
+        None => {
+            return Ok((0, "/".into()));
         }
     }
+    let mut res = String::with_capacity(value.len());
+    res.push('/');
+    let mut count = 1; // accounting for the first slash
     while let Some(c) = chars.next() {
         res.push(c);
         if c == '~' {
@@ -872,18 +947,14 @@ fn validate_and_format(value: &str) -> Result<String, MalformedPointerError> {
                 Some('0') => res.push('0'),
                 Some('1') => res.push('1'),
                 _ => {
-                    if had_hash {
-                        return Err(MalformedPointerError::InvalidEncoding(
-                            String::from("#") + value,
-                        ));
-                    } else {
-                        return Err(MalformedPointerError::InvalidEncoding(value.to_string()));
-                    }
+                    return Err(MalformedPointerError::InvalidEncoding(value.to_string()));
                 }
             }
+        } else if c == '/' {
+            count += 1;
         }
     }
-    Ok(res)
+    Ok((count, res))
 }
 
 impl PartialOrd<&str> for Pointer {
@@ -928,6 +999,12 @@ impl Display for Pointer {
         write!(f, "{}", self.inner)
     }
 }
+impl FromStr for Pointer {
+    type Err = MalformedPointerError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::try_from(s)
+    }
+}
 
 fn prepend(s: &str) -> String {
     if !s.starts_with('/') {
@@ -942,4 +1019,20 @@ struct Assigned<'a> {
     assigned: &'a mut Value,
     replaced: Value,
     to: Pointer,
+}
+
+/// Used internally as a response from `try_resolve`
+#[derive(Debug)]
+struct ResolvedMut<'a> {
+    value: &'a mut Value,
+    remaining: Pointer,
+    resolved: Pointer,
+}
+
+/// Used internally as a response from `try_resolve`
+#[derive(Debug)]
+struct Resolved<'a> {
+    value: &'a Value,
+    remaining: Pointer,
+    resolved: Pointer,
 }

@@ -4,6 +4,9 @@ use std::{
     fmt::{Debug, Display, Formatter},
     num::ParseIntError,
 };
+
+/// An enum representing possible errors that can occur when resolving or
+/// mutating by a JSON Pointer.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error {
     Index(IndexError),
@@ -13,15 +16,19 @@ pub enum Error {
 }
 
 impl Error {
+    /// Returns `true` if the error is `Error::IndexError`.
     pub fn is_index(&self) -> bool {
         matches!(self, Error::Index(_))
     }
+    /// Returns `true` if the error is `Error::UnresolvableError`.
     pub fn is_unresolvable(&self) -> bool {
         matches!(self, Error::Unresolvable(_))
     }
+    /// Returns `true` if the error is `Error::NotFoundError`.
     pub fn is_not_found(&self) -> bool {
         matches!(self, Error::NotFound(_))
     }
+    /// Returns `true` if the error is `Error::MalformedPointerError`.
     pub fn is_malformed_pointer(&self) -> bool {
         matches!(self, Error::MalformedPointer(_))
     }
@@ -48,11 +55,6 @@ impl From<OutOfBoundsError> for Error {
     }
 }
 
-// impl From<serde_json::Error> for Error {
-//     fn from(err: serde_json::Error) -> Self {
-//         Error::Serde(err)
-//     }
-// }
 impl From<UnresolvableError> for Error {
     fn from(err: UnresolvableError) -> Self {
         Error::Unresolvable(err)
@@ -81,13 +83,32 @@ impl StdError for Error {
     }
 }
 
+/// Represents an error that occurs when attempting to resolve a `Pointer` that
+/// encounters a leaf node (i.e. a scalar / null value) which is not the root
+/// of the `Pointer`.
+///
+/// ## Example
+/// ```rust
+/// use serde_json::json;
+/// use jsonptr::{Pointer, ResolveMut, Resolve, UnresolvableError};
+/// let mut data = json!({ "foo": "bar" });
+/// let ptr = Pointer::try_from("/foo/unreachable").unwrap();
+/// let err = data.resolve_mut(&ptr).unwrap_err();
+/// assert_eq!(err, UnresolvableError::new(ptr.clone()).into());
+/// ```
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct UnresolvableError {
-    pub unresolvable: Pointer,
+    pub pointer: Pointer,
+    pub leaf: Option<Token>,
 }
 impl UnresolvableError {
-    pub fn new(unresolvable: Pointer) -> Self {
-        Self { unresolvable }
+    pub fn new(pointer: Pointer) -> Self {
+        let leaf = if pointer.count() >= 2 {
+            Some(pointer.get(pointer.count() - 2).unwrap())
+        } else {
+            None
+        };
+        Self { pointer, leaf }
     }
 }
 
@@ -95,17 +116,17 @@ impl Display for UnresolvableError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "can not resolve \"{}\" due to \"{}\" being a leaf node",
-            self.unresolvable,
-            self.unresolvable
-                .front()
-                .map_or("/".to_string(), |t| t.to_string())
+            "can not resolve \"{}\" due to {} being a scalar value",
+            self.pointer,
+            self.leaf
+                .as_deref()
+                .map_or_else(|| "the root value".to_string(), |l| format!("\"{}\"", l))
         )
     }
 }
 #[derive(PartialEq, Eq)]
 pub enum IndexError {
-    Parse(ParseError<ParseIntError>),
+    Parse(ParseError),
     OutOfBounds(OutOfBoundsError),
 }
 impl Display for IndexError {
@@ -130,23 +151,17 @@ impl From<OutOfBoundsError> for IndexError {
 }
 
 #[derive(PartialEq, Eq)]
-pub struct ParseError<T> {
-    pub source: T,
+pub struct ParseError {
+    pub source: ParseIntError,
     pub token: Token,
 }
 
-impl<E> Display for ParseError<E>
-where
-    E: StdError,
-{
+impl Display for ParseError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.source)
     }
 }
-impl<E> Debug for ParseError<E>
-where
-    E: StdError + 'static,
-{
+impl Debug for ParseError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ParseError")
             .field("source", &self.source)
@@ -154,15 +169,14 @@ where
             .finish()
     }
 }
-impl<E> StdError for ParseError<E>
-where
-    E: StdError + 'static + Send + Sync,
-{
+impl StdError for ParseError {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         Some(&self.source)
     }
 }
 
+/// Indicates that the `Pointer` contains an index of an array that is out of
+/// bounds.
 #[derive(Debug, PartialEq, Eq)]
 pub struct OutOfBoundsError {
     pub len: usize,
@@ -203,6 +217,7 @@ impl Display for MalformedPointerError {
 
 impl StdError for MalformedPointerError {}
 
+/// NotFoundError indicates that a Pointer was not found in the data.
 #[derive(Debug, PartialEq, Eq)]
 pub struct NotFoundError {
     pub pointer: Pointer,
@@ -222,6 +237,8 @@ impl Display for NotFoundError {
     }
 }
 
+/// ReplaceTokenError is returned from `Pointer::replace_token` when the
+/// provided index is out of bounds.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ReplaceTokenError {
     pub index: usize,

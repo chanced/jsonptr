@@ -18,6 +18,11 @@ const ENC_PREFIX: char = '~';
 const TILDE_ENC: char = '0';
 const SLASH_ENC: char = '1';
 
+/// A `Token` is a segment of a JSON Pointer, seperated by '/' (%x2F). It can
+/// represent a key in a JSON object or an index in a JSON array.
+///
+/// - Indexes should not contain leading zeros.
+/// - `"-"` represents the next, non-existent index in a JSON array.
 #[derive(Clone)]
 pub struct Token {
     value: Value,

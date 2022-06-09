@@ -13,7 +13,7 @@ Data structures and logic for resolving, assigning, and deleting by JSON Pointer
 JSON Pointers can be created either with a slice of strings or directly from a properly encoded string representing a JSON Pointer.
 
 ```rust
-use jsonptr::{Pointer, ResolveMut};
+use jsonptr::{Pointer, Resolve, ResolveMut};
 use serde_json::json;
 
 fn main() {
