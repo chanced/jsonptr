@@ -11,7 +11,7 @@ pub struct Tokens<'a> {
 impl<'a> Iterator for Tokens<'a> {
     type Item = Token;
     fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next().map(Into::into)
+        self.inner.next().map(Token::from_encoded)
     }
 }
 impl<'t> Tokens<'t> {

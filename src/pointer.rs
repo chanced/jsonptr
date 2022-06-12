@@ -59,16 +59,18 @@ impl Pointer {
     pub fn new(tokens: &[impl AsRef<str>]) -> Self {
         let mut inner = String::new();
         for t in tokens.iter().map(Token::new) {
-            inner.push_str(&prepend(t.encoded()));
-        }
-        if inner.is_empty() {
             inner.push('/');
+            inner.push_str(t.encoded());
         }
         Pointer {
             inner,
             err: None,
             count: tokens.len(),
         }
+    }
+    /// Extracts a string slice containing the entire encoded `Pointer`.
+    pub fn as_str(&self) -> &str {
+        &self.inner
     }
 
     /// Returns `true` if the `Pointer` is valid. The only way an invalid
@@ -82,10 +84,6 @@ impl Pointer {
     /// Pushes a `Token` onto the front of this `Pointer`.
     pub fn push_front(&mut self, token: Token) {
         self.count += 1;
-        if self.inner == "/" {
-            self.inner.push_str(token.encoded());
-            return;
-        }
         self.inner.insert(0, '/');
         self.inner.insert_str(1, token.encoded());
     }
@@ -100,50 +98,73 @@ impl Pointer {
 
     /// Removes and returns the last `Token` in the `Pointer` if it exists.
     pub fn pop_back(&mut self) -> Option<Token> {
-        if self.inner.len() == 1 {
+        if self.is_root() {
             return None;
         }
         if self.count > 0 {
             self.count -= 1;
         }
+        self.inner[1..]
+            .rsplit_once('/')
+            .map_or(Some((&self.inner[1..], "")), Option::Some)
+            .map(|(f, b)| (f.to_owned(), b.to_owned()))
+            .map(|(front, back)| {
+                if !front.is_empty() {
+                    self.inner = String::from("/") + &front;
+                } else {
+                    self.inner = "".to_owned();
+                }
+                Token::from_encoded(back)
+            })
 
-        self.rsplit_once().map(|(front, back)| {
-            self.inner = prepend(&front);
-            Token::from_encoded(back)
-        })
+        // self.rsplit_once().map(|(front, back)| {
+        //     self.inner = maybe_prepend_slash(&front);
+
+        // })
     }
     /// Removes and returns the first `Token` in the `Pointer` if it exists.
     pub fn pop_front(&mut self) -> Option<Token> {
-        if self.inner.len() == 1 {
+        if self.inner.is_empty() {
             return None;
         }
         if self.count > 0 {
             self.count -= 1;
         }
 
-        self.split_once().map(|(front, rest)| {
-            self.inner = prepend(&rest);
-            front.into()
-        })
+        self.inner[1..]
+            .split_once('/')
+            .map_or(Some((&self.inner[1..], "")), Option::Some)
+            .map(|(f, b)| (f.to_owned(), b.to_owned()))
+            .map(|(front, back)| {
+                if !back.is_empty() {
+                    self.inner = String::from("/") + &back;
+                } else {
+                    self.inner = String::new()
+                }
+                front.into()
+            })
     }
     /// Returns the number of tokens in the `Pointer`.
     pub fn count(&self) -> usize {
         self.count
     }
-    /// Returns `true` if the JSON Pointer equals `"/"`.
+    /// Returns `true` if the JSON Pointer equals `""`.
     pub fn is_root(&self) -> bool {
-        self.inner == "/"
+        self.inner.is_empty()
     }
 
     /// Returns the last `Token` in the `Pointer`.
     pub fn back(&self) -> Option<Token> {
-        self.rsplit_once().map(|(front, last)| {
-            if last.is_empty() {
-                Token::from_encoded(front)
-            } else {
-                Token::from_encoded(last)
-            }
-        })
+        self.inner[1..]
+            .rsplit_once('/')
+            .map_or(Some((&self.inner[1..], "")), Option::Some)
+            .map(|(front, back)| {
+                if !back.is_empty() {
+                    Token::from_encoded(back)
+                } else {
+                    Token::from_encoded(front)
+                }
+            })
     }
     /// Returns the last token in the `Pointer`.
     ///
@@ -153,7 +174,13 @@ impl Pointer {
     }
     /// Returns the first `Token` in the `Pointer`.
     pub fn front(&self) -> Option<Token> {
-        self.split_once().map(|(front, _)| front.into())
+        if self.is_root() {
+            return None;
+        }
+        self.inner[1..]
+            .split_once('/')
+            .map_or(Some((&self.inner[1..], "")), Option::Some)
+            .map(|(front, _)| Token::from_encoded(front))
     }
     /// Returns the first `Token` in the `Pointer`.
     ///
@@ -202,6 +229,13 @@ impl Pointer {
         index: usize,
         token: Token,
     ) -> Result<Option<Token>, ReplaceTokenError> {
+        if self.is_root() {
+            return Err(ReplaceTokenError {
+                count: self.count,
+                index,
+                pointer: self.clone(),
+            });
+        }
         let mut tokens = self.tokens().collect::<Vec<_>>();
         if index > tokens.len() {
             return Err(ReplaceTokenError {
@@ -211,23 +245,21 @@ impl Pointer {
             });
         }
         let old = tokens.get(index).cloned();
-
         tokens[index] = token;
 
-        self.inner = prepend(
-            &tokens
+        self.inner = String::from("/")
+            + &tokens
                 .iter()
-                .map(|t| t.encoded())
+                .map(Token::encoded)
                 .collect::<Vec<_>>()
-                .join("/"),
-        );
+                .join("/");
         Ok(old)
     }
 
     /// Clears the `Pointer`, setting it to root (`"/"`).
     pub fn clear(&mut self) {
         self.count = 0;
-        self.inner = prepend("")
+        self.inner = String::from("");
     }
 
     /// Returns an iterator of `Token`s in the `Pointer`.
@@ -772,33 +804,12 @@ impl Pointer {
         s.next();
         s
     }
-    fn split_once(&self) -> Option<(String, String)> {
-        if self.is_root() {
-            None
-        } else {
-            self.inner[1..]
-                .split_once('/')
-                .map_or(Some((&self.inner[1..], "")), Option::Some)
-                .map(|(f, b)| (f.to_owned(), b.to_owned()))
-        }
-    }
-
-    fn rsplit_once(&self) -> Option<(String, String)> {
-        if self.is_root() {
-            None
-        } else {
-            self.inner[1..]
-                .rsplit_once('/')
-                .map_or(Some((&self.inner[1..], "")), Option::Some)
-                .map(|(f, b)| (f.to_owned(), b.to_owned()))
-        }
-    }
 }
 
 impl Default for Pointer {
     fn default() -> Self {
         Self {
-            inner: "/".to_owned(),
+            inner: "".to_string(),
             err: None,
             count: 0,
         }
@@ -918,12 +929,12 @@ impl TryFrom<&str> for Pointer {
 
 fn validate_and_format(value: &str) -> Result<(usize, String), MalformedPointerError> {
     let mut chars = value.chars();
-    let mut next = chars.next();
-    match next {
+
+    match chars.next() {
         Some('#') => {
-            next = chars.next();
+            let next = chars.next();
             if next.is_none() {
-                return Ok((0, "/".into()));
+                return Ok((0, "".to_string()));
             }
             if next != Some('/') {
                 return Err(MalformedPointerError::NoLeadingSlash(value.into()));
@@ -934,24 +945,27 @@ fn validate_and_format(value: &str) -> Result<(usize, String), MalformedPointerE
             return Err(MalformedPointerError::NoLeadingSlash(value.into()));
         }
         None => {
-            return Ok((0, "/".into()));
+            return Ok((0, "".to_string()));
         }
     }
     let mut res = String::with_capacity(value.len());
     res.push('/');
     let mut count = 1; // accounting for the first slash
+
     while let Some(c) = chars.next() {
         res.push(c);
-        if c == '~' {
-            match chars.next() {
+        match c {
+            '~' => match chars.next() {
                 Some('0') => res.push('0'),
                 Some('1') => res.push('1'),
                 _ => {
                     return Err(MalformedPointerError::InvalidEncoding(value.to_string()));
                 }
+            },
+            '/' => {
+                count += 1;
             }
-        } else if c == '/' {
-            count += 1;
+            _ => {}
         }
     }
     Ok((count, res))
@@ -1006,7 +1020,7 @@ impl FromStr for Pointer {
     }
 }
 
-fn prepend(s: &str) -> String {
+fn prepend_slash(s: &str) -> String {
     if !s.starts_with('/') {
         "/".to_string() + s
     } else {

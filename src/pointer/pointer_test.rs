@@ -1,6 +1,76 @@
 use super::ResolvedMut;
-use crate::{Error, MalformedPointerError, Pointer, ResolveMut, UnresolvableError};
+use crate::{Error, MalformedPointerError, Pointer, Resolve, ResolveMut, UnresolvableError};
 use serde_json::{json, Value};
+#[test]
+fn test_rfc_examples() {
+    let data = json!({
+        "foo": ["bar", "baz"],
+        "": 0,
+        "a/b": 1,
+        "c%d": 2,
+        "e^f": 3,
+        "g|h": 4,
+        "i\\j": 5,
+        "k\"l": 6,
+        " ": 7,
+        "m~n": 8
+    });
+
+    let val = data.get("").unwrap();
+    assert_eq!(val, 0);
+
+    // ""           // the whole document
+    let ptr = Pointer::default();
+    assert_eq!(data.resolve(&ptr).unwrap(), &data);
+
+    // "/foo"       ["bar", "baz"]
+    let ptr = Pointer::try_from("/foo").unwrap();
+
+    assert_eq!(data.resolve(&ptr).unwrap(), &json!(["bar", "baz"]));
+
+    // "/foo/0"     "bar"
+    let ptr = Pointer::try_from("/foo/0").unwrap();
+    assert_eq!(data.resolve(&ptr).unwrap(), &json!("bar"));
+
+    // // "/"          0
+    let ptr = Pointer::try_from("/").unwrap();
+    assert_eq!(data.resolve(&ptr).unwrap(), &json!(0));
+
+    // "/a~1b"      1
+    assert_eq!(data.get("a/b").unwrap(), 1);
+    let ptr = Pointer::try_from("/a~1b").unwrap();
+    assert_eq!(ptr.as_str(), "/a~1b");
+    assert_eq!(data.get("a/b").unwrap(), 1);
+    assert_eq!(&ptr.first().unwrap(), "a/b");
+    assert_eq!(data.resolve(&ptr).unwrap(), &json!(1));
+
+    // "/c%d"       2
+    let ptr = Pointer::try_from("/c%d").unwrap();
+    assert_eq!(data.resolve(&ptr).unwrap(), &json!(2));
+
+    // // "/e^f"       3
+    let ptr = Pointer::try_from("/e^f").unwrap();
+    assert_eq!(data.resolve(&ptr).unwrap(), &json!(3));
+
+    // // "/g|h"       4
+    let ptr = Pointer::try_from("/g|h").unwrap();
+    assert_eq!(data.resolve(&ptr).unwrap(), &json!(4));
+
+    // "/i\\j"      5
+    let ptr = Pointer::try_from("/i\\j").unwrap();
+    assert_eq!(data.resolve(&ptr).unwrap(), &json!(5));
+
+    // // "/k\"l"      6
+    let ptr = Pointer::try_from("/k\"l").unwrap();
+    assert_eq!(data.resolve(&ptr).unwrap(), &json!(6));
+
+    // // "/ "         7
+    let ptr = Pointer::try_from("/ ").unwrap();
+    assert_eq!(data.resolve(&ptr).unwrap(), &json!(7));
+    // // "/m~0n"      8
+    let ptr = Pointer::try_from("/m~0n").unwrap();
+    assert_eq!(data.resolve(&ptr).unwrap(), &json!(8));
+}
 
 #[test]
 fn test_try_from_validation() {
@@ -23,12 +93,19 @@ fn test_try_from_validation() {
         err,
         MalformedPointerError::NoLeadingSlash("foo".to_string())
     );
+
+    assert!(Pointer::try_from("/foo/bar/baz/~1/~0").is_ok());
+
+    assert_eq!(
+        &Pointer::try_from("/foo/bar/baz/~1/~0").unwrap(),
+        "/foo/bar/baz/~1/~0"
+    );
 }
 
 #[test]
 fn test_push_pop_back() {
     let mut ptr = Pointer::default();
-    assert_eq!(ptr, "/", "default pointer should equal \"/\"");
+    assert_eq!(ptr, "", "default, root pointer should equal \"\"");
     assert_eq!(ptr.count(), 0, "default pointer should have 0 tokens");
 
     ptr.push_back("foo".into());
@@ -65,7 +142,7 @@ fn test_replace_token() {
 #[test]
 fn test_push_pop_front() {
     let mut ptr = Pointer::default();
-    assert_eq!(ptr, "/");
+    assert_eq!(ptr, "");
     assert_eq!(ptr.count(), 0);
     ptr.push_front("bar".into());
     assert_eq!(ptr, "/bar");
@@ -98,7 +175,7 @@ fn test_formatting() {
         "/~0~1foo/~0bar/~1baz"
     );
     assert_eq!(Pointer::new(&["field", "", "baz"]), "/field//baz");
-    assert_eq!(Pointer::default(), "/");
+    assert_eq!(Pointer::default(), "");
 }
 
 #[test]
@@ -116,13 +193,12 @@ fn test_last() {
 #[test]
 fn test_first() {
     let ptr = Pointer::try_from("/foo/bar").unwrap();
-
     assert_eq!(ptr.first(), Some("foo".into()));
 
     let ptr = Pointer::try_from("/foo/bar/-").unwrap();
     assert_eq!(ptr.first(), Some("foo".into()));
 
-    let ptr = Pointer::try_from("/").unwrap();
+    let ptr = Pointer::default();
     assert_eq!(ptr.first(), None);
 }
 
@@ -157,7 +233,7 @@ fn test_try_resolve_mut() {
         remaining,
         resolved: _resolved,
     } = ptr.try_resolve_mut(&mut data).unwrap();
-    assert_eq!(&remaining, "/");
+    assert_eq!(&remaining, "");
     assert_eq!(value, &mut json!("quux"));
 
     let ptr = Pointer::try_from("/foo/bar/does_not_exist/derp").unwrap();
@@ -179,17 +255,17 @@ fn test_try_resolve_mut() {
 
     let ptr = Pointer::try_from("/foo/strings/0").unwrap();
     let res = ptr.try_resolve_mut(&mut data).unwrap();
-    assert_eq!(res.remaining, "/");
+    assert_eq!(res.remaining, "");
     assert_eq!(res.value, &mut json!("zero"));
 
     let ptr = Pointer::try_from("/foo/strings/1").unwrap();
     let res = ptr.try_resolve_mut(&mut data).unwrap();
-    assert_eq!(res.remaining, "/");
+    assert_eq!(res.remaining, "");
     assert_eq!(res.value, &mut json!("one"));
 
     let ptr = Pointer::try_from("/foo/strings/2").unwrap();
     let res = ptr.try_resolve_mut(&mut data).unwrap();
-    assert_eq!(res.remaining, "/");
+    assert_eq!(res.remaining, "");
     assert_eq!(res.value, &mut json!("two"));
 
     let ptr = Pointer::try_from("/foo/strings/-").unwrap();
@@ -199,7 +275,7 @@ fn test_try_resolve_mut() {
 
     let ptr = Pointer::try_from("/foo/strings/0").unwrap();
     let res = ptr.try_resolve_mut(&mut data).unwrap();
-    assert_eq!(res.remaining, "/");
+    assert_eq!(res.remaining, "");
     assert_eq!(res.value, &mut json!("zero"));
 }
 
@@ -260,7 +336,7 @@ fn test_try_resolve() {
     let data = test_data();
     let ptr = Pointer::try_from("/foo/bar/baz/qux").unwrap();
     let res = ptr.try_resolve(&data).unwrap();
-    assert_eq!(&res.remaining, "/");
+    assert_eq!(&res.remaining, "");
     assert_eq!(res.value, &mut json!("quux"));
 
     let ptr = Pointer::try_from("/foo/bar/does_not_exist/derp").unwrap();
@@ -278,17 +354,17 @@ fn test_try_resolve() {
 
     let ptr = Pointer::try_from("/foo/strings/0").unwrap();
     let res = ptr.try_resolve(&data).unwrap();
-    assert_eq!(res.remaining, "/");
+    assert_eq!(res.remaining, "");
     assert_eq!(res.value, &mut json!("zero"));
 
     let ptr = Pointer::try_from("/foo/strings/1").unwrap();
     let res = ptr.try_resolve(&data).unwrap();
-    assert_eq!(res.remaining, "/");
+    assert_eq!(res.remaining, "");
     assert_eq!(res.value, &mut json!("one"));
 
     let ptr = Pointer::try_from("/foo/strings/2").unwrap();
     let res = ptr.try_resolve(&data).unwrap();
-    assert_eq!(res.remaining, "/");
+    assert_eq!(res.remaining, "");
     assert_eq!(res.value, &mut json!("two"));
 
     let ptr = Pointer::try_from("/foo/strings/-").unwrap();
@@ -298,7 +374,7 @@ fn test_try_resolve() {
 
     let ptr = Pointer::try_from("/foo/strings/0").unwrap();
     let res = ptr.try_resolve(&data).unwrap();
-    assert_eq!(res.remaining, "/");
+    assert_eq!(res.remaining, "");
     assert_eq!(res.value, &mut json!("zero"));
 }
 
