@@ -19,7 +19,6 @@ use std::{
     str::{FromStr, Split},
 };
 
-#[derive(Clone)]
 /// A JSON Pointer is a string containing a sequence of zero or more reference
 /// tokens, each prefixed by a '/' character.
 ///
@@ -43,6 +42,7 @@ use std::{
 /// let url = Url::parse("https://example.com#/foo/bar").unwrap();
 /// assert_eq!(ptr, Pointer::try_from(url).unwrap())
 /// ```
+#[derive(Clone, Default)]
 pub struct Pointer {
     inner: String,
     count: usize,
@@ -112,7 +112,7 @@ impl Pointer {
                 if !front.is_empty() {
                     self.inner = String::from("/") + &front;
                 } else {
-                    self.inner = "".to_owned();
+                    self.inner = String::default();
                 }
                 Token::from_encoded(back)
             })
@@ -153,6 +153,10 @@ impl Pointer {
         self.inner.is_empty()
     }
 
+    /// Returns a `serde_json::Value` representation of this `Pointer`
+    pub fn to_value(&self) -> Value {
+        Value::String(self.to_string())
+    }
     /// Returns the last `Token` in the `Pointer`.
     pub fn back(&self) -> Option<Token> {
         self.inner[1..]
@@ -806,16 +810,6 @@ impl Pointer {
     }
 }
 
-impl Default for Pointer {
-    fn default() -> Self {
-        Self {
-            inner: "".to_string(),
-            err: None,
-            count: 0,
-        }
-    }
-}
-
 impl Eq for Pointer {}
 impl Deref for Pointer {
     type Target = str;
@@ -910,11 +904,19 @@ impl TryFrom<Url> for Pointer {
         }
     }
 }
+
+impl From<Pointer> for Value {
+    fn from(val: Pointer) -> Self {
+        val.to_value()
+    }
+}
+
 impl From<usize> for Pointer {
     fn from(value: usize) -> Self {
         Pointer::new(&[value.to_string()])
     }
 }
+
 impl TryFrom<&str> for Pointer {
     type Error = MalformedPointerError;
     fn try_from(value: &str) -> Result<Self, Self::Error> {
@@ -934,7 +936,7 @@ fn validate_and_format(value: &str) -> Result<(usize, String), MalformedPointerE
         Some('#') => {
             let next = chars.next();
             if next.is_none() {
-                return Ok((0, "".to_string()));
+                return Ok((0, String::default()));
             }
             if next != Some('/') {
                 return Err(MalformedPointerError::NoLeadingSlash(value.into()));
@@ -945,7 +947,7 @@ fn validate_and_format(value: &str) -> Result<(usize, String), MalformedPointerE
             return Err(MalformedPointerError::NoLeadingSlash(value.into()));
         }
         None => {
-            return Ok((0, "".to_string()));
+            return Ok((0, String::default()));
         }
     }
     let mut res = String::with_capacity(value.len());
