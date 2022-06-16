@@ -1022,14 +1022,6 @@ impl FromStr for Pointer {
     }
 }
 
-fn prepend_slash(s: &str) -> String {
-    if !s.starts_with('/') {
-        "/".to_string() + s
-    } else {
-        s.to_owned()
-    }
-}
-
 #[derive(Debug)]
 struct Assigned<'a> {
     assigned: &'a mut Value,
