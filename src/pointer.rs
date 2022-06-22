@@ -906,8 +906,14 @@ impl TryFrom<Url> for Pointer {
 }
 
 impl From<Pointer> for Value {
-    fn from(val: Pointer) -> Self {
-        val.to_value()
+    fn from(ptr: Pointer) -> Self {
+        ptr.to_value()
+    }
+}
+
+impl From<&Pointer> for Value {
+    fn from(ptr: &Pointer) -> Self {
+        ptr.to_value()
     }
 }
 
