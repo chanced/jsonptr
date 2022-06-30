@@ -7,7 +7,7 @@ use std::{
 
 /// An enum representing possible errors that can occur when resolving or
 /// mutating by a JSON Pointer.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Error {
     Index(IndexError),
     Unresolvable(UnresolvableError),
@@ -127,7 +127,7 @@ impl Display for UnresolvableError {
 
 /// Indicates an error occurred while parsing a `usize` (`ParseError`) or the
 /// parsed value was out of bounds for the targeted array.
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone)]
 pub enum IndexError {
     Parse(ParseError),
     OutOfBounds(OutOfBoundsError),
@@ -154,7 +154,7 @@ impl From<OutOfBoundsError> for IndexError {
 }
 
 /// ParseError represents an that an error occurred when parsing an index.
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct ParseError {
     pub source: ParseIntError,
     pub token: Token,
@@ -181,7 +181,7 @@ impl StdError for ParseError {
 
 /// Indicates that the `Pointer` contains an index of an array that is out of
 /// bounds.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct OutOfBoundsError {
     pub len: usize,
     pub index: usize,
@@ -222,7 +222,7 @@ impl Display for MalformedPointerError {
 impl StdError for MalformedPointerError {}
 
 /// NotFoundError indicates that a Pointer was not found in the data.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct NotFoundError {
     pub pointer: Pointer,
 }
