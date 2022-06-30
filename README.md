@@ -1,9 +1,9 @@
 # jsonptr - JSON Pointers for Rust
 
-[<img alt="github" src="https://img.shields.io/badge/github-chanced/jsonptr-8da0cb?style=for-the-badge&labelColor=777&logo=github" height="20">](https://github.com/chanced/jsonptr)
-[<img alt="crates.io" src="https://img.shields.io/crates/v/jsonptr.svg?style=for-the-badge&color=fc8d62&logo=rust" height="20">](https://crates.io/crates/jsonptr)
-[<img alt="docs.rs" src="https://img.shields.io/badge/docs.rs-jsonptr-f0f0f0?style=for-the-badge&labelColor=777&logo=docs.rs" height="20">](https://docs.rs/jsonptr)
-[<img alt="build status" src="https://img.shields.io/github/workflow/status/chanced/jsonptr/Rust/main?style=for-the-badge" height="20">](https://github.com/chanced/jsonptr/actions?query=branch%3Amain)
+[<img alt="github" src="https://img.shields.io/badge/github-chanced/jsonptr-8da0cb?style=for-the-badge&labelColor=777&logo=github">](https://github.com/chanced/jsonptr)
+[<img alt="crates.io" src="https://img.shields.io/crates/v/jsonptr.svg?style=for-the-badge&color=fc8d62&logo=rust">](https://crates.io/crates/jsonptr)
+[<img alt="docs.rs" src="https://img.shields.io/badge/docs.rs-jsonptr-f0f0f0?style=for-the-badge&labelColor=777&logo=docs.rs">](https://docs.rs/jsonptr)
+[<img alt="build status" src="https://img.shields.io/github/workflow/status/chanced/jsonptr/Rust/main?style=for-the-badge" >](https://github.com/chanced/jsonptr/actions?query=branch%3Amain)
 
 Data structures and logic for resolving, assigning, and deleting by JSON Pointers ([RFC
 6901](https://datatracker.ietf.org/doc/html/rfc6901)).
