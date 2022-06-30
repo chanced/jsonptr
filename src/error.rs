@@ -214,6 +214,22 @@ impl Display for OutOfBoundsError {
     }
 }
 
+/// Pointer was not in UTF-8 format.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct NotUtf8Error {
+    /// Underlying `std::str::Utf8Error`.
+    pub source: std::string::FromUtf8Error,
+    /// Byte slice that was not in UTF-8 format.
+    pub path: Vec<u8>,
+}
+
+impl std::fmt::Display for NotUtf8Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "not utf8: {}", self.source)
+    }
+}
+impl StdError for NotUtf8Error {}
+
 /// Indicates that a Pointer was malformed.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum MalformedPointerError {
@@ -223,8 +239,23 @@ pub enum MalformedPointerError {
     /// Indicates that the Pointer was malformed because it contained invalid
     /// encoding.
     InvalidEncoding(String),
+    /// NonUTF8
+    NotUtf8(NotUtf8Error),
+}
+impl From<NotUtf8Error> for MalformedPointerError {
+    fn from(err: NotUtf8Error) -> Self {
+        MalformedPointerError::NotUtf8(err)
+    }
 }
 
+impl From<std::string::FromUtf8Error> for MalformedPointerError {
+    fn from(err: std::string::FromUtf8Error) -> Self {
+        MalformedPointerError::NotUtf8(NotUtf8Error {
+            source: err,
+            path: Vec::new(),
+        })
+    }
+}
 impl Display for MalformedPointerError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -237,6 +268,9 @@ impl Display for MalformedPointerError {
             }
             MalformedPointerError::InvalidEncoding(s) => {
                 write!(f, "json pointer \"{}\" is improperly encoded", s)
+            }
+            MalformedPointerError::NotUtf8(err) => {
+                write!(f, "json pointer is not UTF-8: {}", err.source)
             }
         }
     }

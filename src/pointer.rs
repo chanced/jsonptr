@@ -1,14 +1,12 @@
 #[cfg(test)]
 mod pointer_test;
 
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use url::Url;
-
 use crate::{
     Assignment, Error, MalformedPointerError, NotFoundError, OutOfBoundsError, ReplaceTokenError,
     Token, Tokens, UnresolvableError,
 };
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::{
     borrow::{Borrow, Cow},
     cmp::Ordering,
@@ -18,6 +16,8 @@ use std::{
     ops::{ControlFlow, Deref},
     str::{FromStr, Split},
 };
+use uniresid::{Uri, AbsoluteUri};
+use url::Url;
 
 /// A JSON Pointer is a string containing a sequence of zero or more reference
 /// tokens, each prefixed by a '/' character.
@@ -896,6 +896,53 @@ impl TryFrom<String> for Pointer {
     type Error = MalformedPointerError;
     fn try_from(value: String) -> Result<Self, Self::Error> {
         Self::try_from(value.as_str())
+    }
+}
+impl TryFrom<&Uri> for Pointer {
+    type Error = MalformedPointerError;
+
+    fn try_from(uri: &Uri) -> Result<Self, Self::Error> {
+        match uri.fragment_to_string() {
+            Ok(Some(_)) => todo!(),
+            Ok(None) => todo!(),
+            Err(err) => Err(err.into()),
+        }
+    }
+}
+impl TryFrom<Uri> for Pointer {
+    type Error = MalformedPointerError;
+
+    fn try_from(uri: Uri) -> Result<Self, Self::Error> {
+        Self::try_from(&uri)
+    }
+}
+
+impl TryFrom<&AbsoluteUri> for Pointer {
+    type Error = MalformedPointerError;
+
+    fn try_from(uri: &AbsoluteUri) -> Result<Self, Self::Error> {
+        match uri.fragment_to_string() {
+            Ok(Some(_)) => todo!(),
+            Ok(None) => todo!(),
+            Err(err) => Err(err.into()),
+        }
+    }
+}
+impl TryFrom<AbsoluteUri> for Pointer {
+    type Error = MalformedPointerError;
+
+    fn try_from(uri: AbsoluteUri) -> Result<Self, Self::Error> {
+        Self::try_from(&uri)
+    }
+}
+
+impl TryFrom<&Url> for Pointer {
+    type Error = MalformedPointerError;
+    fn try_from(url: &Url) -> Result<Self, Self::Error> {
+        match url.fragment() {
+            Some(f) => Self::try_from(f),
+            None => Ok(Pointer::default()),
+        }
     }
 }
 

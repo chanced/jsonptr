@@ -1,6 +1,6 @@
 [package]
 name = "jsonptr"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2021"
 description = "Data structures and logic for resolving, assigning, and deleting by JSON Pointers (RFC 6901)"
 documentation = "https://docs.rs/jsonptr"
@@ -15,3 +15,4 @@ authors = ["chance dinkins"]
 serde = "1.0"
 serde_json = "1.0"
 url = "2"
+uniresid = "0.1.4"
