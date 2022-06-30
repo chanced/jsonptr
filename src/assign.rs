@@ -7,6 +7,7 @@ use crate::{Error, Pointer};
 /// Assign is implemented by types which can internally assign a
 /// `serde_json::Value` by a JSON Pointer.
 pub trait Assign {
+    /// Error associated with `Assign`
     type Error: std::error::Error + Send + Sync + 'static;
     /// Assign a value of based on the path provided by a JSON Pointer.
     fn assign(&mut self, ptr: &Pointer, value: Value) -> Result<Assignment, Self::Error>;

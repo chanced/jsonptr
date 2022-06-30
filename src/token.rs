@@ -114,7 +114,7 @@ impl Token {
     pub fn as_key(&self) -> &String {
         self.value.as_key()
     }
-
+    /// Returns the `&str` representation of the `Token`
     pub fn as_str(&self) -> &str {
         self.value.decoded()
     }

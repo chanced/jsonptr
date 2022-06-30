@@ -56,6 +56,7 @@ impl Pointer {
     pub fn root() -> Self {
         Self::default()
     }
+    /// Creates a new `Pointer` from a slice of non-encoded strings.
     pub fn new(tokens: &[impl AsRef<str>]) -> Self {
         let mut inner = String::new();
         for t in tokens.iter().map(Token::new) {
@@ -227,7 +228,10 @@ impl Pointer {
         let tokens = self.tokens().collect::<Vec<_>>();
         tokens.get(index).cloned()
     }
-
+    /// Attempts to replace a `Token` by the index, returning the replaced
+    /// `Token` if it already exists. Returns `None` otherwise.
+    ///
+    /// A `ReplaceTokenError` is returned if the index is out of bounds.
     pub fn replace_token(
         &mut self,
         index: usize,

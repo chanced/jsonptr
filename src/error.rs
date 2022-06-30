@@ -9,9 +9,16 @@ use std::{
 /// mutating by a JSON Pointer.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Error {
+    /// Indicates an error occurred while parsing a `usize` (`ParseError`) or the
+    /// parsed value was out of bounds for the targeted array.
     Index(IndexError),
+    /// Represents an error that occurs when attempting to resolve a `Pointer` that
+    /// encounters a leaf node (i.e. a scalar / null value) which is not the root
+    /// of the `Pointer`.
     Unresolvable(UnresolvableError),
+    /// Indicates that a Pointer was not found in the data.
     NotFound(NotFoundError),
+    /// Indicates that a Pointer was malformed.
     MalformedPointer(MalformedPointerError),
 }
 
@@ -98,10 +105,14 @@ impl StdError for Error {
 /// ```
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct UnresolvableError {
+    /// The unresolved `Pointer`.
     pub pointer: Pointer,
+    /// The leaf node, if applicable, which was expected to be either an
+    /// `Object` or an `Array`.
     pub leaf: Option<Token>,
 }
 impl UnresolvableError {
+    /// Creates a new `UnresolvableError` with the given `Pointer`.
     pub fn new(pointer: Pointer) -> Self {
         let leaf = if pointer.count() >= 2 {
             Some(pointer.get(pointer.count() - 2).unwrap())
@@ -129,7 +140,10 @@ impl Display for UnresolvableError {
 /// parsed value was out of bounds for the targeted array.
 #[derive(PartialEq, Eq, Clone)]
 pub enum IndexError {
+    /// Represents an that an error occurred when parsing an index.
     Parse(ParseError),
+    /// Indicates that the Pointer contains an index of an array that is out of
+    /// bounds.
     OutOfBounds(OutOfBoundsError),
 }
 impl Display for IndexError {
@@ -156,7 +170,9 @@ impl From<OutOfBoundsError> for IndexError {
 /// ParseError represents an that an error occurred when parsing an index.
 #[derive(PartialEq, Eq, Clone)]
 pub struct ParseError {
+    /// The source `ParseIntError`
     pub source: ParseIntError,
+    /// The `Token` which was unable to be parsed as an index.
     pub token: Token,
 }
 
@@ -183,8 +199,11 @@ impl StdError for ParseError {
 /// bounds.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct OutOfBoundsError {
+    /// The length of the array.
     pub len: usize,
+    /// The index of the array that was out of bounds.
     pub index: usize,
+    /// The `Token` which was out of bounds.
     pub token: Token,
 }
 impl StdError for OutOfBoundsError {}
@@ -198,7 +217,11 @@ impl Display for OutOfBoundsError {
 /// Indicates that a Pointer was malformed.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum MalformedPointerError {
+    /// Indicates that the Pointer was malformed because it did not contain a
+    /// leading slash (`'/'`).
     NoLeadingSlash(String),
+    /// Indicates that the Pointer was malformed because it contained invalid
+    /// encoding.
     InvalidEncoding(String),
 }
 
@@ -224,9 +247,11 @@ impl StdError for MalformedPointerError {}
 /// NotFoundError indicates that a Pointer was not found in the data.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct NotFoundError {
+    /// The `Pointer` which could not be resolved.
     pub pointer: Pointer,
 }
 impl NotFoundError {
+    /// Creates a new `NotFoundError` with the given `Pointer`.
     pub fn new(pointer: Pointer) -> Self {
         NotFoundError { pointer }
     }
@@ -241,12 +266,15 @@ impl Display for NotFoundError {
     }
 }
 
-/// ReplaceTokenError is returned from `Pointer::replace_token` when the
-/// provided index is out of bounds.
+/// Returned from `Pointer::replace_token` when the provided index is out of
+/// bounds.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ReplaceTokenError {
+    /// The index of the token that was out of bounds.
     pub index: usize,
+    /// The number of tokens in the `Pointer`.
     pub count: usize,
+    /// The subject `Pointer`.
     pub pointer: Pointer,
 }
 impl StdError for ReplaceTokenError {}
