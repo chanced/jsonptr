@@ -32,7 +32,7 @@ use serde_json::Value;
 /// ```rust
 /// use jsonptr::{Pointer, Resolve};
 /// use serde_json::{json, Value};
-/// use url::Url; // for the `try_from` example below.
+/// use url::Url;
 ///
 /// let data = json!({ "foo": { "bar": "baz" } });
 /// let ptr = Pointer::new(&["foo", "bar"]);
@@ -42,6 +42,7 @@ use serde_json::Value;
 /// // you can also use `try_from`, which expects a properly formatted JSON Pointer:
 /// assert_eq!(ptr, Pointer::try_from("/foo/bar").unwrap());
 ///
+/// // enable the `url` feature to use `TryFrom<Url>`:
 /// let url = Url::parse("https://example.com#/foo/bar").unwrap();
 /// assert_eq!(ptr, Pointer::try_from(url).unwrap())
 /// ```
