@@ -9,12 +9,17 @@ pub trait Assign {
     /// Error associated with `Assign`
     type Error;
     /// Assign a value of based on the path provided by a JSON Pointer.
-    fn assign(&mut self, ptr: &Pointer, value: Value) -> Result<Assignment, Self::Error>;
+    fn assign<V>(&mut self, ptr: &Pointer, value: V) -> Result<Assignment, Self::Error>
+    where
+        V: Into<Value>;
 }
 
 impl Assign for Value {
     type Error = Error;
-    fn assign(&mut self, ptr: &Pointer, value: Value) -> Result<Assignment, Error> {
+    fn assign<V>(&mut self, ptr: &Pointer, value: V) -> Result<Assignment, Error>
+    where
+        V: Into<Value>,
+    {
         ptr.assign(self, value)
     }
 }
@@ -69,7 +74,7 @@ pub struct Assignment<'a> {
     /// use jsonptr::{Pointer, Assign};
     /// let mut data = json!({ "foo": ["zero"] });
     /// let mut ptr = Pointer::try_from("/foo/-").unwrap();
-    /// let assignment = data.assign(&mut ptr, "one".into()).unwrap();
+    /// let assignment = data.assign(&mut ptr, "one").unwrap();
     /// assert_eq!(assignment.assigned_to, Pointer::try_from("/foo/1").unwrap());
     /// ```
     pub assigned_to: Pointer,

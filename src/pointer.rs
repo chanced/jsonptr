@@ -472,7 +472,10 @@ impl Pointer {
     /// let assignment = data.assign(&ptr, src).unwrap();
     /// assert_eq!(data, json!([{ "foo": "bar" } ]));
     /// ```
-    pub fn assign<'d>(&self, dest: &'d mut Value, src: Value) -> Result<Assignment<'d>, Error> {
+    pub fn assign<'d, V>(&self, dest: &'d mut Value, src: V) -> Result<Assignment<'d>, Error>
+    where
+        V: Into<Value>,
+    {
         match self.try_resolve_mut(dest) {
             Ok(ResolvedMut {
                 value: dest,
@@ -480,7 +483,7 @@ impl Pointer {
                 mut resolved,
             }) => {
                 if remaining.is_root() {
-                    let replaced = mem::replace(dest, src);
+                    let replaced = mem::replace(dest, src.into());
                     Ok(Assignment {
                         replaced,
                         assigned: Cow::Borrowed(dest),
@@ -492,7 +495,7 @@ impl Pointer {
                         assigned,
                         replaced,
                         to,
-                    } = remaining.assign_value(dest, src)?;
+                    } = remaining.assign_value(dest, src.into())?;
                     resolved.append(&to);
                     Ok(Assignment {
                         replaced,
@@ -506,9 +509,12 @@ impl Pointer {
         }
     }
 
-    fn assign_value<'a>(&mut self, dest: &'a mut Value, src: Value) -> Result<Assigned<'a>, Error> {
+    fn assign_value<'a, V>(&mut self, dest: &'a mut Value, src: V) -> Result<Assigned<'a>, Error>
+    where
+        V: Into<Value>,
+    {
         if self.is_root() {
-            let replaced = mem::replace(dest, src);
+            let replaced = mem::replace(dest, src.into());
             return Ok(Assigned {
                 assigned: dest,
                 replaced,
@@ -539,10 +545,10 @@ impl Pointer {
             // value onto the array.
             if self.is_root() {
                 if i == len {
-                    dest.as_array_mut().unwrap().push(src);
+                    dest.as_array_mut().unwrap().push(src.into());
                 } else {
                     replaced = dest.as_array_mut().unwrap().get(i).cloned().unwrap();
-                    dest.as_array_mut().unwrap()[i] = src;
+                    dest.as_array_mut().unwrap()[i] = src.into();
                 }
                 let assigned = dest.as_array_mut().unwrap().get_mut(i).unwrap();
 
@@ -557,7 +563,11 @@ impl Pointer {
         // if not an array, the value is an object (due to the assignment above)
         // if root, replace the value
         } else if self.is_root() {
-            if let Some(old_val) = dest.as_object_mut().unwrap().insert(token.to_string(), src) {
+            if let Some(old_val) = dest
+                .as_object_mut()
+                .unwrap()
+                .insert(token.to_string(), src.into())
+            {
                 replaced = old_val;
             }
             let assigned = dest
