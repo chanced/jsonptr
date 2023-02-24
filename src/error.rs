@@ -126,7 +126,7 @@ impl Display for UnresolvableError {
             self.pointer,
             self.leaf
                 .as_deref()
-                .map_or_else(|| "the root value".to_string(), |l| format!("\"{}\"", l))
+                .map_or_else(|| "the root value".to_string(), |l| format!("\"{l}\""))
         )
     }
 }
@@ -261,12 +261,11 @@ impl Display for MalformedPointerError {
             MalformedPointerError::NoLeadingSlash(s) => {
                 write!(
                     f,
-                    "json pointer \"{}\" is malformed due to missing starting slash",
-                    s
+                    "json pointer \"{s}\" is malformed due to missing starting slash",
                 )
             }
             MalformedPointerError::InvalidEncoding(s) => {
-                write!(f, "json pointer \"{}\" is improperly encoded", s)
+                write!(f, "json pointer \"{s}\" is improperly encoded")
             }
             MalformedPointerError::NotUtf8(err) => {
                 write!(f, "json pointer is not UTF-8: {}", err.source)
