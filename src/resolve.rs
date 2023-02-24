@@ -4,7 +4,7 @@ use serde_json::Value;
 /// `serde_json::Value` from the path in a JSON Pointer.
 pub trait Resolve {
     /// Error associated with `Resolve`
-    type Error: std::error::Error + Send + Sync + 'static;
+    type Error;
     /// Resolve a reference to a `serde_json::Value` based on the path in a
     /// [Pointer].
     fn resolve(&self, ptr: &Pointer) -> Result<&Value, Error>;

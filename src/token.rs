@@ -1,14 +1,10 @@
 #[cfg(test)]
 mod token_test;
 
-use std::{
-    borrow::Borrow,
-    fmt::{Debug, Display},
-    hash::{Hash, Hasher},
-    ops::Deref,
-};
+use core::{borrow::Borrow, cmp::Ordering, ops::Deref};
 
 use crate::{IndexError, OutOfBoundsError, ParseError};
+use alloc::string::{String, ToString};
 use serde::{Deserialize, Serialize};
 
 const ENCODED_TILDE: &str = "~0";
@@ -230,17 +226,17 @@ impl PartialEq<&Token> for String {
 }
 
 impl PartialOrd<str> for Token {
-    fn partial_cmp(&self, other: &str) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &str) -> Option<Ordering> {
         self.decoded().partial_cmp(other)
     }
 }
 impl PartialOrd<String> for Token {
-    fn partial_cmp(&self, other: &String) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &String) -> Option<Ordering> {
         self.decoded().partial_cmp(other)
     }
 }
 impl PartialOrd<Token> for Token {
-    fn partial_cmp(&self, other: &Token) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Token) -> Option<Ordering> {
         self.decoded().partial_cmp(other.decoded())
     }
 }
@@ -251,30 +247,30 @@ impl PartialEq<Token> for String {
 }
 
 impl PartialOrd<Token> for String {
-    fn partial_cmp(&self, other: &Token) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Token) -> Option<Ordering> {
         self.as_str().partial_cmp(other.decoded())
     }
 }
 
-impl Hash for Token {
-    fn hash<H: Hasher>(&self, state: &mut H) {
+impl core::hash::Hash for Token {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         self.value.decoded().hash(state)
     }
 }
 
-impl Debug for Token {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for Token {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.decoded())
     }
 }
-impl Display for Token {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Token {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.decoded())
     }
 }
 
-impl std::cmp::Ord for Token {
-    fn cmp(&self, other: &Token) -> std::cmp::Ordering {
+impl Ord for Token {
+    fn cmp(&self, other: &Token) -> Ordering {
         self.decoded().cmp(other.decoded())
     }
 }

@@ -1,5 +1,6 @@
 use super::ResolvedMut;
 use crate::{Error, MalformedPointerError, Pointer, Resolve, ResolveMut, UnresolvableError};
+use alloc::{string::ToString, vec};
 use serde_json::{json, Value};
 #[test]
 fn test_rfc_examples() {

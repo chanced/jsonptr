@@ -1,4 +1,4 @@
-use std::str::Split;
+use core::str::Split;
 
 use crate::Token;
 
@@ -15,7 +15,7 @@ impl<'a> Iterator for Tokens<'a> {
     }
 }
 impl<'t> Tokens<'t> {
-    pub(crate) fn new(split: Split<char>) -> Tokens {
-        Tokens { inner: split }
+    pub(crate) fn new(split: Split<'t, char>) -> Self {
+        Self { inner: split }
     }
 }

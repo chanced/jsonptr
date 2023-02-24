@@ -1,5 +1,4 @@
-use std::borrow::Cow;
-
+use alloc::borrow::Cow;
 use serde_json::Value;
 
 use crate::{Error, Pointer};
@@ -8,7 +7,7 @@ use crate::{Error, Pointer};
 /// `serde_json::Value` by a JSON Pointer.
 pub trait Assign {
     /// Error associated with `Assign`
-    type Error: std::error::Error + Send + Sync + 'static;
+    type Error;
     /// Assign a value of based on the path provided by a JSON Pointer.
     fn assign(&mut self, ptr: &Pointer, value: Value) -> Result<Assignment, Self::Error>;
 }
@@ -35,13 +34,9 @@ pub struct Assignment<'a> {
     pub replaced: Value,
     /// The path which was created or replaced.
     ///
-    /// For example, if you had the json:
-    /// ```json
-    /// { "foo": { "bar": "baz" } }
-    /// ```
-    /// and you assigned `"new_value"` to `"/foo/qux/quux"`, then
-    /// `created_or_mutated` would be `Some("/foo/qux")` as `"qux"` is the
-    /// top-level value assigned.
+    /// For example, if you had the json `{ "foo": { "bar": "baz" } }` and you
+    /// assigned `"new_value"` to `"/foo/qux/quux"`, then `created_or_mutated`
+    /// would be `Some("/foo/qux")` as `"qux"` is the top-level value assigned.
     ///
     /// The resulting json would have the following structure:
     /// ```json
@@ -56,15 +51,15 @@ pub struct Assignment<'a> {
     /// ```
     ///
     /// Note: if a portion of the path contains a leaf node that is to be
-    /// overridden by an object or an array, then the path will be the from the
-    /// leaf that is replaced.
+    /// overridden by an object or an array, then the path will be leaf that is
+    /// replaced.
     ///
     /// For example, if you had the json:
     /// ```json
     /// { "foo:" "bar" }
     /// ```
-    /// and you assigned `"new_value"` to `"/foo/bar/baz"`, then `created` would
-    /// be `Some("/foo/bar")` as `"/foo/bar"` is the new path object.
+    /// and you assigned `"new_value"` to `"/foo/bar/baz"`, then the value would
+    /// be `Some("/foo/bar")`.
     pub created_or_mutated: Pointer,
     /// A `Pointer` consisting of the path which was assigned.
     ///

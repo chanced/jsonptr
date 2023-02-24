@@ -1,6 +1,12 @@
+use alloc::{
+    format,
+    string::{FromUtf8Error, String, ToString},
+    vec::Vec,
+};
+
 use crate::{Pointer, Token};
-use std::{
-    error::Error as StdError,
+use core::{
+    // error::Error as StdError,
     fmt::{Debug, Display, Formatter},
     num::ParseIntError,
 };
@@ -69,23 +75,12 @@ impl From<UnresolvableError> for Error {
 }
 
 impl Display for Error {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
             Error::Index(err) => Display::fmt(err, f),
             Error::Unresolvable(err) => Display::fmt(err, f),
             Error::NotFound(err) => Display::fmt(err, f),
             Error::MalformedPointer(err) => Display::fmt(err, f),
-        }
-    }
-}
-
-impl StdError for Error {
-    fn source(&self) -> Option<&(dyn StdError + 'static)> {
-        match self {
-            Self::Index(err) => Some(err),
-            Error::Unresolvable(_) => None,
-            Error::NotFound(_) => None,
-            Error::MalformedPointer(_) => todo!(),
         }
     }
 }
@@ -124,7 +119,7 @@ impl UnresolvableError {
 }
 
 impl Display for UnresolvableError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
             "can not resolve \"{}\" due to {} being a scalar value",
@@ -147,7 +142,7 @@ pub enum IndexError {
     OutOfBounds(OutOfBoundsError),
 }
 impl Display for IndexError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
             IndexError::Parse(err) => Display::fmt(&err, f),
             IndexError::OutOfBounds(err) => Display::fmt(&err, f),
@@ -155,10 +150,11 @@ impl Display for IndexError {
     }
 }
 impl Debug for IndexError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         Display::fmt(self, f)
     }
 }
+#[cfg(feature = "std")]
 impl std::error::Error for IndexError {}
 
 impl From<OutOfBoundsError> for IndexError {
@@ -177,20 +173,21 @@ pub struct ParseError {
 }
 
 impl Display for ParseError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.source)
     }
 }
 impl Debug for ParseError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("ParseError")
             .field("source", &self.source)
             .field("token", &self.token)
             .finish()
     }
 }
-impl StdError for ParseError {
-    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+#[cfg(feature = "std")]
+impl std::error::Error for ParseError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         Some(&self.source)
     }
 }
@@ -206,10 +203,11 @@ pub struct OutOfBoundsError {
     /// The `Token` which was out of bounds.
     pub token: Token,
 }
-impl StdError for OutOfBoundsError {}
+#[cfg(feature = "std")]
+impl std::error::Erorr for OutOfBoundsError {}
 
 impl Display for OutOfBoundsError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         write!(f, "index {} out of bounds", self.index)
     }
 }
@@ -218,17 +216,18 @@ impl Display for OutOfBoundsError {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct NotUtf8Error {
     /// Underlying `std::str::Utf8Error`.
-    pub source: std::string::FromUtf8Error,
+    pub source: FromUtf8Error,
     /// Byte slice that was not in UTF-8 format.
     pub path: Vec<u8>,
 }
 
-impl std::fmt::Display for NotUtf8Error {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for NotUtf8Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         write!(f, "not utf8: {}", self.source)
     }
 }
-impl StdError for NotUtf8Error {}
+#[cfg(feature = "std")]
+impl std::error::Error for NotUtf8Error {}
 
 /// Indicates that a Pointer was malformed.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -248,8 +247,8 @@ impl From<NotUtf8Error> for MalformedPointerError {
     }
 }
 
-impl From<std::string::FromUtf8Error> for MalformedPointerError {
-    fn from(err: std::string::FromUtf8Error) -> Self {
+impl From<FromUtf8Error> for MalformedPointerError {
+    fn from(err: FromUtf8Error) -> Self {
         MalformedPointerError::NotUtf8(NotUtf8Error {
             source: err,
             path: Vec::new(),
@@ -257,7 +256,7 @@ impl From<std::string::FromUtf8Error> for MalformedPointerError {
     }
 }
 impl Display for MalformedPointerError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
             MalformedPointerError::NoLeadingSlash(s) => {
                 write!(
@@ -276,7 +275,8 @@ impl Display for MalformedPointerError {
     }
 }
 
-impl StdError for MalformedPointerError {}
+#[cfg(feature = "std")]
+impl std::error::Error for MalformedPointerError {}
 
 /// NotFoundError indicates that a Pointer was not found in the data.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -291,7 +291,7 @@ impl NotFoundError {
     }
 }
 impl Display for NotFoundError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
             "the resource at json pointer \"{}\" was not found",
@@ -311,9 +311,10 @@ pub struct ReplaceTokenError {
     /// The subject `Pointer`.
     pub pointer: Pointer,
 }
-impl StdError for ReplaceTokenError {}
+#[cfg(feature = "std")]
+impl std::error::Error for ReplaceTokenError {}
 impl Display for ReplaceTokenError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
             "index {} is out of bounds ({}) for the pointer {}",

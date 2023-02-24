@@ -1,24 +1,27 @@
 #[cfg(test)]
 mod pointer_test;
 
-use crate::{
-    Assignment, Error, MalformedPointerError, NotFoundError, OutOfBoundsError, ReplaceTokenError,
-    Token, Tokens, UnresolvableError,
-};
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use std::{
-    borrow::{Borrow, Cow},
+use core::{
+    borrow::Borrow,
     cmp::Ordering,
-    fmt::{Debug, Display},
-    hash::{Hash, Hasher},
     mem,
     ops::{ControlFlow, Deref},
     str::{FromStr, Split},
 };
-use uniresid::{Uri, AbsoluteUri};
-use url::Url;
 
+use crate::{
+    Assignment, Error, MalformedPointerError, NotFoundError, OutOfBoundsError, ReplaceTokenError,
+    Token, Tokens, UnresolvableError,
+};
+use alloc::{
+    borrow::{Cow, ToOwned},
+    boxed::Box,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 /// A JSON Pointer is a string containing a sequence of zero or more reference
 /// tokens, each prefixed by a '/' character.
 ///
@@ -264,7 +267,7 @@ impl Pointer {
         Ok(old)
     }
 
-    /// Clears the `Pointer`, setting it to root (`"/"`).
+    /// Clears the `Pointer`, setting it to root (`""`).
     pub fn clear(&mut self) {
         self.count = 0;
         self.inner = String::from("");
@@ -633,7 +636,7 @@ impl Pointer {
     /// not at the root, an error is returned.
     ///
     /// If the resolution is successful, the pointer will be empty.
-    fn try_resolve_mut<'v, 'p>(&'p self, value: &'v mut Value) -> Result<ResolvedMut<'v>, Error> {
+    fn try_resolve_mut<'v>(&self, value: &'v mut Value) -> Result<ResolvedMut<'v>, Error> {
         self.validate()?;
         let mut tokens = self.tokens();
         let mut resolved = Pointer::default();
@@ -726,7 +729,7 @@ impl Pointer {
     /// not at the root, an error is returned.
     ///
     /// If the resolution is successful, the pointer will be empty.
-    fn try_resolve<'v, 'p>(&'p self, value: &'v Value) -> Result<Resolved<'v>, Error> {
+    fn try_resolve<'v>(&self, value: &'v Value) -> Result<Resolved<'v>, Error> {
         let mut tokens = self.tokens();
         let mut resolved = Pointer::default();
         let res = tokens.try_fold((value, self.clone()), |(v, mut p), token| match v {
@@ -847,7 +850,6 @@ impl<'de> Deserialize<'de> for Pointer {
         }
     }
 }
-
 impl AsRef<str> for Pointer {
     fn as_ref(&self) -> &str {
         &self.inner
@@ -898,10 +900,11 @@ impl TryFrom<String> for Pointer {
         Self::try_from(value.as_str())
     }
 }
-impl TryFrom<&Uri> for Pointer {
+#[cfg(feature = "uniresid")]
+impl TryFrom<&uniresid::Uri> for Pointer {
     type Error = MalformedPointerError;
 
-    fn try_from(uri: &Uri) -> Result<Self, Self::Error> {
+    fn try_from(uri: &uniresid::Uri) -> Result<Self, Self::Error> {
         match uri.fragment_to_string() {
             Ok(Some(_)) => todo!(),
             Ok(None) => todo!(),
@@ -909,18 +912,19 @@ impl TryFrom<&Uri> for Pointer {
         }
     }
 }
-impl TryFrom<Uri> for Pointer {
+#[cfg(feature = "uniresid")]
+impl TryFrom<uniresid::Uri> for Pointer {
     type Error = MalformedPointerError;
 
-    fn try_from(uri: Uri) -> Result<Self, Self::Error> {
+    fn try_from(uri: uniresid::Uri) -> Result<Self, Self::Error> {
         Self::try_from(&uri)
     }
 }
-
-impl TryFrom<&AbsoluteUri> for Pointer {
+#[cfg(feature = "uniresid")]
+impl TryFrom<&uniresid::AbsoluteUri> for Pointer {
     type Error = MalformedPointerError;
 
-    fn try_from(uri: &AbsoluteUri) -> Result<Self, Self::Error> {
+    fn try_from(uri: &uniresid::AbsoluteUri) -> Result<Self, Self::Error> {
         match uri.fragment_to_string() {
             Ok(Some(_)) => todo!(),
             Ok(None) => todo!(),
@@ -928,27 +932,28 @@ impl TryFrom<&AbsoluteUri> for Pointer {
         }
     }
 }
-impl TryFrom<AbsoluteUri> for Pointer {
+#[cfg(feature = "uniresid")]
+impl TryFrom<uniresid::AbsoluteUri> for Pointer {
     type Error = MalformedPointerError;
 
-    fn try_from(uri: AbsoluteUri) -> Result<Self, Self::Error> {
+    fn try_from(uri: uniresid::AbsoluteUri) -> Result<Self, Self::Error> {
         Self::try_from(&uri)
     }
 }
-
-impl TryFrom<&Url> for Pointer {
+#[cfg(feature = "url")]
+impl TryFrom<&url::Url> for Pointer {
     type Error = MalformedPointerError;
-    fn try_from(url: &Url) -> Result<Self, Self::Error> {
+    fn try_from(url: &url::Url) -> Result<Self, Self::Error> {
         match url.fragment() {
             Some(f) => Self::try_from(f),
             None => Ok(Pointer::default()),
         }
     }
 }
-
-impl TryFrom<Url> for Pointer {
+#[cfg(feature = "url")]
+impl TryFrom<url::Url> for Pointer {
     type Error = MalformedPointerError;
-    fn try_from(url: Url) -> Result<Self, Self::Error> {
+    fn try_from(url: url::Url) -> Result<Self, Self::Error> {
         match url.fragment() {
             Some(f) => Self::try_from(f),
             None => Ok(Pointer::default()),
@@ -1056,19 +1061,19 @@ impl PartialOrd<Pointer> for String {
         self.partial_cmp(&other.inner)
     }
 }
-impl Hash for Pointer {
-    fn hash<H: Hasher>(&self, state: &mut H) {
+impl core::hash::Hash for Pointer {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         self.inner.hash(state)
     }
 }
 
-impl Debug for Pointer {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for Pointer {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.inner)
     }
 }
-impl Display for Pointer {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Pointer {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.inner)
     }
 }
