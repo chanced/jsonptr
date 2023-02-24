@@ -81,11 +81,11 @@ fn main() {
 
 ## Feature Flags
 
-| Flag       | Enables                                                                                                    |
-| ---------- | ---------------------------------------------------------------------------------------------------------- |
-| `"std"`    | implements `std::error::Error` for errors                                                                  |
-| `"url"`    | implements `TryFrom<url::Url>` for [`Pointer`](`crate::Pointer`)                                           |
-| `uniresid` | implements `TryFrom<uniresid::Uri>` and `TryFrom<uniresid::AbsoluteUri>` for [`Pointer`](`crate::Pointer`) |
+|     Flag     | Enables                                                                                                    |
+| :----------: | ---------------------------------------------------------------------------------------------------------- |
+|   `"std"`    | implements `std::error::Error` for errors                                                                  |
+|   `"url"`    | implements `TryFrom<url::Url>` for [`Pointer`](`crate::Pointer`)                                           |
+| `"uniresid"` | implements `TryFrom<uniresid::Uri>` and `TryFrom<uniresid::AbsoluteUri>` for [`Pointer`](`crate::Pointer`) |
 
 ## Contributions / Issues
 
