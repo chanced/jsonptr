@@ -26,12 +26,14 @@ fn main() {
     });
 
     let ptr = Pointer::new(&["foo", "bar"]);
-    ptr.resolve(&data);
+    let bar = ptr.resolve(&data).unwrap();
+    assert_eq!(bar, "baz");
+
     let bar = data.resolve(&ptr).unwrap();
     assert_eq!(bar, "baz");
 
     let ptr = Pointer::try_from("/foo/bar").unwrap();
-    let mut bar = data.resolve_mut(&ptr).unwrap(); // alternatively: ptr.resolve_mut(&mut data);
+    let mut bar = data.resolve_mut(&ptr).unwrap();
     assert_eq!(bar, "baz");
 }
 
@@ -71,7 +73,8 @@ fn main() {
     // replacing a root pointer replaces data with `Value::Null`
     let mut data = json!({ "foo": { "bar": "baz" } });
     let ptr = Pointer::default();
-    assert_eq!(data.delete(&ptr), Ok(Some(json!({ "foo": { "bar": "baz" } }))));
+    let expected = json!({ "foo": { "bar": "baz" } });
+    assert_eq!(data.delete(&ptr), Ok(Some(expected)));
     assert!(data.is_null());
 }
 ```
