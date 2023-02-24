@@ -46,8 +46,7 @@ use serde_json::json;
 fn main() {
     let ptr = Pointer::try_from("/foo/bar").unwrap();
     let mut data = json!({});
-    let val = json!("qux");
-    let assignment = data.assign(&ptr, val);
+    let assignment = data.assign(&ptr, "qux");
     assert_eq!(data, json!({ "foo": { "bar": "qux" }}))
 }
 ```
