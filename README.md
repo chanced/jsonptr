@@ -3,15 +3,15 @@
 [<img alt="github" src="https://img.shields.io/badge/github-chanced/jsonptr-8da0cb?style=for-the-badge&labelColor=777&logo=github" height="21">](https://github.com/chanced/jsonptr)
 [<img alt="crates.io" src="https://img.shields.io/crates/v/jsonptr.svg?style=for-the-badge&color=fc8d62&logo=rust" height="21">](https://crates.io/crates/jsonptr)
 [<img alt="docs.rs" src="https://img.shields.io/badge/docs.rs-jsonptr-f0f0f0?style=for-the-badge&labelColor=777&logo=docs.rs" height="21">](https://docs.rs/jsonptr)
-[<img alt="build status" src="https://img.shields.io/github/workflow/status/chanced/jsonptr/rust.yaml?style=for-the-badge" height="21">](https://github.com/chanced/jsonptr/actions?query=branch%3Amain)
+[<img alt="build status" src="https://img.shields.io/github/workflow/status/chanced/jsonptr/rust.yml?branch=main&style=for-the-badge" height="21">](https://github.com/chanced/jsonptr/actions?query=branch%3Amain)
 Data structures and logic for resolving, assigning, and deleting by JSON Pointers ([RFC
 6901](https://datatracker.ietf.org/doc/html/rfc6901)).
 
 ## Usage
 
-### Resolve
-
 JSON Pointers can be created either with a slice of strings or directly from a properly encoded string representing a JSON Pointer.
+
+### Resolve
 
 ```rust
 use jsonptr::{Pointer, Resolve, ResolveMut};
@@ -75,6 +75,14 @@ fn main() {
     assert!(data.is_null());
 }
 ```
+
+## Feature Flags
+
+| Flag       | Enables                                                                                                    |
+| ---------- | ---------------------------------------------------------------------------------------------------------- |
+| `"std"`    | implements `std::error::Error` for errors                                                                  |
+| `"url"`    | implements `TryFrom<url::Url>` for [`Pointer`](`crate::Pointer`)                                           |
+| `uniresid` | implements `TryFrom<uniresid::Uri>` and `TryFrom<uniresid::AbsoluteUri>` for [`Pointer`](`crate::Pointer`) |
 
 ## Contributions / Issues
 
