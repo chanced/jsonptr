@@ -43,8 +43,9 @@ use serde_json::Value;
     doc = r##"
 ```rust
 use jsonptr::Pointer;
-let url = Url::parse("https://example.com#/foo/bar").unwrap();
-assert_eq!(ptr, Pointer::try_from(url).unwrap())
+let expected = Pointer::new(&["foo", "bar"]);
+let url = url::Url::parse("https://example.com#/foo/bar").unwrap();
+assert_eq!(expected, Pointer::try_from(url).unwrap())
 ```
 "##
 )]
