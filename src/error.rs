@@ -204,7 +204,7 @@ pub struct OutOfBoundsError {
     pub token: Token,
 }
 #[cfg(feature = "std")]
-impl std::error::Erorr for OutOfBoundsError {}
+impl std::error::Error for OutOfBoundsError {}
 
 impl Display for OutOfBoundsError {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
