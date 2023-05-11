@@ -1,6 +1,3 @@
-#[cfg(test)]
-mod token_test;
-
 use core::{borrow::Borrow, cmp::Ordering, ops::Deref};
 
 use crate::{IndexError, OutOfBoundsError, ParseError};

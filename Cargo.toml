@@ -16,8 +16,8 @@ serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde = { version = "1.0", default-features = false, features = ["alloc"] }
 url = { version = "2", optional = true }
 uniresid = { version = "0.1.4", optional = true }
-
+fluent-uri = { version = "*", optional = true, default-features = false }
 
 [features]
-default = []
-std = ["serde/std", "serde_json/std"]
+default = ["fluent-uri"]
+std = ["serde/std", "serde_json/std", "fluent-uri?/std"]
