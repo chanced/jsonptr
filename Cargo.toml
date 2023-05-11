@@ -16,7 +16,7 @@ serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde = { version = "1.0", default-features = false, features = ["alloc"] }
 url = { version = "2", optional = true }
 uniresid = { version = "0.1.4", optional = true }
-fluent-uri = { version = "*", optional = true, default-features = false }
+fluent-uri = { version = "0.1.4", optional = true, default-features = false }
 
 [features]
 default = []
