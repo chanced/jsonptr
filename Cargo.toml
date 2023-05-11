@@ -19,5 +19,5 @@ uniresid = { version = "0.1.4", optional = true }
 fluent-uri = { version = "*", optional = true, default-features = false }
 
 [features]
-default = ["fluent-uri"]
+default = []
 std = ["serde/std", "serde_json/std", "fluent-uri?/std"]
