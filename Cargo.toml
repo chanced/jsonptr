@@ -1,23 +1,22 @@
 [package]
-name = "jsonptr"
-version = "0.3.4"
-edition = "2021"
-description = "Data structures and logic for resolving, assigning, and deleting by JSON Pointers (RFC 6901)"
+authors       = ["chance dinkins"]
+description   = "Data structures and logic for resolving, assigning, and deleting by JSON Pointers (RFC 6901)"
 documentation = "https://docs.rs/jsonptr"
-keywords = ["json-pointer", "rfc-6901", "6901"]
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/chanced/jsonptr"
-homepage = "https://github.com/chanced/jsonptr"
-authors = ["chance dinkins"]
-
+edition       = "2021"
+homepage      = "https://github.com/chanced/jsonptr"
+keywords      = ["json-pointer", "rfc-6901", "6901"]
+license       = "MIT OR Apache-2.0"
+name          = "jsonptr"
+repository    = "https://github.com/chanced/jsonptr"
+version       = "0.3.4"
 
 [dependencies]
-serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
-serde = { version = "1.0", default-features = false, features = ["alloc"] }
-url = { version = "2", optional = true }
-uniresid = { version = "0.1.4", optional = true }
 fluent-uri = { version = "0.1.4", optional = true, default-features = false }
+serde      = { version = "1.0", default-features = false, features = ["alloc"] }
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+uniresid   = { version = "0.1.4", optional = true }
+url        = { version = "2", optional = true }
 
 [features]
 default = []
-std = ["serde/std", "serde_json/std", "fluent-uri?/std"]
+std     = ["serde/std", "serde_json/std", "fluent-uri?/std"]

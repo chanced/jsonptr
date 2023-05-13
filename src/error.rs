@@ -85,6 +85,9 @@ impl Display for Error {
     }
 }
 
+#[cfg(feature = "std")]
+impl std::error::Error for Error {}
+
 /// Represents an error that occurs when attempting to resolve a `Pointer` that
 /// encounters a leaf node (i.e. a scalar / null value) which is not the root
 /// of the `Pointer`.
@@ -106,6 +109,10 @@ pub struct UnresolvableError {
     /// `Object` or an `Array`.
     pub leaf: Option<Token>,
 }
+
+#[cfg(feature = "std")]
+impl std::error::Error for UnresolvableError {}
+
 impl UnresolvableError {
     /// Creates a new `UnresolvableError` with the given `Pointer`.
     pub fn new(pointer: Pointer) -> Self {
@@ -298,6 +305,8 @@ impl Display for NotFoundError {
         )
     }
 }
+#[cfg(feature = "std")]
+impl std::error::Error for NotFoundError {}
 
 /// Returned from `Pointer::replace_token` when the provided index is out of
 /// bounds.
@@ -312,6 +321,7 @@ pub struct ReplaceTokenError {
 }
 #[cfg(feature = "std")]
 impl std::error::Error for ReplaceTokenError {}
+
 impl Display for ReplaceTokenError {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         write!(
