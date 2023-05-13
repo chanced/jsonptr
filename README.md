@@ -81,12 +81,12 @@ fn main() {
 
 ## Feature Flags
 
-|      Flag      | Enables                                                                                                                                     |
-| :------------: | ------------------------------------------------------------------------------------------------------------------------------------------- |
-|    `"std"`     | implements `std::error::Error` for errors                                                                                                   |
-|    `"url"`     | `TryFrom<url::Url>` for [`Pointer`](`crate::Pointer`)                                                                                       |
-|  `"uniresid"`  | `TryFrom<uniresid::Uri>` + `TryFrom<uniresid::AbsoluteUri>` for [`Pointer`](`crate::Pointer`)                                               |
-| `"fluent-uri"` | `TryFrom<fluent_uri::Uri<&str>>` + `TryFrom<uniresid::Uri<String>>` + `TryFrom<uniresid::Uri<&mut [u8]>>` for [`Pointer`](`crate::Pointer`) |
+|      Flag      | Enables                                                                                                                                         |
+| :------------: | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+|    `"std"`     | implements `std::error::Error` for errors                                                                                                       |
+|    `"url"`     | `TryFrom<url::Url>` for [`Pointer`](`crate::Pointer`)                                                                                           |
+|  `"uniresid"`  | `TryFrom<uniresid::Uri>` + `TryFrom<uniresid::AbsoluteUri>` for [`Pointer`](`crate::Pointer`)                                                   |
+| `"fluent-uri"` | `TryFrom<fluent_uri::Uri<&str>>` + `TryFrom<fluent_uri::Uri<String>>` + `TryFrom<fluent_uri::Uri<&mut [u8]>>` for [`Pointer`](`crate::Pointer`) |
 
 ## Contributions / Issues
 
