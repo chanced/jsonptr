@@ -326,6 +326,7 @@ impl Pointer {
             }
         }
     }
+
     /// Attempts to resolve a mutable `Value` based on the path in this `Pointer`.
     pub fn resolve_mut<'v>(&self, value: &'v mut Value) -> Result<&'v mut Value, Error> {
         let ResolvedMut {
@@ -1113,7 +1114,7 @@ impl core::hash::Hash for Pointer {
 
 impl core::fmt::Debug for Pointer {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}", self.inner)
+        write!(f, "\"{}\"", self.inner)
     }
 }
 impl core::fmt::Display for Pointer {
