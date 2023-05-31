@@ -147,6 +147,44 @@ impl From<&str> for Token {
         Token::new(s)
     }
 }
+impl From<&String> for Token {
+    fn from(value: &String) -> Self {
+        Token::new(value.as_str())
+    }
+}
+
+impl From<&&str> for Token {
+    fn from(value: &&str) -> Self {
+        Token::new(*value)
+    }
+}
+
+impl From<&usize> for Token {
+    fn from(value: &usize) -> Self {
+        Token::new(value.to_string())
+    }
+}
+impl From<u32> for Token {
+    fn from(v: u32) -> Self {
+        Token::new(v.to_string())
+    }
+}
+impl From<&u32> for Token {
+    fn from(v: &u32) -> Self {
+        Token::new(v.to_string())
+    }
+}
+impl From<u64> for Token {
+    fn from(v: u64) -> Self {
+        Token::new(v.to_string())
+    }
+}
+impl From<&u64> for Token {
+    fn from(v: &u64) -> Self {
+        Token::new(v.to_string())
+    }
+}
+
 impl From<String> for Token {
     fn from(value: String) -> Self {
         Token::new(value)

@@ -12,13 +12,55 @@ use crate::{
 };
 use alloc::{
     borrow::{Cow, ToOwned},
-    boxed::Box,
     string::{String, ToString},
     vec,
     vec::Vec,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+/// Helper type for deserialization. Either a valid [`Pointer`] or a string and
+/// the parsing error
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MaybePointer {
+    /// A valid [`Pointer`].
+    Pointer(Pointer),
+    /// An invalid [`Pointer`] and the error that caused it.
+    Malformed(String, MalformedPointerError),
+}
+impl Deref for MaybePointer {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            MaybePointer::Pointer(p) => p.as_str(),
+            MaybePointer::Malformed(s, _) => s,
+        }
+    }
+}
+impl<'de> Deserialize<'de> for MaybePointer {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        String::deserialize(deserializer).map(|s| match Pointer::from_str(&s) {
+            Ok(ptr) => MaybePointer::Pointer(ptr),
+            Err(e) => MaybePointer::Malformed(s, e),
+        })
+    }
+}
+impl Serialize for MaybePointer {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            MaybePointer::Pointer(ptr) => serializer.serialize_str(ptr.as_str()),
+            MaybePointer::Malformed(s, _) => serializer.serialize_str(s),
+        }
+    }
+}
+
 /// A JSON Pointer is a string containing a sequence of zero or more reference
 /// tokens, each prefixed by a '/' character.
 ///
@@ -50,7 +92,6 @@ assert_eq!(expected, Pointer::try_from(url).unwrap())
 pub struct Pointer {
     inner: String,
     count: usize,
-    err: Option<Box<MalformedPointerError>>,
 }
 
 impl Pointer {
@@ -61,29 +102,26 @@ impl Pointer {
         Self::default()
     }
     /// Creates a new `Pointer` from a slice of non-encoded strings.
-    pub fn new(tokens: &[impl AsRef<str>]) -> Self {
+    pub fn new<V, T>(tokens: V) -> Self
+    where
+        V: AsRef<[T]>,
+        Token: for<'a> From<&'a T>,
+    {
         let mut inner = String::new();
-        for t in tokens.iter().map(Token::new) {
+        let tokens = tokens.as_ref();
+
+        for t in tokens.iter().map(Into::<Token>::into) {
             inner.push('/');
             inner.push_str(t.encoded());
         }
         Pointer {
             inner,
-            err: None,
             count: tokens.len(),
         }
     }
     /// Extracts a string slice containing the entire encoded `Pointer`.
     pub fn as_str(&self) -> &str {
         &self.inner
-    }
-
-    /// Returns `true` if the `Pointer` is valid. The only way an invalid
-    /// `Pointer` can occur is through deserialization.
-    ///
-    /// The JSON Pointer specification
-    pub fn is_valid(&self) -> bool {
-        self.err.is_none()
     }
 
     /// Pushes a `Token` onto the front of this `Pointer`.
@@ -200,9 +238,6 @@ impl Pointer {
     /// Merges two `Pointer`s by appending `other` onto `self`.
     pub fn append(&mut self, other: &Pointer) -> &Pointer {
         self.count += other.count;
-        if self.err.is_none() && other.err.is_some() {
-            self.err = other.err.clone();
-        }
         if self.is_root() {
             self.inner = other.inner.clone();
         } else if !other.is_root() {
@@ -279,14 +314,6 @@ impl Pointer {
         Tokens::new(self.split())
     }
 
-    /// Returns the validation error which occurred during deserialization.
-    pub fn validate(&self) -> Result<(), MalformedPointerError> {
-        if let Some(err) = self.err.as_deref() {
-            Err(err.clone())
-        } else {
-            Ok(())
-        }
-    }
     /// Attempts to resolve a `Value` based on the path in this `Pointer`.
     pub fn resolve<'v>(&self, value: &'v Value) -> Result<&'v Value, Error> {
         let Resolved {
@@ -398,7 +425,7 @@ impl Pointer {
     ///
     /// let mut data = json!({ "foo": { "bar": { "baz": "qux" } } });
     /// let ptr = Pointer::new(&["foo", "bar", "baz"]);
-    /// assert_eq!(data.delete(&ptr), Ok(Some("qux".into())));
+    /// assert_eq!(data.delete(&ptr), Some("qux".into()));
     /// assert_eq!(data, json!({ "foo": { "bar": {} } }));
     /// ```
     /// ### Deleting a non-existent Pointer returns `None`:
@@ -408,7 +435,7 @@ impl Pointer {
     ///
     /// let mut data = json!({});
     /// let ptr = Pointer::new(&["foo", "bar", "baz"]);
-    /// assert_eq!(ptr.delete(&mut data), Ok(None));
+    /// assert_eq!(ptr.delete(&mut data), None);
     /// assert_eq!(data, json!({}));
     /// ```
     /// ### Deleting a root pointer replaces the value with `Value::Null`:
@@ -418,13 +445,12 @@ impl Pointer {
     ///
     /// let mut data = json!({ "foo": { "bar": "baz" } });
     /// let ptr = Pointer::default();
-    /// assert_eq!(data.delete(&ptr), Ok(Some(json!({ "foo": { "bar": "baz" } }))));
+    /// assert_eq!(data.delete(&ptr), Some(json!({ "foo": { "bar": "baz" } })));
     /// assert!(data.is_null());
     /// ```
-    pub fn delete(&self, value: &mut Value) -> Result<Option<Value>, MalformedPointerError> {
-        self.validate()?;
+    pub fn delete(&self, value: &mut Value) -> Option<Value> {
         if self.is_root() {
-            return Ok(Some(mem::replace(value, Value::Null)));
+            return Some(mem::replace(value, Value::Null));
         }
         let mut ptr = self.clone();
         let last_token = ptr.pop_back().unwrap();
@@ -438,17 +464,17 @@ impl Pointer {
                 if remaining.is_root() {
                     match value {
                         Value::Array(arr) => match last_token.as_index(arr.len()) {
-                            Ok(idx) => Ok(Some(arr.remove(idx))),
-                            Err(_) => Ok(None),
+                            Ok(idx) => Some(arr.remove(idx)),
+                            Err(_) => None,
                         },
-                        Value::Object(obj) => Ok(obj.remove(last_token.as_key())),
-                        _ => Ok(None),
+                        Value::Object(obj) => obj.remove(last_token.as_key()),
+                        _ => None,
                     }
                 } else {
-                    Ok(None)
+                    None
                 }
             }
-            Err(_) => Ok(None),
+            Err(_) => None,
         }
     }
 
@@ -649,7 +675,6 @@ impl Pointer {
     ///
     /// If the resolution is successful, the pointer will be empty.
     fn try_resolve_mut<'v>(&self, value: &'v mut Value) -> Result<ResolvedMut<'v>, Error> {
-        self.validate()?;
         let mut tokens = self.tokens();
         let mut resolved = Pointer::default();
         let res = tokens.try_fold((value, self.clone()), |(v, mut p), token| match v {
@@ -851,14 +876,11 @@ impl<'de> Deserialize<'de> for Pointer {
     where
         D: serde::Deserializer<'de>,
     {
+        use serde::de::Error;
         let s = String::deserialize(deserializer)?;
         match Pointer::try_from(s.as_str()) {
             Ok(p) => Ok(p),
-            Err(err) => Ok(Pointer {
-                inner: s,
-                count: 0,
-                err: Some(Box::new(err)),
-            }),
+            Err(err) => Err(D::Error::custom(err)),
         }
     }
 }
@@ -874,7 +896,7 @@ impl Borrow<str> for Pointer {
 }
 impl From<Token> for Pointer {
     fn from(t: Token) -> Self {
-        Pointer::new(&[t])
+        Pointer::new([t])
     }
 }
 
@@ -1020,7 +1042,7 @@ impl From<&Pointer> for Value {
 
 impl From<usize> for Pointer {
     fn from(value: usize) -> Self {
-        Pointer::new(&[value.to_string()])
+        Pointer::new([value])
     }
 }
 
@@ -1028,11 +1050,7 @@ impl TryFrom<&str> for Pointer {
     type Error = MalformedPointerError;
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         let (count, inner) = validate_and_format(value)?;
-        Ok(Pointer {
-            err: None,
-            count,
-            inner,
-        })
+        Ok(Pointer { count, inner })
     }
 }
 
@@ -1328,12 +1346,12 @@ mod tests {
 
     #[test]
     fn test_formatting() {
-        assert_eq!(Pointer::new(&["foo", "bar"]), "/foo/bar");
+        assert_eq!(Pointer::new(["foo", "bar"]), "/foo/bar");
         assert_eq!(
-            Pointer::new(&["~/foo", "~bar", "/baz"]),
+            Pointer::new(["~/foo", "~bar", "/baz"]),
             "/~0~1foo/~0bar/~1baz"
         );
-        assert_eq!(Pointer::new(&["field", "", "baz"]), "/field//baz");
+        assert_eq!(Pointer::new(["field", "", "baz"]), "/field//baz");
         assert_eq!(Pointer::default(), "");
     }
 
@@ -1458,7 +1476,7 @@ mod tests {
     #[test]
     fn test_resolve_not_found() {
         let mut data = test_data();
-        let ptr = Pointer::new(&["foo", "not_found", "nope"]);
+        let ptr = Pointer::new(["foo", "not_found", "nope"]);
         let res = ptr.resolve_mut(&mut data);
         assert!(res.is_err());
         let err = res.unwrap_err();
@@ -1483,7 +1501,7 @@ mod tests {
     }
     #[test]
     fn test_try_from() {
-        let ptr = Pointer::new(&["foo", "bar", "~/"]);
+        let ptr = Pointer::new(["foo", "bar", "~/"]);
 
         assert_eq!(Pointer::try_from("/foo/bar/~0~1").unwrap(), ptr);
         let into: Pointer = "/foo/bar/~0~1".try_into().unwrap();

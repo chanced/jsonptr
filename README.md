@@ -12,71 +12,105 @@ Data structures and logic for resolving, assigning, and deleting by JSON Pointer
 
 JSON Pointers can be created either with a slice of strings or directly from a properly encoded string representing a JSON Pointer.
 
-### Resolve
+### Resolve values
+
+#### `Pointer::resolve`
 
 ```rust
-use jsonptr::{Pointer, Resolve, ResolveMut};
+use jsonptr::Pointer;
 use serde_json::json;
 
-fn main() {
-    let mut data = json!({
-        "foo": {
-            "bar": "baz"
-        }
-    });
+let mut data = json!({"foo": { "bar": "baz" }});
+let ptr = Pointer::new(["foo", "bar"]);
+let bar = ptr.resolve(&data).unwrap();
+assert_eq!(bar, "baz");
+```
 
-    let ptr = Pointer::new(&["foo", "bar"]);
-    let bar = ptr.resolve(&data).unwrap();
-    assert_eq!(bar, "baz");
+#### `Resolve::resolve`
 
-    let bar = data.resolve(&ptr).unwrap();
-    assert_eq!(bar, "baz");
+```rust
+use jsonptr::{Pointer, Resolve};
+use serde_json::json;
 
-    let ptr = Pointer::try_from("/foo/bar").unwrap();
-    let mut bar = data.resolve_mut(&ptr).unwrap();
-    assert_eq!(bar, "baz");
-}
+let mut data = json!({ "foo": { "bar": "baz" }});
+let ptr = Pointer::new(["foo", "bar"]);
+let bar = data.resolve(&ptr).unwrap();
+assert_eq!(bar, "baz");
 
+```
+
+#### `ResolveMut::resolve_mut`
+
+```rust
+use jsonptr::{Pointer, ResolveMut};
+use serde_json::json;
+
+let ptr = Pointer::try_from("/foo/bar").unwrap();
+let mut data = json!({ "foo": { "bar": "baz" }});
+let mut bar = data.resolve_mut(&ptr).unwrap();
+assert_eq!(bar, "baz");
 ```
 
 ### Assign
 
+#### `Pointer::assign`
+
 ```rust
-use jsonptr::{Pointer, Assign};
+use jsonptr::Pointer;
 use serde_json::json;
 
-fn main() {
-    let ptr = Pointer::try_from("/foo/bar").unwrap();
-    let mut data = json!({});
-    let assignment = data.assign(&ptr, "qux");
-    assert_eq!(data, json!({ "foo": { "bar": "qux" }}))
-}
+let ptr = Pointer::try_from("/foo/bar").unwrap();
+let mut data = json!({});
+let _previous = ptr.assign(&mut data, "qux").unwrap();
+assert_eq!(data, json!({ "foo": { "bar": "qux" }}))
+```
+
+#### `Assign::asign`
+
+```rust
+use jsonptr::{Assign, Pointer};
+use serde_json::json;
+
+let ptr = Pointer::try_from("/foo/bar").unwrap();
+let mut data = json!({});
+let _previous = data.assign(&ptr, "qux").unwrap();
+assert_eq!(data, json!({ "foo": { "bar": "qux" }}))
 ```
 
 ### Delete
 
+#### `Pointer::delete`
+
 ```rust
-    use jsonptr::{Pointer, Delete};
-    use serde_json::json;
-fn main() {
-    let mut data = json!({ "foo": { "bar": { "baz": "qux" } } });
-    let ptr = Pointer::new(&["foo", "bar", "baz"]);
-    assert_eq!(data.delete(&ptr), Ok(Some("qux".into())));
-    assert_eq!(data, json!({ "foo": { "bar": {} } }));
+use jsonptr::Pointer;
+use serde_json::json;
 
-    // unresolved pointers return Ok(None)
-    let mut data = json!({});
-    let ptr = Pointer::new(&["foo", "bar", "baz"]);
-    assert_eq!(ptr.delete(&mut data), Ok(None));
-    assert_eq!(data, json!({}));
+let mut data = json!({ "foo": { "bar": { "baz": "qux" } } });
+let ptr = Pointer::new(&["foo", "bar", "baz"]);
+assert_eq!(ptr.delete(&mut data), Some("qux".into()));
+assert_eq!(data, json!({ "foo": { "bar": {} } }));
 
-    // replacing a root pointer replaces data with `Value::Null`
-    let mut data = json!({ "foo": { "bar": "baz" } });
-    let ptr = Pointer::default();
-    let expected = json!({ "foo": { "bar": "baz" } });
-    assert_eq!(data.delete(&ptr), Ok(Some(expected)));
-    assert!(data.is_null());
-}
+// unresolved pointers return None
+let mut data = json!({});
+assert_eq!(ptr.delete(&mut data), None);
+```
+
+#### `Delete::delete`
+
+```rust
+use jsonptr::{Pointer, Delete};
+use serde_json::json;
+
+let mut data = json!({ "foo": { "bar": { "baz": "qux" } } });
+let ptr = Pointer::new(["foo", "bar", "baz"]);
+assert_eq!(ptr.delete(&mut data), Some("qux".into()));
+assert_eq!(data, json!({ "foo": { "bar": {} } }));
+
+// replacing a root pointer replaces data with `Value::Null`
+let ptr = Pointer::default();
+let deleted = json!({ "foo": { "bar": {} } });
+assert_eq!(data.delete(&ptr), Some(deleted));
+assert!(data.is_null());
 ```
 
 ## Feature Flags
@@ -97,3 +131,7 @@ If you find an issue, please open a ticket or a pull request.
 ## License
 
 MIT or Apache 2.0.
+
+```
+
+```
