@@ -24,8 +24,8 @@ pub enum Error {
     Unresolvable(UnresolvableError),
     /// Indicates that a Pointer was not found in the data.
     NotFound(NotFoundError),
-    /// Indicates that a Pointer was malformed.
-    MalformedPointer(MalformedPointerError),
+    // /// Indicates that a Pointer was malformed.
+    // MalformedPointer(MalformedPointerError),
 }
 
 impl Error {
@@ -41,16 +41,16 @@ impl Error {
     pub fn is_not_found(&self) -> bool {
         matches!(self, Error::NotFound(_))
     }
-    /// Returns `true` if the error is `Error::MalformedPointerError`.
-    pub fn is_malformed_pointer(&self) -> bool {
-        matches!(self, Error::MalformedPointer(_))
-    }
+    // /// Returns `true` if the error is `Error::MalformedPointerError`.
+    // pub fn is_malformed_pointer(&self) -> bool {
+    //     matches!(self, Error::MalformedPointer(_))
+    // }
 }
-impl From<MalformedPointerError> for Error {
-    fn from(err: MalformedPointerError) -> Self {
-        Error::MalformedPointer(err)
-    }
-}
+// impl From<MalformedPointerError> for Error {
+//     fn from(err: MalformedPointerError) -> Self {
+//         Error::MalformedPointer(err)
+//     }
+// }
 impl From<IndexError> for Error {
     fn from(err: IndexError) -> Self {
         Error::Index(err)
@@ -80,7 +80,7 @@ impl Display for Error {
             Error::Index(err) => Display::fmt(err, f),
             Error::Unresolvable(err) => Display::fmt(err, f),
             Error::NotFound(err) => Display::fmt(err, f),
-            Error::MalformedPointer(err) => Display::fmt(err, f),
+            // Error::MalformedPointer(err) => Display::fmt(err, f),
         }
     }
 }
