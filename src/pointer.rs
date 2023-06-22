@@ -934,6 +934,18 @@ impl TryFrom<String> for Pointer {
         Self::try_from(value.as_str())
     }
 }
+impl AsRef<[u8]> for Pointer {
+    fn as_ref(&self) -> &[u8] {
+        self.inner.as_bytes()
+    }
+}
+
+impl Borrow<[u8]> for Pointer {
+    fn borrow(&self) -> &[u8] {
+        self.inner.as_bytes()
+    }
+}
+
 #[cfg(feature = "uniresid")]
 impl TryFrom<&uniresid::Uri> for Pointer {
     type Error = MalformedPointerError;
