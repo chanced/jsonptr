@@ -1058,6 +1058,14 @@ impl From<usize> for Pointer {
     }
 }
 
+impl<'a> IntoIterator for &'a Pointer {
+    type Item = Token;
+    type IntoIter = Tokens<'a>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.tokens()
+    }
+}
+
 impl TryFrom<&str> for Pointer {
     type Error = MalformedPointerError;
     fn try_from(value: &str) -> Result<Self, Self::Error> {
