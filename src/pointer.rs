@@ -119,6 +119,14 @@ impl Pointer {
             count: tokens.len(),
         }
     }
+    /// Parses `value` as a JSON Pointer.
+    /// 
+    /// # Errors
+    /// returns `MalformedPointerError` if `value` is not able to be parsed as a
+    /// valid JSON Pointer.
+    pub fn parse(value: &str) -> Result<Self, MalformedPointerError> {
+        Self::from_str(value)
+    }
     /// Extracts a string slice containing the entire encoded `Pointer`.
     pub fn as_str(&self) -> &str {
         &self.inner
