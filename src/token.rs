@@ -66,12 +66,11 @@ impl Token {
     ///
     /// ## Parameters
     /// - `len` - current length of the array / vector.
-    /// - `max_size` - a optional maximum allowed size for the array / vector.
     ///
     /// ## Errors
     /// - `IndexError::Parse` - if the token is not a valid index.
     /// - `IndexError::OutOfBounds` - if the token is a valid index but exceeds
-    ///   `max_size` or `len`.
+    ///   `len`.
     ///
     /// ## Examples
     ///```

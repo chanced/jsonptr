@@ -120,7 +120,7 @@ impl Pointer {
         }
     }
     /// Parses `value` as a JSON Pointer.
-    /// 
+    ///
     /// # Errors
     /// returns `MalformedPointerError` if `value` is not able to be parsed as a
     /// valid JSON Pointer.
@@ -160,18 +160,15 @@ impl Pointer {
             .map_or(Some((&self.inner[1..], "")), Option::Some)
             .map(|(f, b)| (f.to_owned(), b.to_owned()))
             .map(|(front, back)| {
-                if !front.is_empty() {
-                    self.inner = String::from("/") + &front;
-                } else {
+                if back.is_empty() {
                     self.inner = String::default();
+                    Token::from_encoded(front)
+                } else {
+                    self.inner = String::from("/") + &front;
+                    Token::from_encoded(back)
                 }
-                Token::from_encoded(back)
+                
             })
-
-        // self.rsplit_once().map(|(front, back)| {
-        //     self.inner = maybe_prepend_slash(&front);
-
-        // })
     }
     /// Removes and returns the first `Token` in the `Pointer` if it exists.
     pub fn pop_front(&mut self) -> Option<Token> {
@@ -1326,6 +1323,16 @@ mod tests {
             ptr, "/foo/bar/~1baz",
             "pointer should equal \"/foo/bar/~1baz\" after push_back"
         );
+
+        let mut ptr = Pointer::new(["foo", "bar"]);
+        assert_eq!(ptr.pop_back(), Some("bar".into()));
+        assert_eq!(ptr, "/foo", "pointer should equal \"/foo\" after pop_back");
+        assert_eq!(
+            ptr.pop_back(),
+            Some("foo".into()),
+            "\"foo\" should have been popped from the back"
+        );
+        assert_eq!(ptr, "", "pointer should equal \"\" after pop_back");
     }
 
     #[test]
@@ -1368,8 +1375,8 @@ mod tests {
         assert_eq!(ptr.pop_back(), Some("bar".into()));
         assert_eq!(ptr, "/foo");
         assert_eq!(ptr.count(), 1);
-
-        ptr.pop_front();
+        assert_eq!(ptr.pop_front(), Some("foo".into()));
+        assert_eq!(ptr, "");
     }
 
     #[test]
