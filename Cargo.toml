@@ -8,7 +8,7 @@ keywords      = ["json-pointer", "rfc-6901", "6901"]
 license       = "MIT OR Apache-2.0"
 name          = "jsonptr"
 repository    = "https://github.com/chanced/jsonptr"
-version       = "0.4.4"
+version       = "0.4.5"
 
 [dependencies]
 fluent-uri = { version = "0.1.4", optional = true, default-features = false }
