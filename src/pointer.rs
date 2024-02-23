@@ -141,9 +141,7 @@ impl Pointer {
     /// Pushes a `Token` onto the back of this `Pointer`.
     pub fn push_back(&mut self, token: Token) {
         self.count += 1;
-        if !self.inner.ends_with('/') {
-            self.inner.push('/');
-        }
+        self.inner.push('/');
         self.inner.push_str(token.encoded());
     }
 
@@ -167,7 +165,6 @@ impl Pointer {
                     self.inner = String::from("/") + &front;
                     Token::from_encoded(back)
                 }
-                
             })
     }
     /// Removes and returns the first `Token` in the `Pointer` if it exists.
@@ -1778,6 +1775,29 @@ mod tests {
             }),
             data.clone()
         );
+    }
+
+    #[test]
+    fn nested_maps_with_empty_keys() {
+        let data = json!({
+            "": {
+                "": {
+                    "bar": 42,
+                }
+            }
+        });
+
+        {
+            let ptr = Pointer::try_from("///bar").unwrap();
+            assert_eq!(ptr.resolve(&data).unwrap(), 42);
+        }
+        {
+            let mut ptr = Pointer::root();
+            ptr.push_back("".into());
+            ptr.push_back("".into());
+            ptr.push_back("bar".into());
+            assert_eq!(ptr.resolve(&data).unwrap(), 42);
+        }
     }
 
     #[test]
