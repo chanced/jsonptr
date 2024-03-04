@@ -204,6 +204,9 @@ impl Pointer {
     }
     /// Returns the last `Token` in the `Pointer`.
     pub fn back(&self) -> Option<Token> {
+        if self.is_root() {
+            return None;
+        }
         self.inner[1..]
             .rsplit_once('/')
             .map_or(Some((&self.inner[1..], "")), Option::Some)
@@ -1398,7 +1401,14 @@ mod tests {
 
         let ptr = Pointer::try_from("/-").unwrap();
         assert_eq!(ptr.last(), Some("-".into()));
+
+        let ptr = Pointer::default();
+        assert_eq!(ptr.last(), None);
+
+        let ptr = Pointer::try_from("/bar").unwrap();
+        assert_eq!(ptr.last(), Some("bar".into()));
     }
+
     #[test]
     fn test_first() {
         let ptr = Pointer::try_from("/foo/bar").unwrap();
