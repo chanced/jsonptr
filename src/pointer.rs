@@ -153,19 +153,12 @@ impl Pointer {
         if self.count > 0 {
             self.count -= 1;
         }
-        self.inner[1..]
-            .rsplit_once('/')
-            .map_or(Some((&self.inner[1..], "")), Option::Some)
-            .map(|(f, b)| (f.to_owned(), b.to_owned()))
-            .map(|(front, back)| {
-                if back.is_empty() {
-                    self.inner = String::default();
-                    Token::from_encoded(front)
-                } else {
-                    self.inner = String::from("/") + &front;
-                    Token::from_encoded(back)
-                }
-            })
+        let (front, back) = self.inner.rsplit_once('/').expect("`self.count` was > 0");
+        let back = Token::from_encoded(back);
+
+        self.inner = front.to_owned();
+
+        Some(back)
     }
     /// Removes and returns the first `Token` in the `Pointer` if it exists.
     pub fn pop_front(&mut self) -> Option<Token> {
@@ -207,16 +200,12 @@ impl Pointer {
         if self.is_root() {
             return None;
         }
-        self.inner[1..]
+
+        let (_, back) = self
+            .inner
             .rsplit_once('/')
-            .map_or(Some((&self.inner[1..], "")), Option::Some)
-            .map(|(front, back)| {
-                if !back.is_empty() {
-                    Token::from_encoded(back)
-                } else {
-                    Token::from_encoded(front)
-                }
-            })
+            .expect("`self.is_root()` is false, thus pointer starts with `/`");
+        Some(Token::from_encoded(back))
     }
     /// Returns the last token in the `Pointer`.
     ///
@@ -1807,6 +1796,50 @@ mod tests {
             ptr.push_back("".into());
             ptr.push_back("bar".into());
             assert_eq!(ptr.resolve(&data).unwrap(), 42);
+        }
+    }
+
+    #[test]
+    fn pop_back_works_with_empty_strings() {
+        {
+            let mut ptr = Pointer::root();
+            ptr.push_back("".into());
+            ptr.push_back("".into());
+            ptr.push_back("bar".into());
+
+            assert_eq!(ptr.tokens().count(), 3);
+            ptr.pop_back();
+            assert_eq!(ptr.tokens().count(), 2);
+            ptr.pop_back();
+            assert_eq!(ptr.tokens().count(), 1);
+            ptr.pop_back();
+            assert_eq!(ptr.tokens().count(), 0);
+            assert_eq!(ptr, Pointer::root());
+        }
+        {
+            let mut ptr = Pointer::root();
+            assert_eq!(ptr.tokens().count(), 0);
+            ptr.push_back("".into());
+            assert_eq!(ptr.tokens().count(), 1);
+            ptr.pop_back();
+            assert_eq!(ptr.tokens().count(), 0);
+        }
+        {
+            let mut ptr = Pointer::root();
+            let input = ["", "", "", "foo", "", "bar", "baz", ""];
+            for (idx, s) in input.iter().enumerate() {
+                assert_eq!(ptr.tokens().count(), idx);
+                ptr.push_back(s.into());
+            }
+            assert_eq!(ptr.tokens().count(), input.len());
+            for (idx, s) in input.iter().enumerate().rev() {
+                assert_eq!(ptr.tokens().count(), idx + 1);
+                assert_eq!(ptr.back().unwrap().as_str(), *s);
+                assert_eq!(ptr.pop_back().unwrap().as_str(), *s);
+            }
+            assert_eq!(ptr.tokens().count(), 0);
+            assert!(ptr.back().is_none());
+            assert!(ptr.pop_back().is_none());
         }
     }
 
