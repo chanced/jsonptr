@@ -169,25 +169,21 @@ impl Pointer {
     }
     /// Removes and returns the first `Token` in the `Pointer` if it exists.
     pub fn pop_front(&mut self) -> Option<Token> {
-        if self.inner.is_empty() {
-            return None;
-        }
-        if self.count > 0 {
+        if !self.inner.is_empty() && self.count > 0 {
             self.count -= 1;
-        }
 
-        self.inner[1..]
-            .split_once('/')
-            .map_or(Some((&self.inner[1..], "")), Option::Some)
-            .map(|(f, b)| (f.to_owned(), b.to_owned()))
-            .map(|(front, back)| {
-                if !back.is_empty() {
-                    self.inner = String::from("/") + &back;
-                } else {
-                    self.inner = String::new()
-                }
-                front.into()
-            })
+            if let Some((front, back)) = self.inner[1..].split_once('/') {
+                let front = Token::from_encoded(front);
+                self.inner = String::from("/") + back;
+                Some(front)
+            } else {
+                let token = Token::from_encoded(&self.inner[1..]);
+                self.inner.truncate(0);
+                Some(token)
+            }
+        } else {
+            None
+        }
     }
     /// Returns the number of tokens in the `Pointer`.
     pub fn count(&self) -> usize {
@@ -1377,6 +1373,50 @@ mod tests {
         assert_eq!(ptr.count(), 1);
         assert_eq!(ptr.pop_front(), Some("foo".into()));
         assert_eq!(ptr, "");
+    }
+
+    #[test]
+    fn pop_front_works_with_empty_strings() {
+        {
+            let mut ptr = Pointer::new(["bar", "", ""]);
+
+            assert_eq!(ptr.tokens().count(), 3);
+            let mut token = ptr.pop_front();
+            assert_eq!(token, Some(Token::from_encoded("bar")));
+            assert_eq!(ptr.tokens().count(), 2);
+            token = ptr.pop_front();
+            assert_eq!(token, Some(Token::from_encoded("")));
+            assert_eq!(ptr.tokens().count(), 1);
+            token = ptr.pop_front();
+            assert_eq!(token, Some(Token::from_encoded("")));
+            assert_eq!(ptr.tokens().count(), 0);
+            assert_eq!(ptr, Pointer::root());
+        }
+        {
+            let mut ptr = Pointer::root();
+            assert_eq!(ptr.tokens().count(), 0);
+            ptr.push_back("".into());
+            assert_eq!(ptr.tokens().count(), 1);
+            ptr.pop_back();
+            assert_eq!(ptr.tokens().count(), 0);
+        }
+        {
+            let mut ptr = Pointer::root();
+            let input = ["", "", "", "foo", "", "bar", "baz", ""];
+            for (idx, s) in input.iter().enumerate() {
+                assert_eq!(ptr.tokens().count(), idx);
+                ptr.push_back(s.into());
+            }
+            assert_eq!(ptr.tokens().count(), input.len());
+            for (idx, s) in input.iter().enumerate() {
+                assert_eq!(ptr.tokens().count(), 8 - idx);
+                assert_eq!(ptr.front().unwrap().as_str(), *s);
+                assert_eq!(ptr.pop_front().unwrap().as_str(), *s);
+            }
+            assert_eq!(ptr.tokens().count(), 0);
+            assert!(ptr.back().is_none());
+            assert!(ptr.pop_front().is_none());
+        }
     }
 
     #[test]
