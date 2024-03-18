@@ -169,21 +169,19 @@ impl Pointer {
     }
     /// Removes and returns the first `Token` in the `Pointer` if it exists.
     pub fn pop_front(&mut self) -> Option<Token> {
-        if !self.inner.is_empty() && self.count > 0 {
+        (!self.inner.is_empty() && self.count > 0).then(|| {
             self.count -= 1;
 
             if let Some((front, back)) = self.inner[1..].split_once('/') {
                 let front = Token::from_encoded(front);
                 self.inner = String::from("/") + back;
-                Some(front)
+                front
             } else {
                 let token = Token::from_encoded(&self.inner[1..]);
                 self.inner.truncate(0);
-                Some(token)
+                token
             }
-        } else {
-            None
-        }
+        })
     }
     /// Returns the number of tokens in the `Pointer`.
     pub fn count(&self) -> usize {
