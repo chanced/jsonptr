@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.7] 2024-03-18
+
+-   Fixes issue with `pop_front` on a token with an empty string leaving the pointer in an invalid state. #25 by [@wngr](https://github.com/wngr)
+-   Fixes issue with `pop_back` on a token with an empty string. #26 by [@asmello](https://github.com/asmello)
+
 ## [0.4.6] 2024-03-24
 
 -   Fixes `Pointer::last` panicking for empty/root pointers #23 by [@wngr](https://github.com/wngr)
