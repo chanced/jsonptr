@@ -227,8 +227,11 @@ impl Pointer {
         }
         self.inner[1..]
             .split_once('/')
-            .map_or(Some((&self.inner[1..], "")), Option::Some)
-            .map(|(front, _)| Token::from_encoded(front))
+            .map_or_else(
+                || Token::from_encoded(&self.inner[1..]),
+                |(front, _)| Token::from_encoded(front),
+            )
+            .into()
     }
     /// Returns the first `Token` in the `Pointer`.
     ///
@@ -1414,7 +1417,7 @@ mod tests {
                 assert_eq!(ptr.pop_front().unwrap().as_str(), *s);
             }
             assert_eq!(ptr.tokens().count(), 0);
-            assert!(ptr.back().is_none());
+            assert!(ptr.front().is_none());
             assert!(ptr.pop_front().is_none());
         }
     }
