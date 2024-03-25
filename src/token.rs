@@ -271,7 +271,7 @@ impl PartialOrd<String> for Token {
 }
 impl PartialOrd<Token> for Token {
     fn partial_cmp(&self, other: &Token) -> Option<Ordering> {
-        self.decoded().partial_cmp(other.decoded())
+        Some(self.cmp(other))
     }
 }
 impl PartialEq<Token> for String {
