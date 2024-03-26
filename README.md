@@ -21,7 +21,7 @@ use jsonptr::Pointer;
 use serde_json::json;
 
 let mut data = json!({"foo": { "bar": "baz" }});
-let ptr = Pointer::new(["foo", "bar"]);
+let ptr = Pointer::parse("/foo/bar").unwrap();
 let bar = ptr.resolve(&data).unwrap();
 assert_eq!(bar, "baz");
 ```
@@ -33,7 +33,7 @@ use jsonptr::{Pointer, Resolve};
 use serde_json::json;
 
 let mut data = json!({ "foo": { "bar": "baz" }});
-let ptr = Pointer::new(["foo", "bar"]);
+let ptr = Pointer::parse("/foo/bar").unwrap();
 let bar = data.resolve(&ptr).unwrap();
 assert_eq!(bar, "baz");
 
@@ -45,7 +45,7 @@ assert_eq!(bar, "baz");
 use jsonptr::{Pointer, ResolveMut};
 use serde_json::json;
 
-let ptr = Pointer::try_from("/foo/bar").unwrap();
+let ptr = Pointer::parse("/foo/bar").unwrap();
 let mut data = json!({ "foo": { "bar": "baz" }});
 let mut bar = data.resolve_mut(&ptr).unwrap();
 assert_eq!(bar, "baz");
@@ -59,7 +59,7 @@ assert_eq!(bar, "baz");
 use jsonptr::Pointer;
 use serde_json::json;
 
-let ptr = Pointer::try_from("/foo/bar").unwrap();
+let ptr = Pointer::parse("/foo/bar").unwrap();
 let mut data = json!({});
 let _previous = ptr.assign(&mut data, "qux").unwrap();
 assert_eq!(data, json!({ "foo": { "bar": "qux" }}))
@@ -71,7 +71,7 @@ assert_eq!(data, json!({ "foo": { "bar": "qux" }}))
 use jsonptr::{Assign, Pointer};
 use serde_json::json;
 
-let ptr = Pointer::try_from("/foo/bar").unwrap();
+let ptr = Pointer::parse("/foo/bar").unwrap();
 let mut data = json!({});
 let _previous = data.assign(&ptr, "qux").unwrap();
 assert_eq!(data, json!({ "foo": { "bar": "qux" }}))
@@ -86,7 +86,7 @@ use jsonptr::Pointer;
 use serde_json::json;
 
 let mut data = json!({ "foo": { "bar": { "baz": "qux" } } });
-let ptr = Pointer::new(&["foo", "bar", "baz"]);
+let ptr = Pointer::parse("/foo/bar/baz").unwrap();
 assert_eq!(ptr.delete(&mut data), Some("qux".into()));
 assert_eq!(data, json!({ "foo": { "bar": {} } }));
 
@@ -102,12 +102,12 @@ use jsonptr::{Pointer, Delete};
 use serde_json::json;
 
 let mut data = json!({ "foo": { "bar": { "baz": "qux" } } });
-let ptr = Pointer::new(["foo", "bar", "baz"]);
+let ptr = Pointer::parse("/foo/bar/baz").unwrap();
 assert_eq!(ptr.delete(&mut data), Some("qux".into()));
 assert_eq!(data, json!({ "foo": { "bar": {} } }));
 
 // replacing a root pointer replaces data with `Value::Null`
-let ptr = Pointer::default();
+let ptr = Pointer::root();
 let deleted = json!({ "foo": { "bar": {} } });
 assert_eq!(data.delete(&ptr), Some(deleted));
 assert!(data.is_null());

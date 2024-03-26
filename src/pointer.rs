@@ -9,7 +9,7 @@ use alloc::{
 };
 use core::{borrow::Borrow, cmp::Ordering, mem, ops::Deref, slice, str::FromStr};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{map::Entry, Map, Value};
 
 /// Helper type for deserialization. Either a valid [`Pointer`] or a string and
 /// the parsing error
@@ -96,6 +96,22 @@ unsafe fn extend_one_before(s: &str) -> &str {
     std::str::from_utf8_unchecked(slice)
 }
 
+/// A JSON Pointer is a string containing a sequence of zero or more reference
+/// tokens, each prefixed by a '/' character.
+///
+/// See [RFC 6901 for more
+/// information](https://datatracker.ietf.org/doc/html/rfc6901).
+///
+/// ## Example
+/// ```rust
+/// use jsonptr::{Pointer, Resolve};
+/// use serde_json::{json, Value};
+///
+/// let data = json!({ "foo": { "bar": "baz" } });
+/// let ptr = Pointer::parse("/foo/bar").unwrap();
+/// let bar = data.resolve(&ptr).unwrap();
+/// assert_eq!(bar, "baz");
+/// ```
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Pointer(str);
 
@@ -215,18 +231,19 @@ impl Pointer {
 
     /// Splits the `Pointer` into the parent path and the last `Token`.
     pub fn split_back(&self) -> Option<(&Self, Token)> {
-        self.0.rsplit_once('/').map(|(front, back)| {
-            // We want to include the delimiter character too!
-            // SAFETY: if split was successful, then the delimiter
-            // character exists before the start of the second `str`.
-            let back = unsafe { extend_one_before(back) };
-            (Self::new(front), Token::from_encoded(back))
-        })
+        self.0
+            .rsplit_once('/')
+            .map(|(front, back)| (Self::new(front), Token::from_encoded(back)))
     }
 
     /// A pointer to the parent of the current path.
     pub fn parent(&self) -> Option<&Self> {
         self.0.rsplit_once('/').map(|(front, _)| Self::new(front))
+    }
+
+    /// Returns the pointer stripped of the given suffix.
+    pub fn strip_suffix(&self, suffix: &Self) -> Option<&Self> {
+        self.0.strip_suffix(&suffix.0).map(Self::new)
     }
 
     /// Attempts to get a `Token` by the index. Returns `None` if the index is
@@ -250,27 +267,27 @@ impl Pointer {
 
     /// Attempts to resolve a `Value` based on the path in this `Pointer`.
     pub fn resolve<'v>(&self, mut value: &'v Value) -> Result<&'v Value, Error> {
+        let partial_path = |suffix| {
+            self.strip_suffix(suffix)
+                .expect("suffix came from self")
+                .to_buf()
+        };
         let mut pointer = self;
         while let Some((token, rem)) = pointer.split_front() {
             pointer = rem;
             match value {
                 // found a leaf node but the pointer hasn't been exhausted
                 Value::Null | Value::Number(_) | Value::String(_) | Value::Bool(_) => {
-                    return Err(Error::Unresolvable(UnresolvableError {
-                        pointer: pointer.to_buf(),
-                        leaf: Some(token),
-                    }));
+                    return Err(UnresolvableError::new(partial_path(rem)).into());
                 }
                 Value::Array(v) => {
                     let idx = token.as_index(v.len()).map_err(Error::Index)?;
                     value = &v[idx];
                 }
                 Value::Object(v) => {
-                    value = v.get(token.as_key()).ok_or_else(|| {
-                        Error::NotFound(NotFoundError {
-                            pointer: pointer.to_buf(),
-                        })
-                    })?;
+                    value = v
+                        .get(token.as_key())
+                        .ok_or_else(|| Error::from(NotFoundError::new(partial_path(rem))))?;
                 }
             }
         }
@@ -279,27 +296,27 @@ impl Pointer {
 
     /// Attempts to resolve a mutable `Value` based on the path in this `Pointer`.
     pub fn resolve_mut<'v>(&self, mut value: &'v mut Value) -> Result<&'v mut Value, Error> {
+        let partial_path = |suffix| {
+            self.strip_suffix(suffix)
+                .expect("suffix came from self")
+                .to_buf()
+        };
         let mut pointer = self;
         while let Some((token, rem)) = pointer.split_front() {
             pointer = rem;
             match value {
                 // found a leaf node but the pointer hasn't been exhausted
                 Value::Null | Value::Number(_) | Value::String(_) | Value::Bool(_) => {
-                    return Err(Error::Unresolvable(UnresolvableError {
-                        pointer: pointer.to_buf(),
-                        leaf: Some(token),
-                    }));
+                    return Err(UnresolvableError::new(partial_path(rem)).into());
                 }
                 Value::Array(v) => {
                     let idx = token.as_index(v.len()).map_err(Error::Index)?;
                     value = &mut v[idx];
                 }
                 Value::Object(v) => {
-                    value = v.get_mut(token.as_key()).ok_or_else(|| {
-                        Error::NotFound(NotFoundError {
-                            pointer: pointer.to_buf(),
-                        })
-                    })?;
+                    value = v
+                        .get_mut(token.as_key())
+                        .ok_or_else(|| Error::from(NotFoundError::new(partial_path(rem))))?;
                 }
             }
         }
@@ -335,17 +352,17 @@ impl Pointer {
     /// use serde_json::json;
     ///
     /// let mut data = json!({ "foo": { "bar": { "baz": "qux" } } });
-    /// let ptr = Pointer::new(&["foo", "bar", "baz"]);
+    /// let ptr = Pointer::parse("/foo/bar/baz").unwrap();
     /// assert_eq!(data.delete(&ptr), Some("qux".into()));
     /// assert_eq!(data, json!({ "foo": { "bar": {} } }));
     /// ```
     /// ### Deleting a non-existent Pointer returns `None`:
     /// ```rust
-    /// use jsonptr::{Pointer};
+    /// use jsonptr::Pointer;
     /// use serde_json::json;
     ///
     /// let mut data = json!({});
-    /// let ptr = Pointer::new(&["foo", "bar", "baz"]);
+    /// let ptr = Pointer::parse("/foo/bar/baz").unwrap();
     /// assert_eq!(ptr.delete(&mut data), None);
     /// assert_eq!(data, json!({}));
     /// ```
@@ -355,7 +372,7 @@ impl Pointer {
     /// use serde_json::json;
     ///
     /// let mut data = json!({ "foo": { "bar": "baz" } });
-    /// let ptr = Pointer::default();
+    /// let ptr = Pointer::root();
     /// assert_eq!(data.delete(&ptr), Some(json!({ "foo": { "bar": "baz" } })));
     /// assert!(data.is_null());
     /// ```
@@ -380,52 +397,118 @@ impl Pointer {
 
     /// Attempts to assign `src` to `dest` based on the path in this `Pointer`.
     ///
-    /// If the path is
-    /// partially available, the missing portions will be created. If the path contains an index,
-    /// such as `"/0"` or `"/1"` then an array will be created. Otherwise, objects will be utilized
-    /// to create the missing path.
+    /// If the path is partially available, the missing portions will be created. If the path
+    /// contains a zero index, such as `"/0"`, then an array will be created. Otherwise, objects
+    /// will be utilized to create the missing path.
     ///
     /// ## Example
     /// ```rust
-    /// use jsonptr::{Pointer};
+    /// use jsonptr::Pointer;
     /// use jsonptr::prelude::*; // <-- for Assign trait
     /// use serde_json::{json, Value};
     /// let mut data = json!([]);
     ///
-    /// let mut ptr = Pointer::new(&["0", "foo"]);
+    /// let mut ptr = Pointer::parse("/0/foo").unwrap();
     /// let src = json!("bar");
     /// let assignment = data.assign(&ptr, src).unwrap();
     /// assert_eq!(data, json!([{ "foo": "bar" } ]));
     /// ```
-    pub fn assign<'d, V>(&self, mut dest: &'d mut Value, src: V) -> Result<Assignment<'d>, Error>
+    pub fn assign<'d, V>(&self, dest: &'d mut Value, src: V) -> Result<Assignment<'d>, Error>
     where
         V: Into<Value>,
     {
-        let mut pointer = self;
-        let mut created_or_mutated = PointerBuf::new();
-        let mut assigned_to = PointerBuf::new();
-        while let Some((token, rem)) = pointer.split_front() {
-            pointer = rem;
+        self._assign(dest, src, None, PointerBuf::new())
+    }
+
+    fn _assign<'d, V>(
+        &self,
+        dest: &'d mut Value,
+        src: V,
+        created_or_mutated: Option<PointerBuf>,
+        mut assigned_to: PointerBuf,
+    ) -> Result<Assignment<'d>, Error>
+    where
+        V: Into<Value>,
+    {
+        // println!("dest: {dest:?}, created_or_mutated: {created_or_mutated:?}, assigned_to: {assigned_to:?}");
+        if let Some((token, tail)) = self.split_front() {
+            // println!("token: {token:?}");
             match dest {
-                // found a leaf node but the pointer hasn't been exhausted
                 Value::Null | Value::Number(_) | Value::String(_) | Value::Bool(_) => {
-                    todo!()
+                    match token.as_str() {
+                        "0" => {
+                            // first element will be traversed when we recurse
+                            *dest = vec![Value::Null].into();
+                        }
+                        "-" => {
+                            // new element will be appended when we recurse
+                            *dest = Value::Array(Vec::new());
+                        }
+                        _ => {
+                            // any other values must be interpreted as map keys
+                            *dest = Map::new().into();
+                        }
+                    }
+                    // Now that the node is a container type, we can recurse into the other cases
+                    self._assign(
+                        dest,
+                        src,
+                        // if this is the first node we created while descending, we record that here
+                        created_or_mutated.or_else(|| assigned_to.clone().into()),
+                        assigned_to,
+                    )
                 }
                 Value::Array(v) => {
-                    todo!()
+                    let idx = token.as_index(v.len()).map_err(Error::Index)?;
+                    debug_assert!(idx <= v.len());
+                    if idx == v.len() {
+                        assigned_to.push_back(idx.into());
+                        v.push(Value::Null);
+                        tail._assign(
+                            v.last_mut().expect("just pushed"),
+                            src,
+                            // NOTE: this MUST be the first node we're creating, because we can't
+                            // append to arrays that do not yet exist! So `created_or_mutated` must
+                            // be `None` at this point, and we always set it to the current path.
+                            assigned_to.clone().into(),
+                            assigned_to,
+                        )
+                    } else {
+                        assigned_to.push_back(token);
+                        tail._assign(&mut v[idx], src, created_or_mutated, assigned_to)
+                    }
                 }
                 Value::Object(v) => {
-                    todo!()
+                    assigned_to.push_back(token.clone());
+                    match v.entry(token.to_string()) {
+                        Entry::Occupied(entry) => {
+                            tail._assign(entry.into_mut(), src, created_or_mutated, assigned_to)
+                        }
+                        Entry::Vacant(entry) => {
+                            let dest = entry.insert(Value::Null);
+                            tail._assign(
+                                dest,
+                                src,
+                                // if this is the first node we created while descending, we record that here
+                                created_or_mutated.or_else(|| assigned_to.clone().into()),
+                                assigned_to,
+                            )
+                        }
+                    }
                 }
             }
+        } else {
+            // Pointer is root, we can replace `dest` directly
+            let replaced = std::mem::replace(dest, src.into());
+            Ok(Assignment {
+                assigned: Cow::Borrowed(dest),
+                replaced,
+                created_or_mutated: created_or_mutated.unwrap_or_else(|| assigned_to.clone()),
+                // NOTE: in practice, `assigned_to` is always equivalent to the original pointer,
+                // with `-` replaced by the actual index (if it occurs)
+                assigned_to,
+            })
         }
-        let replaced = std::mem::replace(dest, src.into());
-        Ok(Assignment {
-            replaced,
-            assigned: Cow::Borrowed(dest),
-            created_or_mutated,
-            assigned_to,
-        })
     }
 }
 
@@ -530,22 +613,11 @@ impl<'a> IntoIterator for &'a Pointer {
     }
 }
 
-/// A JSON Pointer is a string containing a sequence of zero or more reference
-/// tokens, each prefixed by a '/' character.
+/// An owned, mutable Pointer (akin to String).
 ///
-/// See [RFC 6901 for more
-/// information](https://datatracker.ietf.org/doc/html/rfc6901).
-///
-/// ## Example
-/// ```rust
-/// use jsonptr::{Pointer, Resolve};
-/// use serde_json::{json, Value};
-///
-/// let data = json!({ "foo": { "bar": "baz" } });
-/// let ptr = Pointer::parse("/foo/bar").unwrap();
-/// let bar = data.resolve(&ptr).unwrap();
-/// assert_eq!(bar, "baz");
-/// ```
+/// This type provides methods like [`PointerBuf::push_back`] and [`PointerBuf::replace_token`] that
+/// mutate the pointer in place. It also implements [`std::ops::Deref`] to [`Pointer`], meaning that
+/// all methods on [`Pointer`] slices are available on `PointerBuf` values as well.
 #[cfg_attr(
     feature = "url",
     doc = r##"
