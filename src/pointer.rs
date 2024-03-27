@@ -302,7 +302,7 @@ impl Pointer {
     }
 
     /// Returns the pointer stripped of the given suffix.
-    pub fn strip_suffix(&self, suffix: &Self) -> Option<&Self> {
+    pub fn strip_suffix<'a>(&'a self, suffix: &Self) -> Option<&'a Self> {
         self.0.strip_suffix(&suffix.0).map(Self::new)
     }
 
@@ -384,7 +384,7 @@ impl Pointer {
     }
 
     /// Finds the commonality between this and another `Pointer`.
-    pub fn intersection(&self, other: &Pointer) -> &Self {
+    pub fn intersection<'a>(&'a self, other: &Self) -> &'a Self {
         let mut last_slash = 0;
         for (i, (a, b)) in self.0.chars().zip(other.0.chars()).enumerate() {
             if a != b {
