@@ -97,7 +97,7 @@ impl std::error::Error for Error {}
 /// use serde_json::json;
 /// use jsonptr::{Pointer, ResolveMut, Resolve, UnresolvableError};
 /// let mut data = json!({ "foo": "bar" });
-/// let ptr = Pointer::parse("/foo/unreachable").unwrap();
+/// let ptr = Pointer::from_static("/foo/unreachable");
 /// let err = data.resolve_mut(&ptr).unwrap_err();
 /// assert_eq!(err, UnresolvableError::new(ptr.to_buf()).into());
 /// ```

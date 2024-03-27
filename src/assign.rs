@@ -74,9 +74,9 @@ pub struct Assignment<'a> {
     /// use serde_json::json;
     /// use jsonptr::{Pointer, Assign};
     /// let mut data = json!({ "foo": ["zero"] });
-    /// let mut ptr = Pointer::parse("/foo/-").unwrap();
+    /// let mut ptr = Pointer::from_static("/foo/-");
     /// let assignment = data.assign(&mut ptr, "one").unwrap();
-    /// assert_eq!(assignment.assigned_to, Pointer::parse("/foo/1").unwrap());
+    /// assert_eq!(assignment.assigned_to, Pointer::from_static("/foo/1"));
     /// ```
     pub assigned_to: PointerBuf,
 }

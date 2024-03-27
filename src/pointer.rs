@@ -96,6 +96,44 @@ unsafe fn extend_one_before(s: &str) -> &str {
     std::str::from_utf8_unchecked(slice)
 }
 
+const fn is_valid_ptr(value: &str) -> bool {
+    let bytes = value.as_bytes();
+
+    if bytes.is_empty() {
+        // root pointer
+        return true;
+    }
+
+    match bytes[0] {
+        b'#' => {
+            if bytes.len() == 1 {
+                // also root pointer
+                return true;
+            }
+            if bytes[1] != b'/' {
+                return false;
+            }
+        }
+        b'/' => {}
+        _ => return false,
+    }
+
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'~' {
+            if i + 1 >= bytes.len() {
+                return false;
+            }
+            if bytes[i + 1] != b'0' && bytes[i + 1] != b'1' {
+                return false;
+            }
+        }
+        i += 1;
+    }
+
+    true
+}
+
 /// A JSON Pointer is a string containing a sequence of zero or more reference
 /// tokens, each prefixed by a '/' character.
 ///
@@ -108,7 +146,7 @@ unsafe fn extend_one_before(s: &str) -> &str {
 /// use serde_json::{json, Value};
 ///
 /// let data = json!({ "foo": { "bar": "baz" } });
-/// let ptr = Pointer::parse("/foo/bar").unwrap();
+/// let ptr = Pointer::from_static("/foo/bar");
 /// let bar = data.resolve(&ptr).unwrap();
 /// assert_eq!(bar, "baz");
 /// ```
@@ -139,6 +177,28 @@ impl Pointer {
     /// If successful, this does not allocate.
     pub fn parse<S: AsRef<str> + ?Sized>(s: &S) -> Result<&Self, MalformedPointerError> {
         validate(s.as_ref()).map(Self::new)
+    }
+
+    /// Creates a static `Pointer` from a string.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if the string does not represent a valid pointer.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use jsonptr::{Pointer, Resolve};
+    /// use serde_json::{json, Value};
+    ///
+    /// const POINTER: &Pointer = Pointer::from_static("/foo/bar");
+    /// let data = json!({ "foo": { "bar": "baz" } });
+    /// let bar = data.resolve(POINTER).unwrap();
+    /// assert_eq!(bar, "baz");
+    /// ````
+    pub const fn from_static(s: &'static str) -> &'static Self {
+        assert!(is_valid_ptr(s), "invalid JSON Pointer");
+        unsafe { &*(s as *const str as *const Self) }
     }
 
     /// The encoded string representation of this `Pointer`
@@ -253,7 +313,7 @@ impl Pointer {
     /// ```rust
     /// use jsonptr::{Pointer, Token};
     ///
-    /// let ptr = Pointer::parse("/foo/bar").unwrap();
+    /// let ptr = Pointer::from_static("/foo/bar");
     /// assert_eq!(ptr.get(0), Some("foo".into()));
     /// assert_eq!(ptr.get(1), Some("bar".into()));
     /// assert_eq!(ptr.get(2), None);
@@ -352,7 +412,7 @@ impl Pointer {
     /// use serde_json::json;
     ///
     /// let mut data = json!({ "foo": { "bar": { "baz": "qux" } } });
-    /// let ptr = Pointer::parse("/foo/bar/baz").unwrap();
+    /// let ptr = Pointer::from_static("/foo/bar/baz");
     /// assert_eq!(data.delete(&ptr), Some("qux".into()));
     /// assert_eq!(data, json!({ "foo": { "bar": {} } }));
     /// ```
@@ -362,7 +422,7 @@ impl Pointer {
     /// use serde_json::json;
     ///
     /// let mut data = json!({});
-    /// let ptr = Pointer::parse("/foo/bar/baz").unwrap();
+    /// let ptr = Pointer::from_static("/foo/bar/baz");
     /// assert_eq!(ptr.delete(&mut data), None);
     /// assert_eq!(data, json!({}));
     /// ```
@@ -408,7 +468,7 @@ impl Pointer {
     /// use serde_json::{json, Value};
     /// let mut data = json!([]);
     ///
-    /// let mut ptr = Pointer::parse("/0/foo").unwrap();
+    /// let mut ptr = Pointer::from_static("/0/foo");
     /// let src = json!("bar");
     /// let assignment = data.assign(&ptr, src).unwrap();
     /// assert_eq!(data, json!([{ "foo": "bar" } ]));
@@ -935,6 +995,12 @@ mod tests {
     use super::*;
 
     #[test]
+    #[should_panic]
+    fn from_const_validates() {
+        Pointer::from_static("foo/bar");
+    }
+
+    #[test]
     fn test_rfc_examples() {
         let data = json!({
             "foo": ["bar", "baz"],
@@ -957,50 +1023,50 @@ mod tests {
         assert_eq!(data.resolve(ptr).unwrap(), &data);
 
         // "/foo"       ["bar", "baz"]
-        let ptr = Pointer::parse("/foo").unwrap();
+        let ptr = Pointer::from_static("/foo");
         assert_eq!(data.resolve(ptr).unwrap(), &json!(["bar", "baz"]));
 
         // "/foo/0"     "bar"
-        let ptr = Pointer::parse("/foo/0").unwrap();
+        let ptr = Pointer::from_static("/foo/0");
         assert_eq!(data.resolve(ptr).unwrap(), &json!("bar"));
 
         // // "/"          0
-        let ptr = Pointer::parse("/").unwrap();
+        let ptr = Pointer::from_static("/");
         assert_eq!(data.resolve(ptr).unwrap(), &json!(0));
 
         // "/a~1b"      1
         assert_eq!(data.get("a/b").unwrap(), 1);
-        let ptr = Pointer::parse("/a~1b").unwrap();
+        let ptr = Pointer::from_static("/a~1b");
         assert_eq!(ptr.as_str(), "/a~1b");
         assert_eq!(data.get("a/b").unwrap(), 1);
         assert_eq!(&ptr.first().unwrap(), "a/b");
         assert_eq!(data.resolve(ptr).unwrap(), &json!(1));
 
         // "/c%d"       2
-        let ptr = Pointer::parse("/c%d").unwrap();
+        let ptr = Pointer::from_static("/c%d");
         assert_eq!(data.resolve(ptr).unwrap(), &json!(2));
 
         // // "/e^f"       3
-        let ptr = Pointer::parse("/e^f").unwrap();
+        let ptr = Pointer::from_static("/e^f");
         assert_eq!(data.resolve(ptr).unwrap(), &json!(3));
 
         // // "/g|h"       4
-        let ptr = Pointer::parse("/g|h").unwrap();
+        let ptr = Pointer::from_static("/g|h");
         assert_eq!(data.resolve(ptr).unwrap(), &json!(4));
 
         // "/i\\j"      5
-        let ptr = Pointer::parse("/i\\j").unwrap();
+        let ptr = Pointer::from_static("/i\\j");
         assert_eq!(data.resolve(ptr).unwrap(), &json!(5));
 
         // // "/k\"l"      6
-        let ptr = Pointer::parse("/k\"l").unwrap();
+        let ptr = Pointer::from_static("/k\"l");
         assert_eq!(data.resolve(ptr).unwrap(), &json!(6));
 
         // // "/ "         7
-        let ptr = Pointer::parse("/ ").unwrap();
+        let ptr = Pointer::from_static("/ ");
         assert_eq!(data.resolve(ptr).unwrap(), &json!(7));
         // // "/m~0n"      8
-        let ptr = Pointer::parse("/m~0n").unwrap();
+        let ptr = Pointer::from_static("/m~0n");
         assert_eq!(data.resolve(ptr).unwrap(), &json!(8));
     }
 
@@ -1166,29 +1232,29 @@ mod tests {
 
     #[test]
     fn test_last() {
-        let ptr = Pointer::parse("/foo/bar").unwrap();
+        let ptr = Pointer::from_static("/foo/bar");
 
         assert_eq!(ptr.last(), Some("bar".into()));
 
-        let ptr = Pointer::parse("/foo/bar/-").unwrap();
+        let ptr = Pointer::from_static("/foo/bar/-");
         assert_eq!(ptr.last(), Some("-".into()));
 
-        let ptr = Pointer::parse("/-").unwrap();
+        let ptr = Pointer::from_static("/-");
         assert_eq!(ptr.last(), Some("-".into()));
 
         let ptr = Pointer::root();
         assert_eq!(ptr.last(), None);
 
-        let ptr = Pointer::parse("/bar").unwrap();
+        let ptr = Pointer::from_static("/bar");
         assert_eq!(ptr.last(), Some("bar".into()));
     }
 
     #[test]
     fn test_first() {
-        let ptr = Pointer::parse("/foo/bar").unwrap();
+        let ptr = Pointer::from_static("/foo/bar");
         assert_eq!(ptr.first(), Some("foo".into()));
 
-        let ptr = Pointer::parse("/foo/bar/-").unwrap();
+        let ptr = Pointer::from_static("/foo/bar/-");
         assert_eq!(ptr.first(), Some("foo".into()));
 
         let ptr = Pointer::root();
@@ -1220,7 +1286,7 @@ mod tests {
     #[test]
     fn test_resolve_unresolvable() {
         let mut data = test_data();
-        let ptr = Pointer::parse("/foo/bool/unresolvable").unwrap();
+        let ptr = Pointer::from_static("/foo/bool/unresolvable");
         let res = ptr.resolve_mut(&mut data);
 
         assert!(res.is_err());
@@ -1256,7 +1322,7 @@ mod tests {
     #[test]
     fn test_resolve_mut_unresolvable_error() {
         let mut data = test_data();
-        let ptr = Pointer::parse("/foo/bool/unresolvable/not-in-token").unwrap();
+        let ptr = Pointer::from_static("/foo/bool/unresolvable/not-in-token");
         let res = ptr.resolve_mut(&mut data);
         assert!(res.is_err());
         let unresolvable = "/foo/bool/unresolvable".try_into().unwrap();
@@ -1274,7 +1340,7 @@ mod tests {
     #[test]
     fn test_resolve_unresolvable_error() {
         let data = test_data();
-        let ptr = Pointer::parse("/foo/bool/unresolvable/not-in-token").unwrap();
+        let ptr = Pointer::from_static("/foo/bool/unresolvable/not-in-token");
         let res = ptr.resolve(&data);
 
         assert!(res.is_err());
@@ -1288,7 +1354,7 @@ mod tests {
     #[test]
     fn test_assign() {
         let mut data = json!({});
-        let ptr = Pointer::parse("/foo").unwrap();
+        let ptr = Pointer::from_static("/foo");
         let val = json!("bar");
         let assignment = ptr.assign(&mut data, val.clone()).unwrap();
         assert_eq!(assignment.replaced, Value::Null);
@@ -1306,7 +1372,7 @@ mod tests {
     #[test]
     fn test_assign_with_explicit_array_path() {
         let mut data = json!({});
-        let ptr = Pointer::parse("/foo/0/bar").unwrap();
+        let ptr = Pointer::from_static("/foo/0/bar");
         let val = json!("baz");
 
         let assignment = ptr.assign(&mut data, val).unwrap();
@@ -1413,7 +1479,7 @@ mod tests {
             "foo": "bar"
         });
 
-        let ptr = Pointer::parse("/foo/bar/baz").unwrap();
+        let ptr = Pointer::from_static("/foo/bar/baz");
         let val = json!("qux");
 
         ptr.assign(&mut data, val).unwrap();
@@ -1440,7 +1506,7 @@ mod tests {
         });
 
         {
-            let ptr = Pointer::parse("///bar").unwrap();
+            let ptr = Pointer::from_static("///bar");
             assert_eq!(ptr.resolve(&data).unwrap(), 42);
         }
         {

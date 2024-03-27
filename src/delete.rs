@@ -28,7 +28,7 @@ mod tests {
             "Example": 21,
             "test": "test"
         });
-        let pointer = Pointer::parse("/Example").unwrap();
+        let pointer = Pointer::from_static("/Example");
         pointer.delete(&mut data);
         assert_eq!(json!({"test": "test"}), data);
     }
