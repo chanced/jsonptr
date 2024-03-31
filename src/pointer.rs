@@ -396,7 +396,11 @@ impl Pointer {
             }
             idx += 1;
         }
-        Self::new(&self.0[..idx])
+        if idx == self.0.len() || self.0.as_bytes()[idx] == b'/' {
+            Self::new(&self.0[..idx])
+        } else {
+            Self::new(&self.0[..last_slash])
+        }
     }
 
     /// Attempts to delete a `serde_json::Value` based upon the path in this
@@ -1571,6 +1575,11 @@ mod tests {
         let base = Pointer::from_static("/foo/bar");
         let a = Pointer::from_static("/foo/bar/qux");
         let b = Pointer::from_static("/foo/bar");
+        assert_eq!(a.intersection(b), base);
+
+        let base = Pointer::from_static("");
+        let a = Pointer::from_static("/foo");
+        let b = Pointer::from_static("/");
         assert_eq!(a.intersection(b), base);
     }
 
