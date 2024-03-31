@@ -685,9 +685,9 @@ impl<'a> IntoIterator for &'a Pointer {
     doc = r##"
 ```rust
 use jsonptr::PointerBuf;
-let expected = PointerBuf::new(&["foo", "bar"]);
+let expected = PointerBuf::from_tokens(&["foo", "bar"]);
 let url = url::Url::parse("https://example.com#/foo/bar").unwrap();
-assert_eq!(expected, Pointer::try_from(url).unwrap())
+assert_eq!(expected, PointerBuf::try_from(url).unwrap())
 ```
 "##
 )]
