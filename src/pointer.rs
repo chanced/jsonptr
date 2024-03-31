@@ -386,15 +386,17 @@ impl Pointer {
     /// Finds the commonality between this and another `Pointer`.
     pub fn intersection<'a>(&'a self, other: &Self) -> &'a Self {
         let mut last_slash = 0;
-        for (i, (a, b)) in self.0.chars().zip(other.0.chars()).enumerate() {
+        let mut idx = 0;
+        for (a, b) in self.0.bytes().zip(other.0.bytes()) {
             if a != b {
                 return Self::new(&self.0[..last_slash]);
             }
-            if a == '/' {
-                last_slash = i;
+            if a == b'/' {
+                last_slash = idx;
             }
+            idx += 1;
         }
-        self
+        Self::new(&self.0[..idx])
     }
 
     /// Attempts to delete a `serde_json::Value` based upon the path in this
@@ -988,6 +990,8 @@ impl core::fmt::Display for PointerBuf {
 
 #[cfg(test)]
 mod tests {
+    use quickcheck::TestResult;
+    use quickcheck_macros::quickcheck;
     use serde_json::json;
 
     use crate::{Resolve, ResolveMut};
@@ -1563,10 +1567,153 @@ mod tests {
     }
 
     #[test]
+    fn intersect() {
+        let base = Pointer::from_static("/foo/bar");
+        let a = Pointer::from_static("/foo/bar/qux");
+        let b = Pointer::from_static("/foo/bar");
+        assert_eq!(a.intersection(b), base);
+    }
+
+    #[test]
     #[cfg(feature = "fluent-uri")]
     fn test_try_from_fluent_uri() {
         let uri = fluent_uri::Uri::parse("#/foo/bar").unwrap();
         let ptr = PointerBuf::try_from(&uri).unwrap();
         assert_eq!(ptr, "/foo/bar");
+    }
+
+    #[quickcheck]
+    fn qc_pop_and_push(mut ptr: PointerBuf) -> bool {
+        let original_ptr = ptr.clone();
+        let mut tokens = Vec::with_capacity(ptr.count());
+        while let Some(token) = ptr.pop_back() {
+            tokens.push(token);
+        }
+        if dbg!(ptr.count() != 0)
+            || dbg!(!ptr.is_root())
+            || dbg!(ptr.last().is_some())
+            || dbg!(ptr.first().is_some())
+        {
+            return false;
+        }
+        for token in tokens.drain(..) {
+            ptr.push_front(token);
+        }
+        if ptr != original_ptr {
+            return false;
+        }
+        while let Some(token) = ptr.pop_front() {
+            tokens.push(token);
+        }
+        if dbg!(ptr.count() != 0)
+            || dbg!(!ptr.is_root())
+            || dbg!(ptr.last().is_some())
+            || dbg!(ptr.first().is_some())
+        {
+            return false;
+        }
+        for token in tokens {
+            ptr.push_back(token);
+        }
+        ptr == original_ptr
+    }
+
+    #[quickcheck]
+    fn qc_split(ptr: PointerBuf) -> bool {
+        if let Some((head, tail)) = ptr.split_front() {
+            {
+                let Some(first) = ptr.first() else {
+                    return false;
+                };
+                if first != head {
+                    return false;
+                }
+            }
+            {
+                let mut copy = ptr.clone();
+                copy.pop_front();
+                if copy != tail {
+                    return false;
+                }
+            }
+            {
+                let mut buf = tail.to_buf();
+                buf.push_front(head.clone());
+                if buf != ptr {
+                    return false;
+                }
+            }
+            {
+                let fmt = format!("/{}{tail}", head.encoded());
+                if Pointer::parse(&fmt).unwrap() != ptr {
+                    return false;
+                }
+            }
+        } else {
+            return ptr.is_root()
+                && ptr.count() == 0
+                && ptr.last().is_none()
+                && ptr.first().is_none();
+        }
+        if let Some((head, tail)) = ptr.split_back() {
+            {
+                let Some(last) = ptr.last() else {
+                    return false;
+                };
+                if last != tail {
+                    return false;
+                }
+            }
+            {
+                let mut copy = ptr.clone();
+                copy.pop_back();
+                if copy != head {
+                    return false;
+                }
+            }
+            {
+                let mut buf = head.to_buf();
+                buf.push_back(tail.clone());
+                if buf != ptr {
+                    return false;
+                }
+            }
+            {
+                let fmt = format!("{head}/{}", tail.encoded());
+                if Pointer::parse(&fmt).unwrap() != ptr {
+                    return false;
+                }
+            }
+            if Some(head) != ptr.parent() {
+                return false;
+            }
+        } else {
+            return ptr.is_root()
+                && ptr.count() == 0
+                && ptr.last().is_none()
+                && ptr.first().is_none();
+        }
+        true
+    }
+
+    #[quickcheck]
+    fn qc_from_tokens(tokens: Vec<Token>) -> bool {
+        let buf = PointerBuf::from_tokens(&tokens);
+        let reconstructed: Vec<_> = buf.tokens().collect();
+        tokens == reconstructed
+    }
+
+    #[quickcheck]
+    fn qc_intersection(base: PointerBuf, suffix_0: PointerBuf, suffix_1: PointerBuf) -> TestResult {
+        if suffix_0.first() == suffix_1.first() {
+            // base must be the true intersection
+            return TestResult::discard();
+        }
+        let mut a = base.clone();
+        a.append(&suffix_0);
+        let mut b = base.clone();
+        b.append(&suffix_1);
+        let isect = a.intersection(&b);
+        TestResult::from_bool(isect == base)
     }
 }

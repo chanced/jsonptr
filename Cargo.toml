@@ -20,3 +20,7 @@ url        = { version = "2", optional = true }
 [features]
 default = ["std"]
 std     = ["serde/std", "serde_json/std", "fluent-uri?/std"]
+
+[dev-dependencies]
+quickcheck = "1.0.3"
+quickcheck_macros = "1.0.0"

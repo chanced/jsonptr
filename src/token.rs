@@ -437,3 +437,16 @@ impl Into<&str> for Escaped {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quickcheck_macros::quickcheck;
+
+    #[quickcheck]
+    fn encode_decode(token: Token) -> bool {
+        let encoded = token.encoded();
+        let decoded = Token::from_encoded(encoded);
+        token == decoded
+    }
+}
