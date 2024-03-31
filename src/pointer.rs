@@ -1581,6 +1581,11 @@ mod tests {
         let a = Pointer::from_static("/foo");
         let b = Pointer::from_static("/");
         assert_eq!(a.intersection(b), base);
+
+        let base = Pointer::from_static("");
+        let a = Pointer::from_static("/fooqux");
+        let b = Pointer::from_static("/foobar");
+        assert_eq!(a.intersection(b), base);
     }
 
     #[test]
