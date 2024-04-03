@@ -93,7 +93,7 @@ unsafe fn extend_one_before(s: &str) -> &str {
     let ptr = s.as_ptr().offset(-1);
     let len = s.len() + 1;
     let slice = slice::from_raw_parts(ptr, len);
-    std::str::from_utf8_unchecked(slice)
+    core::str::from_utf8_unchecked(slice)
 }
 
 const fn is_valid_ptr(value: &str) -> bool {
@@ -153,7 +153,7 @@ const fn is_valid_ptr(value: &str) -> bool {
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Pointer(str);
 
-impl std::fmt::Display for Pointer {
+impl core::fmt::Display for Pointer {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.0.fmt(f)
     }
@@ -565,7 +565,7 @@ impl Pointer {
             }
         } else {
             // Pointer is root, we can replace `dest` directly
-            let replaced = std::mem::replace(dest, src.into());
+            let replaced = core::mem::replace(dest, src.into());
             Ok(Assignment {
                 assigned: Cow::Borrowed(dest),
                 replaced,
@@ -682,7 +682,7 @@ impl<'a> IntoIterator for &'a Pointer {
 /// An owned, mutable Pointer (akin to String).
 ///
 /// This type provides methods like [`PointerBuf::push_back`] and [`PointerBuf::replace_token`] that
-/// mutate the pointer in place. It also implements [`std::ops::Deref`] to [`Pointer`], meaning that
+/// mutate the pointer in place. It also implements [`core::ops::Deref`] to [`Pointer`], meaning that
 /// all methods on [`Pointer`] slices are available on `PointerBuf` values as well.
 #[cfg_attr(
     feature = "url",
