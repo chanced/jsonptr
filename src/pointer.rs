@@ -703,7 +703,7 @@ assert_eq!(expected, PointerBuf::try_from(url).unwrap())
 ```
 "##
 )]
-#[derive(Clone, Default, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PointerBuf(String);
 
 impl PointerBuf {
