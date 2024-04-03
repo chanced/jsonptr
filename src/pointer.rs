@@ -587,6 +587,14 @@ impl Serialize for Pointer {
     }
 }
 
+impl ToOwned for Pointer {
+    type Owned = PointerBuf;
+
+    fn to_owned(&self) -> Self::Owned {
+        self.to_buf()
+    }
+}
+
 impl PartialEq<&str> for Pointer {
     fn eq(&self, other: &&str) -> bool {
         &&self.0 == other
@@ -819,6 +827,12 @@ impl FromStr for PointerBuf {
     type Err = MalformedPointerError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::try_from(s)
+    }
+}
+
+impl Borrow<Pointer> for PointerBuf {
+    fn borrow(&self) -> &Pointer {
+        self.as_ptr()
     }
 }
 
