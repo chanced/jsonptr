@@ -504,7 +504,7 @@ impl Pointer {
                     match token.as_str() {
                         "0" => {
                             // first element will be traversed when we recurse
-                            *dest = vec![Value::Null].into();
+                            *dest = alloc::vec![Value::Null].into();
                         }
                         "-" => {
                             // new element will be appended when we recurse
@@ -994,13 +994,12 @@ impl core::fmt::Display for PointerBuf {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::{Resolve, ResolveMut};
+    use alloc::vec;
     use quickcheck::TestResult;
     use quickcheck_macros::quickcheck;
     use serde_json::json;
-
-    use crate::{Resolve, ResolveMut};
-
-    use super::*;
 
     #[test]
     #[should_panic]
@@ -1603,11 +1602,7 @@ mod tests {
         while let Some(token) = ptr.pop_back() {
             tokens.push(token);
         }
-        if dbg!(ptr.count() != 0)
-            || dbg!(!ptr.is_root())
-            || dbg!(ptr.last().is_some())
-            || dbg!(ptr.first().is_some())
-        {
+        if ptr.count() != 0 || !ptr.is_root() || ptr.last().is_some() || ptr.first().is_some() {
             return false;
         }
         for token in tokens.drain(..) {
@@ -1619,11 +1614,7 @@ mod tests {
         while let Some(token) = ptr.pop_front() {
             tokens.push(token);
         }
-        if dbg!(ptr.count() != 0)
-            || dbg!(!ptr.is_root())
-            || dbg!(ptr.last().is_some())
-            || dbg!(ptr.first().is_some())
-        {
+        if ptr.count() != 0 || !ptr.is_root() || ptr.last().is_some() || ptr.first().is_some() {
             return false;
         }
         for token in tokens {
@@ -1658,7 +1649,7 @@ mod tests {
                 }
             }
             {
-                let fmt = format!("/{}{tail}", head.encoded());
+                let fmt = alloc::format!("/{}{tail}", head.encoded());
                 if Pointer::parse(&fmt).unwrap() != ptr {
                     return false;
                 }
@@ -1693,7 +1684,7 @@ mod tests {
                 }
             }
             {
-                let fmt = format!("{head}/{}", tail.encoded());
+                let fmt = alloc::format!("{head}/{}", tail.encoded());
                 if Pointer::parse(&fmt).unwrap() != ptr {
                     return false;
                 }

@@ -1,4 +1,9 @@
 use crate::{PointerBuf, Token};
+use alloc::{
+    boxed::Box,
+    string::{String, ToString},
+    vec::Vec,
+};
 use quickcheck::Arbitrary;
 
 impl Arbitrary for Token {
@@ -7,8 +12,7 @@ impl Arbitrary for Token {
     }
 
     fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-        let s = self.to_string();
-        Box::new(s.shrink().map(Self::new))
+        Box::new(ToString::to_string(self).shrink().map(Self::new))
     }
 }
 
