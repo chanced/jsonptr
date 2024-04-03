@@ -854,6 +854,15 @@ impl<'de> Deserialize<'de> for PointerBuf {
     }
 }
 
+impl Serialize for PointerBuf {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        String::serialize(&self.0, serializer)
+    }
+}
+
 impl From<Token> for PointerBuf {
     fn from(t: Token) -> Self {
         PointerBuf::from_tokens([t])
