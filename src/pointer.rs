@@ -496,9 +496,7 @@ impl Pointer {
     where
         V: Into<Value>,
     {
-        // println!("dest: {dest:?}, created_or_mutated: {created_or_mutated:?}, assigned_to: {assigned_to:?}");
         if let Some((token, tail)) = self.split_front() {
-            // println!("token: {token:?}");
             match dest {
                 Value::Null | Value::Number(_) | Value::String(_) | Value::Bool(_) => {
                     match token.as_str() {
