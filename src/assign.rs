@@ -1,7 +1,7 @@
 use alloc::borrow::Cow;
 use serde_json::Value;
 
-use crate::{Error, Pointer};
+use crate::{Error, Pointer, PointerBuf};
 
 /// Assign is implemented by types which can internally assign a
 /// `serde_json::Value` by a JSON Pointer.
@@ -23,6 +23,7 @@ impl Assign for Value {
         ptr.assign(self, value)
     }
 }
+
 #[derive(Debug)]
 /// The data structure returned from a successful call to `assign`.
 pub struct Assignment<'a> {
@@ -65,7 +66,7 @@ pub struct Assignment<'a> {
     /// ```
     /// and you assigned `"new_value"` to `"/foo/bar/baz"`, then the value would
     /// be `Some("/foo/bar")`.
-    pub created_or_mutated: Pointer,
+    pub created_or_mutated: PointerBuf,
     /// A `Pointer` consisting of the path which was assigned.
     ///
     /// ## Example
@@ -73,9 +74,9 @@ pub struct Assignment<'a> {
     /// use serde_json::json;
     /// use jsonptr::{Pointer, Assign};
     /// let mut data = json!({ "foo": ["zero"] });
-    /// let mut ptr = Pointer::try_from("/foo/-").unwrap();
+    /// let mut ptr = Pointer::from_static("/foo/-");
     /// let assignment = data.assign(&mut ptr, "one").unwrap();
-    /// assert_eq!(assignment.assigned_to, Pointer::try_from("/foo/1").unwrap());
+    /// assert_eq!(assignment.assigned_to, Pointer::from_static("/foo/1"));
     /// ```
-    pub assigned_to: Pointer,
+    pub assigned_to: PointerBuf,
 }

@@ -22,3 +22,6 @@ pub mod prelude;
 
 mod tokens;
 pub use tokens::*;
+
+#[cfg(test)]
+mod arbitrary;

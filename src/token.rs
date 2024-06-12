@@ -271,7 +271,7 @@ impl PartialOrd<String> for Token {
 }
 impl PartialOrd<Token> for Token {
     fn partial_cmp(&self, other: &Token) -> Option<Ordering> {
-        self.decoded().partial_cmp(other.decoded())
+        Some(self.cmp(other))
     }
 }
 impl PartialEq<Token> for String {
@@ -435,5 +435,18 @@ impl Into<&str> for Escaped {
             Escaped::Tilde => ENCODED_TILDE,
             Escaped::Slash => ENCODED_SLASH,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quickcheck_macros::quickcheck;
+
+    #[quickcheck]
+    fn encode_decode(token: Token) -> bool {
+        let encoded = token.encoded();
+        let decoded = Token::from_encoded(encoded);
+        token == decoded
     }
 }

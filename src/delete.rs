@@ -19,20 +19,16 @@ impl Delete for Value {
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
-
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn test_issue_18() {
-        let mut data = json!(
-            {
-                "Example": 21,
-                "test": "test"
-              }
-        );
-        let pointer = Pointer::new(["Example"]);
-        println!("{}", pointer);
+        let mut data = json!({
+            "Example": 21,
+            "test": "test"
+        });
+        let pointer = Pointer::from_static("/Example");
         pointer.delete(&mut data);
         assert_eq!(json!({"test": "test"}), data);
     }

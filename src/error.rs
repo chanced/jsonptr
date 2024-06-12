@@ -4,7 +4,7 @@ use alloc::{
     vec::Vec,
 };
 
-use crate::{Pointer, Token};
+use crate::{PointerBuf, Token};
 use core::{
     // error::Error as StdError,
     fmt::{Debug, Display, Formatter},
@@ -97,14 +97,14 @@ impl std::error::Error for Error {}
 /// use serde_json::json;
 /// use jsonptr::{Pointer, ResolveMut, Resolve, UnresolvableError};
 /// let mut data = json!({ "foo": "bar" });
-/// let ptr = Pointer::try_from("/foo/unreachable").unwrap();
+/// let ptr = Pointer::from_static("/foo/unreachable");
 /// let err = data.resolve_mut(&ptr).unwrap_err();
-/// assert_eq!(err, UnresolvableError::new(ptr.clone()).into());
+/// assert_eq!(err, UnresolvableError::new(ptr.to_buf()).into());
 /// ```
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct UnresolvableError {
     /// The unresolved `Pointer`.
-    pub pointer: Pointer,
+    pub pointer: PointerBuf,
     /// The leaf node, if applicable, which was expected to be either an
     /// `Object` or an `Array`.
     pub leaf: Option<Token>,
@@ -115,7 +115,7 @@ impl std::error::Error for UnresolvableError {}
 
 impl UnresolvableError {
     /// Creates a new `UnresolvableError` with the given `Pointer`.
-    pub fn new(pointer: Pointer) -> Self {
+    pub fn new(pointer: PointerBuf) -> Self {
         let leaf = if pointer.count() >= 2 {
             Some(pointer.get(pointer.count() - 2).unwrap())
         } else {
@@ -288,11 +288,11 @@ impl std::error::Error for MalformedPointerError {}
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct NotFoundError {
     /// The `Pointer` which could not be resolved.
-    pub pointer: Pointer,
+    pub pointer: PointerBuf,
 }
 impl NotFoundError {
     /// Creates a new `NotFoundError` with the given `Pointer`.
-    pub fn new(pointer: Pointer) -> Self {
+    pub fn new(pointer: PointerBuf) -> Self {
         NotFoundError { pointer }
     }
 }
@@ -317,7 +317,7 @@ pub struct ReplaceTokenError {
     /// The number of tokens in the `Pointer`.
     pub count: usize,
     /// The subject `Pointer`.
-    pub pointer: Pointer,
+    pub pointer: PointerBuf,
 }
 #[cfg(feature = "std")]
 impl std::error::Error for ReplaceTokenError {}

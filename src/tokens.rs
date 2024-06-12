@@ -15,8 +15,8 @@ impl<'a> Iterator for Tokens<'a> {
     }
 }
 impl<'t> Tokens<'t> {
-    pub(crate) fn new(split: Split<'t, char>) -> Self {
-        Self { inner: split }
+    pub(crate) fn new(inner: Split<'t, char>) -> Self {
+        Self { inner }
     }
 }
 
