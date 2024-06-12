@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+This is a breaking release.
+
+### Added
+
+-   New slice type `Pointer` that enables zero-copy usage patterns
+-   New const constructor `const fn Pointer::from_static` for compile-time allocated `Pointer`s
+-   Zero-allocation `Pointer::root` singleton pointer
+-   [Quickcheck](https://docs.rs/quickcheck/latest/quickcheck/index.html)-based testing
+-   New methods: `Pointer::split_front`, `Pointer::split_back`, `Pointer::parent`, `Pointer::strip_suffix`
+
+### Changed
+-   Debug implementation now preserves type information (e.g. prints `PathBuf("/foo/bar")` instead of `"/foo/bar"`) - `Display` remains the same
+-   Original `Pointer` type renamed to `PointerBuf`
+-   `Pointer::root` is now `PointerBuf::new`
+-   `Pointer::new` is now `PointerBuf::from_tokens`
+-   `Pointer::union` is now `PointerBuf::intersection`
+
+### Fixed
+-   Fixes #28: `Pointer::union` is misleadingly named
+
+### Removed
+-   Removes `impl Deref<Target=&str>`
+
 ## [0.4.7] 2024-03-18
 
 -   Fixes issue with `pop_front` on a token with an empty string leaving the pointer in an invalid state. #25 by [@wngr](https://github.com/wngr)
