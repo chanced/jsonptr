@@ -1,5 +1,5 @@
 [package]
-authors       = ["chance dinkins"]
+authors       = ["chance dinkins", "André Sá de Mello <codasm@pm.me>"]
 description   = "Data structures and logic for resolving, assigning, and deleting by JSON Pointers (RFC 6901)"
 documentation = "https://docs.rs/jsonptr"
 edition       = "2021"
@@ -22,5 +22,5 @@ default = ["std"]
 std     = ["serde/std", "serde_json/std", "fluent-uri?/std"]
 
 [dev-dependencies]
-quickcheck = "1.0.3"
+quickcheck        = "1.0.3"
 quickcheck_macros = "1.0.0"
