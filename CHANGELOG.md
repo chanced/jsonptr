@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-This is a breaking release.
+This is a breaking release including [#30](https://github.com/chanced/jsonptr/pull/30) by [@asmello](https://github.com/asmello)
 
 ### Added
 
@@ -25,7 +25,7 @@ This is a breaking release.
 -   `Pointer::union` is now `PointerBuf::intersection`
 
 ### Fixed
--   Fixes #28: `Pointer::union` is misleadingly named
+-   Fixes [#28](https://github.com/chanced/jsonptr/pull/28): `Pointer::union` is misleadingly named
 
 ### Removed
 -   Removes `impl Deref<Target=&str>`
