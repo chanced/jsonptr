@@ -18,6 +18,7 @@ This is a breaking release including [#30](https://github.com/chanced/jsonptr/pu
 -   New methods: `Pointer::split_front`, `Pointer::split_back`, `Pointer::parent`, `Pointer::strip_suffix`
 
 ### Changed
+
 -   Debug implementation now preserves type information (e.g. prints `PathBuf("/foo/bar")` instead of `"/foo/bar"`) - `Display` remains the same
 -   Original `Pointer` type renamed to `PointerBuf`
 -   `Pointer::root` is now `PointerBuf::new`
@@ -25,10 +26,15 @@ This is a breaking release including [#30](https://github.com/chanced/jsonptr/pu
 -   `Pointer::union` is now `PointerBuf::intersection`
 
 ### Fixed
+
 -   Fixes [#28](https://github.com/chanced/jsonptr/pull/28): `Pointer::union` is misleadingly named
 
 ### Removed
+
 -   Removes `impl Deref<Target=&str>`
+-   Removes optional dependencies of `url`, `fluent-uri` and `uniresid` as well
+    as the `TryFrom` implementations for `fluent_uri::Uri<String>`, `url::Url`,
+    `uniresid::AbsoluteUri`, and `uniresid::Uri`
 
 ## [0.4.7] 2024-03-18
 
