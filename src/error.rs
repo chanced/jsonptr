@@ -325,3 +325,23 @@ impl Display for ReplaceTokenError {
         )
     }
 }
+
+/// Represents that the string is not a valid token under RFC 6901.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InvalidEncodingError {
+    offset: usize,
+}
+
+impl InvalidEncodingError {
+    pub(crate) fn new(offset: usize) -> Self {
+        Self { offset }
+    }
+
+    /// The byte offset where the first invalid character occurs.
+    ///
+    /// Note that this may be equal to the length of the string if the string
+    /// ends with an incomplete escaped sequence.
+    pub fn offset(&self) -> usize {
+        self.offset
+    }
+}

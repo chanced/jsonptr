@@ -4,11 +4,11 @@ use quickcheck::Arbitrary;
 
 impl Arbitrary for Token<'static> {
     fn arbitrary(g: &mut quickcheck::Gen) -> Self {
-        Self::from_raw(String::arbitrary(g))
+        Self::new(String::arbitrary(g))
     }
 
     fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-        Box::new(self.decoded().into_owned().shrink().map(Self::from_raw))
+        Box::new(self.decoded().into_owned().shrink().map(Self::new))
     }
 }
 

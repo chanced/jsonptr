@@ -1,4 +1,4 @@
-use crate::{IndexError, OutOfBoundsError, ParseError};
+use crate::{IndexError, InvalidEncodingError, OutOfBoundsError, ParseError};
 use alloc::{
     borrow::Cow,
     string::{String, ToString},
@@ -23,33 +23,14 @@ pub struct Token<'a> {
 }
 
 impl<'a> Token<'a> {
-    /// Create a new token from `val`. The token is encoded per [RFC
-    /// 6901](https://datatracker.ietf.org/doc/html/rfc6901):
-    /// - `'~'` is encoded as `"~0"`
-    /// - `'/'` is encoded as `"~1"`
-    pub(crate) fn new(inner: Cow<'a, str>) -> Self {
-        Self { inner }
-    }
-
-    fn valid_encoding(s: &str) -> bool {
-        let mut escaped = false;
-        for b in s.bytes() {
-            match b {
-                b'/' => return false,
-                ENC_PREFIX => {
-                    escaped = true;
-                }
-                TILDE_ENC | SLASH_ENC if escaped => {
-                    escaped = false;
-                }
-                _ => {
-                    if escaped {
-                        return false;
-                    }
-                }
-            }
+    /// Constructs a `Token` from an RFC 6901 encoded string.
+    ///
+    /// This is like [`Self::from_encoded`], except that no validation is
+    /// performed on the input string.
+    pub(crate) fn from_encoded_unchecked(inner: impl Into<Cow<'a, str>>) -> Self {
+        Self {
+            inner: inner.into(),
         }
-        !escaped
     }
 
     /// Constructs a `Token` from an RFC 6901 encoded string.
@@ -59,22 +40,37 @@ impl<'a> Token<'a> {
     ///
     /// This function does not allocate.
     ///
-    /// # Panics
-    ///
-    /// Panics if the provided string is not properly encoded per RFC 6901.
-    ///
     /// # Examples
     ///
     /// ```
     /// # use jsonptr::Token;
-    /// assert_eq!(Token::from_encoded("~1foo~1~0bar").decoded(), "/foo/~bar");
+    /// assert_eq!(Token::from_encoded("~1foo~1~0bar").unwrap().decoded(), "/foo/~bar");
+    /// let err = Token::from_encoded("foo/oops~bar").unwrap_err();
+    /// assert_eq!(err.offset(), 3);
     /// ```
-    pub fn from_encoded(s: &'a str) -> Self {
-        if !Self::valid_encoding(s) {
-            panic!("invalid RFC 6901 encoding: {s:?}");
+    pub fn from_encoded(s: &'a str) -> Result<Self, InvalidEncodingError> {
+        let err_at = |i| Err(InvalidEncodingError::new(i));
+        let mut escaped = false;
+        for (i, b) in s.bytes().enumerate() {
+            match b {
+                b'/' => return err_at(i),
+                ENC_PREFIX => {
+                    escaped = true;
+                }
+                TILDE_ENC | SLASH_ENC if escaped => {
+                    escaped = false;
+                }
+                _ => {
+                    if escaped {
+                        return err_at(i);
+                    }
+                }
+            }
         }
-        Self {
-            inner: Cow::Borrowed(s),
+        if escaped {
+            err_at(s.len())
+        } else {
+            Ok(Self { inner: s.into() })
         }
     }
 
@@ -91,9 +87,9 @@ impl<'a> Token<'a> {
     ///
     /// ```
     /// # use jsonptr::Token;
-    /// assert_eq!(Token::from_raw("/foo/~bar").encoded(), "~1foo~1~0bar");
+    /// assert_eq!(Token::new("/foo/~bar").encoded(), "~1foo~1~0bar");
     /// ```
-    pub fn from_raw(s: impl Into<Cow<'a, str>>) -> Self {
+    pub fn new(s: impl Into<Cow<'a, str>>) -> Self {
         let s = s.into();
 
         if let Some(i) = s.bytes().position(|b| b == b'/' || b == b'~') {
@@ -147,7 +143,7 @@ impl<'a> Token<'a> {
     ///
     /// This method is like [`Self::into_owned`], except it doesn't take
     /// ownership of the original `Token`.
-    pub fn as_owned(&self) -> Token<'static> {
+    pub fn to_owned(&self) -> Token<'static> {
         Token {
             inner: Cow::Owned(self.inner.clone().into_owned()),
         }
@@ -159,7 +155,7 @@ impl<'a> Token<'a> {
     ///
     /// ```
     /// # use jsonptr::Token;
-    /// assert_eq!(Token::from("~bar").encoded(), "~0bar");
+    /// assert_eq!(Token::new("~bar").encoded(), "~0bar");
     /// ```
     pub fn encoded(&self) -> &str {
         &self.inner
@@ -171,7 +167,7 @@ impl<'a> Token<'a> {
     ///
     /// ```
     /// # use jsonptr::Token;
-    /// assert_eq!(Token::from("~bar").decoded(), "~bar");
+    /// assert_eq!(Token::new("~bar").decoded(), "~bar");
     /// ```
     pub fn decoded(&self) -> Cow<'_, str> {
         if let Some(i) = self.inner.bytes().position(|b| b == ENC_PREFIX) {
@@ -230,9 +226,9 @@ impl<'a> Token<'a> {
     ///
     /// ```
     /// use jsonptr::Token;
-    /// assert_eq!(Token::from("-").as_index(1).unwrap(), 1);
-    /// assert_eq!(Token::from("1").as_index(1).unwrap(), 1);
-    /// assert_eq!(Token::from("2").as_index(2).unwrap(), 2);
+    /// assert_eq!(Token::new("-").as_index(1).unwrap(), 1);
+    /// assert_eq!(Token::new("1").as_index(1).unwrap(), 1);
+    /// assert_eq!(Token::new("2").as_index(2).unwrap(), 2);
     /// ```
     pub fn as_index(&self, len: usize) -> Result<usize, IndexError> {
         if self.decoded() == "-" {
@@ -270,43 +266,43 @@ impl<'de> Deserialize<'de> for Token<'de> {
         D: serde::Deserializer<'de>,
     {
         let s = <&'de str>::deserialize(deserializer)?;
-        Ok(Token::from_raw(s))
+        Ok(Token::new(s))
     }
 }
 
 impl From<usize> for Token<'static> {
     fn from(v: usize) -> Self {
-        Token::new(v.to_string().into())
+        Token::from_encoded_unchecked(v.to_string())
     }
 }
 
 impl From<u32> for Token<'static> {
     fn from(v: u32) -> Self {
-        Token::new(v.to_string().into())
+        Token::from_encoded_unchecked(v.to_string())
     }
 }
 
 impl From<u64> for Token<'static> {
     fn from(v: u64) -> Self {
-        Token::new(v.to_string().into())
+        Token::from_encoded_unchecked(v.to_string())
     }
 }
 
 impl<'a> From<&'a str> for Token<'a> {
     fn from(value: &'a str) -> Self {
-        Token::from_raw(value)
+        Token::new(value)
     }
 }
 
 impl<'a> From<&'a String> for Token<'a> {
     fn from(value: &'a String) -> Self {
-        Token::from_raw(value)
+        Token::new(value)
     }
 }
 
 impl From<String> for Token<'static> {
     fn from(value: String) -> Self {
-        Token::from_raw(value)
+        Token::new(value)
     }
 }
 
@@ -327,10 +323,25 @@ mod tests {
     use super::*;
     use quickcheck_macros::quickcheck;
 
+    #[test]
+    fn test_from() {
+        assert_eq!(Token::from("/").encoded(), "~1");
+        assert_eq!(Token::from("~/").encoded(), "~0~1");
+    }
+
+    #[test]
+    fn test_from_encoded() {
+        assert_eq!(Token::from_encoded("~1").unwrap().encoded(), "~1");
+        assert_eq!(Token::from_encoded("~0~1").unwrap().encoded(), "~0~1");
+        let t = Token::from_encoded("a~1b").unwrap();
+        assert_eq!(t.decoded(), "a/b");
+        let _ = Token::from_encoded("a/b").unwrap_err();
+    }
+
     #[quickcheck]
     fn encode_decode(s: String) -> bool {
-        let token = Token::from_raw(s);
-        let decoded = Token::from_encoded(token.encoded());
+        let token = Token::new(s);
+        let decoded = Token::from_encoded(token.encoded()).unwrap();
         token == decoded
     }
 }
