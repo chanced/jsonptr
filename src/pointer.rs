@@ -238,7 +238,7 @@ impl Pointer {
     pub fn back(&self) -> Option<Token> {
         self.0
             .rsplit_once('/')
-            .map(|(_, back)| Token::from_encoded(back))
+            .map(|(_, back)| Token::from_encoded_unchecked(back))
     }
 
     /// Returns the last token in the `Pointer`.
@@ -256,8 +256,8 @@ impl Pointer {
         self.0[1..]
             .split_once('/')
             .map_or_else(
-                || Token::from_encoded(&self.0[1..]),
-                |(front, _)| Token::from_encoded(front),
+                || Token::from_encoded_unchecked(&self.0[1..]),
+                |(front, _)| Token::from_encoded_unchecked(front),
             )
             .into()
     }
@@ -277,13 +277,13 @@ impl Pointer {
         self.0[1..]
             .split_once('/')
             .map_or_else(
-                || (Token::from_encoded(&self.0[1..]), Self::root()),
+                || (Token::from_encoded_unchecked(&self.0[1..]), Self::root()),
                 |(front, back)| {
                     // We want to include the delimiter character too!
                     // SAFETY: if split was successful, then the delimiter
                     // character exists before the start of the second `str`.
                     let back = unsafe { extend_one_before(back) };
-                    (Token::from_encoded(front), Self::new(back))
+                    (Token::from_encoded_unchecked(front), Self::new(back))
                 },
             )
             .into()
@@ -293,7 +293,7 @@ impl Pointer {
     pub fn split_back(&self) -> Option<(&Self, Token)> {
         self.0
             .rsplit_once('/')
-            .map(|(front, back)| (Self::new(front), Token::from_encoded(back)))
+            .map(|(front, back)| (Self::new(front), Token::from_encoded_unchecked(back)))
     }
 
     /// A pointer to the parent of the current path.
@@ -346,7 +346,7 @@ impl Pointer {
                 }
                 Value::Object(v) => {
                     value = v
-                        .get(token.as_key())
+                        .get(token.decoded().as_ref())
                         .ok_or_else(|| Error::from(NotFoundError::new(partial_path(rem))))?;
                 }
             }
@@ -375,7 +375,7 @@ impl Pointer {
                 }
                 Value::Object(v) => {
                     value = v
-                        .get_mut(token.as_key())
+                        .get_mut(token.decoded().as_ref())
                         .ok_or_else(|| Error::from(NotFoundError::new(partial_path(rem))))?;
                 }
             }
@@ -456,7 +456,7 @@ impl Pointer {
                     let idx = last.as_index(children.len()).ok()?;
                     children.remove(idx).into()
                 }
-                Value::Object(children) => children.remove(last.as_key()),
+                Value::Object(children) => children.remove(last.decoded().as_ref()),
                 _ => None,
             })
     }
@@ -499,7 +499,7 @@ impl Pointer {
         if let Some((token, tail)) = self.split_front() {
             match dest {
                 Value::Null | Value::Number(_) | Value::String(_) | Value::Bool(_) => {
-                    match token.as_str() {
+                    match token.decoded().as_ref() {
                         "0" => {
                             // first element will be traversed when we recurse
                             *dest = alloc::vec![Value::Null].into();
@@ -678,7 +678,7 @@ impl PartialOrd<String> for Pointer {
 }
 
 impl<'a> IntoIterator for &'a Pointer {
-    type Item = Token;
+    type Item = Token<'a>;
     type IntoIter = Tokens<'a>;
     fn into_iter(self) -> Self::IntoIter {
         self.tokens()
@@ -711,15 +711,12 @@ impl PointerBuf {
     }
 
     /// Creates a new `PointerBuf` from a slice of non-encoded strings.
-    pub fn from_tokens<V, T>(tokens: V) -> Self
+    pub fn from_tokens<'a, T>(tokens: impl IntoIterator<Item = T>) -> Self
     where
-        V: AsRef<[T]>,
-        Token: for<'a> From<&'a T>,
+        T: Into<Token<'a>>,
     {
         let mut inner = String::new();
-        let tokens = tokens.as_ref();
-
-        for t in tokens.iter().map(Into::<Token>::into) {
+        for t in tokens.into_iter().map(|v| v.into()) {
             inner.push('/');
             inner.push_str(t.encoded());
         }
@@ -744,35 +741,35 @@ impl PointerBuf {
     }
 
     /// Removes and returns the last `Token` in the `Pointer` if it exists.
-    pub fn pop_back(&mut self) -> Option<Token> {
-        if let Some((front, back)) = self.0.rsplit_once('/') {
-            let back = Token::from_encoded(back);
-            self.0 = front.to_owned();
+    pub fn pop_back(&mut self) -> Option<Token<'static>> {
+        if let Some(idx) = self.0.rfind('/') {
+            let back = Token::from_encoded_unchecked(self.0.split_off(idx + 1));
+            self.0.pop(); // remove trailing `/`
             Some(back)
         } else {
-            None // is root
+            None
         }
     }
 
     /// Removes and returns the first `Token` in the `Pointer` if it exists.
-    pub fn pop_front(&mut self) -> Option<Token> {
+    pub fn pop_front(&mut self) -> Option<Token<'static>> {
         (!self.is_root()).then(|| {
-            if let Some((front, back)) = self.0[1..].split_once('/') {
-                let front = Token::from_encoded(front);
-                self.0 = String::from("/") + back;
-                front
+            // if not root, must contain at least one `/`
+            let mut token = if let Some(idx) = self.0[1..].find('/') {
+                let token = self.0.split_off(idx + 1);
+                core::mem::replace(&mut self.0, token)
             } else {
-                let token = Token::from_encoded(&self.0[1..]);
-                self.0.truncate(0);
-                token
-            }
+                core::mem::take(&mut self.0)
+            };
+            token.remove(0); // remove leading `/`
+            Token::from_encoded_unchecked(token)
         })
     }
 
     /// Merges two `Pointer`s by appending `other` onto `self`.
     pub fn append(&mut self, other: &PointerBuf) -> &PointerBuf {
         if self.is_root() {
-            self.0 = other.0.clone();
+            self.0.clone_from(&other.0);
         } else if !other.is_root() {
             self.0.push_str(&other.0);
         }
@@ -803,15 +800,16 @@ impl PointerBuf {
                 pointer: self.clone(),
             });
         }
-        let old = tokens.get(index).cloned();
+        let old = tokens.get(index).map(|t| t.to_owned());
         tokens[index] = token;
 
-        self.0 = String::from("/")
-            + &tokens
-                .iter()
-                .map(Token::encoded)
-                .collect::<Vec<_>>()
-                .join("/");
+        let mut buf = String::new();
+        for token in tokens {
+            buf.push('/');
+            buf.push_str(token.encoded());
+        }
+        self.0 = buf;
+
         Ok(old)
     }
 
@@ -861,7 +859,7 @@ impl Serialize for PointerBuf {
     }
 }
 
-impl From<Token> for PointerBuf {
+impl From<Token<'_>> for PointerBuf {
     fn from(t: Token) -> Self {
         PointerBuf::from_tokens([t])
     }
@@ -882,7 +880,7 @@ impl From<usize> for PointerBuf {
 }
 
 impl<'a> IntoIterator for &'a PointerBuf {
-    type Item = Token;
+    type Item = Token<'a>;
     type IntoIter = Tokens<'a>;
     fn into_iter(self) -> Self::IntoIter {
         self.tokens()
@@ -968,7 +966,7 @@ mod tests {
         let ptr = Pointer::from_static("/a~1b");
         assert_eq!(ptr.as_str(), "/a~1b");
         assert_eq!(data.get("a/b").unwrap(), 1);
-        assert_eq!(&ptr.first().unwrap(), "a/b");
+        assert_eq!(&ptr.first().unwrap().decoded(), "a/b");
         assert_eq!(data.resolve(ptr).unwrap(), &json!(1));
 
         // "/c%d"       2
@@ -1111,13 +1109,13 @@ mod tests {
 
             assert_eq!(ptr.tokens().count(), 3);
             let mut token = ptr.pop_front();
-            assert_eq!(token, Some(Token::from_encoded("bar")));
+            assert_eq!(token, Some(Token::from_encoded_unchecked("bar")));
             assert_eq!(ptr.tokens().count(), 2);
             token = ptr.pop_front();
-            assert_eq!(token, Some(Token::from_encoded("")));
+            assert_eq!(token, Some(Token::from_encoded_unchecked("")));
             assert_eq!(ptr.tokens().count(), 1);
             token = ptr.pop_front();
-            assert_eq!(token, Some(Token::from_encoded("")));
+            assert_eq!(token, Some(Token::from_encoded_unchecked("")));
             assert_eq!(ptr.tokens().count(), 0);
             assert_eq!(ptr, Pointer::root());
         }
@@ -1134,13 +1132,13 @@ mod tests {
             let input = ["", "", "", "foo", "", "bar", "baz", ""];
             for (idx, s) in input.iter().enumerate() {
                 assert_eq!(ptr.tokens().count(), idx);
-                ptr.push_back(s.into());
+                ptr.push_back((*s).into());
             }
             assert_eq!(ptr.tokens().count(), input.len());
             for (idx, s) in input.iter().enumerate() {
                 assert_eq!(ptr.tokens().count(), 8 - idx);
-                assert_eq!(ptr.front().unwrap().as_str(), *s);
-                assert_eq!(ptr.pop_front().unwrap().as_str(), *s);
+                assert_eq!(ptr.front().unwrap().decoded(), *s);
+                assert_eq!(ptr.pop_front().unwrap().decoded(), *s);
             }
             assert_eq!(ptr.tokens().count(), 0);
             assert!(ptr.front().is_none());
@@ -1477,13 +1475,13 @@ mod tests {
             let input = ["", "", "", "foo", "", "bar", "baz", ""];
             for (idx, s) in input.iter().enumerate() {
                 assert_eq!(ptr.tokens().count(), idx);
-                ptr.push_back(s.into());
+                ptr.push_back((*s).into());
             }
             assert_eq!(ptr.tokens().count(), input.len());
             for (idx, s) in input.iter().enumerate().rev() {
                 assert_eq!(ptr.tokens().count(), idx + 1);
-                assert_eq!(ptr.back().unwrap().as_str(), *s);
-                assert_eq!(ptr.pop_back().unwrap().as_str(), *s);
+                assert_eq!(ptr.back().unwrap().decoded(), *s);
+                assert_eq!(ptr.pop_back().unwrap().decoded(), *s);
             }
             assert_eq!(ptr.tokens().count(), 0);
             assert!(ptr.back().is_none());
@@ -1624,10 +1622,13 @@ mod tests {
     }
 
     #[quickcheck]
-    fn qc_from_tokens(tokens: Vec<Token>) -> bool {
+    fn qc_from_tokens(tokens: Vec<String>) -> bool {
         let buf = PointerBuf::from_tokens(&tokens);
         let reconstructed: Vec<_> = buf.tokens().collect();
-        tokens == reconstructed
+        reconstructed
+            .into_iter()
+            .zip(tokens)
+            .all(|(a, b)| a.decoded() == b)
     }
 
     #[quickcheck]

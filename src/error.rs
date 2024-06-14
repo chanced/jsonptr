@@ -1,10 +1,9 @@
+use crate::{PointerBuf, Token};
 use alloc::{
     format,
     string::{FromUtf8Error, String, ToString},
     vec::Vec,
 };
-
-use crate::{PointerBuf, Token};
 use core::{
     // error::Error as StdError,
     fmt::{Debug, Display, Formatter},
@@ -107,7 +106,7 @@ pub struct UnresolvableError {
     pub pointer: PointerBuf,
     /// The leaf node, if applicable, which was expected to be either an
     /// `Object` or an `Array`.
-    pub leaf: Option<Token>,
+    pub leaf: Option<Token<'static>>,
 }
 
 #[cfg(feature = "std")]
@@ -117,7 +116,7 @@ impl UnresolvableError {
     /// Creates a new `UnresolvableError` with the given `Pointer`.
     pub fn new(pointer: PointerBuf) -> Self {
         let leaf = if pointer.count() >= 2 {
-            Some(pointer.get(pointer.count() - 2).unwrap())
+            Some(pointer.get(pointer.count() - 2).unwrap().into_owned())
         } else {
             None
         };
@@ -132,7 +131,7 @@ impl Display for UnresolvableError {
             "can not resolve \"{}\" due to {} being a scalar value",
             self.pointer,
             self.leaf
-                .as_deref()
+                .as_ref()
                 .map_or_else(|| "the root value".to_string(), |l| format!("\"{l}\""))
         )
     }
@@ -171,31 +170,27 @@ impl From<OutOfBoundsError> for IndexError {
 }
 
 /// ParseError represents an that an error occurred when parsing an index.
-#[derive(PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ParseError {
-    /// The source `ParseIntError`
-    pub source: ParseIntError,
-    /// The `Token` which was unable to be parsed as an index.
-    pub token: Token,
+    source: ParseIntError,
+}
+
+impl ParseError {
+    pub(crate) fn new(source: ParseIntError) -> Self {
+        Self { source }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for ParseError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.source)
+    }
 }
 
 impl Display for ParseError {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.source)
-    }
-}
-impl Debug for ParseError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("ParseError")
-            .field("source", &self.source)
-            .field("token", &self.token)
-            .finish()
-    }
-}
-#[cfg(feature = "std")]
-impl std::error::Error for ParseError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(&self.source)
     }
 }
 
@@ -207,9 +202,8 @@ pub struct OutOfBoundsError {
     pub len: usize,
     /// The index of the array that was out of bounds.
     pub index: usize,
-    /// The `Token` which was out of bounds.
-    pub token: Token,
 }
+
 #[cfg(feature = "std")]
 impl std::error::Error for OutOfBoundsError {}
 
@@ -329,5 +323,25 @@ impl Display for ReplaceTokenError {
             "index {} is out of bounds ({}) for the pointer {}",
             self.index, self.count, self.pointer
         )
+    }
+}
+
+/// Represents that the string is not a valid token under RFC 6901.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InvalidEncodingError {
+    offset: usize,
+}
+
+impl InvalidEncodingError {
+    pub(crate) fn new(offset: usize) -> Self {
+        Self { offset }
+    }
+
+    /// The byte offset where the first invalid character occurs.
+    ///
+    /// Note that this may be equal to the length of the string if the string
+    /// ends with an incomplete escaped sequence.
+    pub fn offset(&self) -> usize {
+        self.offset
     }
 }
