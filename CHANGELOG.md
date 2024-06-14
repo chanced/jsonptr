@@ -37,6 +37,7 @@ This is a breaking release including [#30](https://github.com/chanced/jsonptr/pu
 -   Removes optional dependencies of `url`, `fluent-uri` and `uniresid` as well
     as the `TryFrom` implementations for `fluent_uri::Uri<String>`, `url::Url`,
     `uniresid::AbsoluteUri`, and `uniresid::Uri`
+-   Removed `Token::as_key` and `Token::as_str` - use `Token::decoded().as_ref()` to achieve the same effect
 -   Several redundant or error-prone trait implementations were removed from `Token`
 
 ## [0.4.7] 2024-03-18
