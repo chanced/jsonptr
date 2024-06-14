@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-This is a breaking release including [#30](https://github.com/chanced/jsonptr/pull/30) by [@asmello](https://github.com/asmello)
+This is a breaking release including [#30](https://github.com/chanced/jsonptr/pull/30) and [#37](https://github.com/chanced/jsonptr/pull/37) by [@asmello](https://github.com/asmello)
 
 ### Added
 
@@ -16,14 +16,16 @@ This is a breaking release including [#30](https://github.com/chanced/jsonptr/pu
 -   Zero-allocation `Pointer::root` singleton pointer
 -   [Quickcheck](https://docs.rs/quickcheck/latest/quickcheck/index.html)-based testing
 -   New methods: `Pointer::split_front`, `Pointer::split_back`, `Pointer::parent`, `Pointer::strip_suffix`
+-   Implemented `Display` and `Debug` for `ParseError`
 
 ### Changed
 
 -   Debug implementation now preserves type information (e.g. prints `PathBuf("/foo/bar")` instead of `"/foo/bar"`) - `Display` remains the same
 -   Original `Pointer` type renamed to `PointerBuf`
 -   `Pointer::root` is now `PointerBuf::new`
--   `Pointer::new` is now `PointerBuf::from_tokens`
+-   `Pointer::new` is now `PointerBuf::from_tokens` (and takes an `IntoIterator` argument - arrays still work)
 -   `Pointer::union` is now `PointerBuf::intersection`
+-   `Token` type has been simplified and is now by default a borrowed type (use `Token::to_owned` or `Token::into_owned` to make it owned)
 
 ### Fixed
 
@@ -35,6 +37,7 @@ This is a breaking release including [#30](https://github.com/chanced/jsonptr/pu
 -   Removes optional dependencies of `url`, `fluent-uri` and `uniresid` as well
     as the `TryFrom` implementations for `fluent_uri::Uri<String>`, `url::Url`,
     `uniresid::AbsoluteUri`, and `uniresid::Uri`
+-   Several redundant or error-prone trait implementations were removed from `Token`
 
 ## [0.4.7] 2024-03-18
 
