@@ -1,83 +1,238 @@
-use core::{borrow::Borrow, cmp::Ordering, ops::Deref};
-
 use crate::{IndexError, OutOfBoundsError, ParseError};
-use alloc::string::{String, ToString};
+use alloc::{
+    borrow::Cow,
+    string::{String, ToString},
+};
 use serde::{Deserialize, Serialize};
 
-const ENCODED_TILDE: &str = "~0";
-const ENCODED_SLASH: &str = "~1";
+const ENCODED_TILDE: &[u8] = b"~0";
+const ENCODED_SLASH: &[u8] = b"~1";
 
-const ENC_PREFIX: char = '~';
-const TILDE_ENC: char = '0';
-const SLASH_ENC: char = '1';
+const ENC_PREFIX: u8 = b'~';
+const TILDE_ENC: u8 = b'0';
+const SLASH_ENC: u8 = b'1';
 
 /// A `Token` is a segment of a JSON Pointer, seperated by '/' (%x2F). It can
 /// represent a key in a JSON object or an index in a JSON array.
 ///
 /// - Indexes should not contain leading zeros.
 /// - `"-"` represents the next, non-existent index in a JSON array.
-#[derive(Clone)]
-pub struct Token {
-    value: Value,
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Token<'a> {
+    inner: Cow<'a, str>,
 }
-impl Token {
+
+impl<'a> Token<'a> {
     /// Create a new token from `val`. The token is encoded per [RFC
     /// 6901](https://datatracker.ietf.org/doc/html/rfc6901):
     /// - `'~'` is encoded as `"~0"`
     /// - `'/'` is encoded as `"~1"`
-    pub fn new(val: impl AsRef<str>) -> Self {
-        Token {
-            value: Value::parse(val.as_ref()),
-        }
+    pub(crate) fn new(inner: Cow<'a, str>) -> Self {
+        Self { inner }
     }
-    /// Create a new token from `encoded`. The token should be encoded per
-    /// [RFC 6901](https://datatracker.ietf.org/doc/html/rfc6901)
-    pub fn from_encoded(val: impl AsRef<str>) -> Self {
-        Token {
-            value: Value::from_encoded(val.as_ref()),
+
+    fn valid_encoding(s: &str) -> bool {
+        let mut escaped = false;
+        for b in s.bytes() {
+            match b {
+                b'/' => return false,
+                ENC_PREFIX => {
+                    escaped = true;
+                }
+                TILDE_ENC | SLASH_ENC if escaped => {
+                    escaped = false;
+                }
+                _ => {
+                    if escaped {
+                        return false;
+                    }
+                }
+            }
+        }
+        !escaped
+    }
+
+    /// Constructs a `Token` from an RFC 6901 encoded string.
+    ///
+    /// To be valid, the string must not contain any `/` characters, and any `~`
+    /// characters must be followed by either `0` or `1`.
+    ///
+    /// This function does not allocate.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the provided string is not properly encoded per RFC 6901.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use jsonptr::Token;
+    /// assert_eq!(Token::from_encoded("~1foo~1~0bar").decoded(), "/foo/~bar");
+    /// ```
+    pub fn from_encoded(s: &'a str) -> Self {
+        if !Self::valid_encoding(s) {
+            panic!("invalid RFC 6901 encoding: {s:?}");
+        }
+        Self {
+            inner: Cow::Borrowed(s),
         }
     }
 
-    /// Returns the decoded `&str` representation of the `Token`.
+    /// Constructs a `Token` from an arbitray string.
+    ///
+    /// If the string contains a `/` or a `~`, then it will be assumed not
+    /// encoded, in which case this function will encode it, allocating a new
+    /// string.
+    ///
+    /// If the string is already encoded per RFC 6901, use
+    /// [`Self::from_encoded`] instead, otherwise it will end up double-encoded.
+    ///
+    /// # Examples
     ///
     /// ```
-    /// use jsonptr::Token;
-    /// assert_eq!(Token::new("/foo/~bar").decoded(), "/foo/~bar");
-    pub fn decoded(&self) -> &str {
-        self.value.decoded()
+    /// # use jsonptr::Token;
+    /// assert_eq!(Token::from_raw("/foo/~bar").encoded(), "~1foo~1~0bar");
+    /// ```
+    pub fn from_raw(s: impl Into<Cow<'a, str>>) -> Self {
+        let s = s.into();
+
+        if let Some(i) = s.bytes().position(|b| b == b'/' || b == b'~') {
+            let input = s.as_bytes();
+            // we could take advantage of [`Cow::into_owned`] here, but it would
+            // mean copying over the entire string, only to overwrite a portion
+            // of it... so instead we explicitly allocate a new buffer and copy
+            // only the prefix until the first encoded character
+            // NOTE: the output is at least as large as the input + 1, so we
+            // allocate that much capacity ahead of time
+            let mut bytes = Vec::with_capacity(input.len() + 1);
+            bytes.extend_from_slice(&input[..i]);
+            for &b in &input[i..] {
+                match b {
+                    b'/' => {
+                        bytes.extend_from_slice(ENCODED_SLASH);
+                    }
+                    b'~' => {
+                        bytes.extend_from_slice(ENCODED_TILDE);
+                    }
+                    other => {
+                        bytes.push(other);
+                    }
+                }
+            }
+            Self {
+                // SAFETY: we started from a valid UTF-8 sequence of bytes,
+                // and only replaced some ASCII characters with other two ASCII
+                // characters, so the output is guaranteed valid UTF-8.
+                inner: Cow::Owned(unsafe { String::from_utf8_unchecked(bytes) }),
+            }
+        } else {
+            Self { inner: s }
+        }
     }
-    /// Returns the encoded `&str` representation of the `Token`.
+
+    /// Converts into an owned copy of this token.
+    ///
+    /// If the token is not already owned, this will clone the referenced string
+    /// slice.
+    pub fn into_owned(self) -> Token<'static> {
+        Token {
+            inner: Cow::Owned(self.inner.into_owned()),
+        }
+    }
+
+    /// Extracts an owned copy of this token.
+    ///
+    /// If the token is not already owned, this will clone the referenced string
+    /// slice.
+    ///
+    /// This method is like [`Self::into_owned`], except it doesn't take
+    /// ownership of the original `Token`.
+    pub fn as_owned(&self) -> Token<'static> {
+        Token {
+            inner: Cow::Owned(self.inner.clone().into_owned()),
+        }
+    }
+
+    /// Returns the encoded string representation of the `Token`.
+    ///
+    /// # Examples
     ///
     /// ```
-    /// use jsonptr::Token;
-    /// assert_eq!(Token::new("/foo/~bar").encoded(), "~1foo~1~0bar");
+    /// # use jsonptr::Token;
+    /// assert_eq!(Token::from("~bar").encoded(), "~0bar");
     /// ```
     pub fn encoded(&self) -> &str {
-        self.value.encoded()
+        &self.inner
+    }
+
+    /// Returns the decoded string representation of the `Token`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use jsonptr::Token;
+    /// assert_eq!(Token::from("~bar").decoded(), "~bar");
+    /// ```
+    pub fn decoded(&self) -> Cow<'_, str> {
+        if let Some(i) = self.inner.bytes().position(|b| b == ENC_PREFIX) {
+            let input = self.inner.as_bytes();
+            // we could take advantage of [`Cow::into_owned`] here, but it would
+            // mean copying over the entire string, only to overwrite a portion
+            // of it... so instead we explicitly allocate a new buffer and copy
+            // only the prefix until the first encoded character
+            // NOTE: the output is at least as large as the input + 1, so we
+            // allocate that much capacity ahead of time
+            let mut bytes = Vec::with_capacity(input.len() + 1);
+            bytes.extend_from_slice(&input[..i]);
+            // we start from the first escaped character
+            let mut escaped = true;
+            for &b in &input[i + 1..] {
+                match b {
+                    ENC_PREFIX => {
+                        escaped = true;
+                    }
+                    TILDE_ENC if escaped => {
+                        bytes.push(b'~');
+                        escaped = false;
+                    }
+                    SLASH_ENC if escaped => {
+                        bytes.push(b'/');
+                        escaped = false;
+                    }
+                    other => {
+                        bytes.push(other);
+                    }
+                }
+            }
+            // SAFETY: we start from a valid String, and only write valid UTF-8
+            // byte sequences into it.
+            Cow::Owned(unsafe { String::from_utf8_unchecked(bytes) })
+        } else {
+            // if there are no encoded characters, we don't need to allocate!
+            self.inner.clone()
+        }
     }
 
     /// Attempts to parse the given `Token` as an array index (`usize`).
     ///
-    /// Per [RFC 6901](https://datatracker.ietf.org/doc/html/rfc6901#section-4),
-    /// the token `"-"` will attempt to index the next, non-existent collection
-    /// index. In order to accomodate that, the following parameters are
-    /// utilized to determine the next index and whether the token falls within
-    /// those bounds:
+    /// The argument represents the length of the array and is used to check the
+    /// bounds as well as produce the correct index from a `-` token. Per [RFC
+    /// 6901](https://datatracker.ietf.org/doc/html/rfc6901#section-4), the `-`
+    /// token will stand for the next, non-existent member after the last array
+    /// element.
     ///
-    /// ## Parameters
-    /// - `len` - current length of the array / vector.
-    ///
-    /// ## Errors
+    /// # Errors
     /// - `IndexError::Parse` - if the token is not a valid index.
     /// - `IndexError::OutOfBounds` - if the token is a valid index but exceeds
     ///   `len`.
     ///
-    /// ## Examples
-    ///```
+    /// # Examples
+    ///
+    /// ```
     /// use jsonptr::Token;
-    /// assert_eq!(Token::new("-").as_index(1).unwrap(), 1);
-    /// assert_eq!(Token::new("1").as_index(1).unwrap(), 1);
-    /// assert_eq!(Token::new("2").as_index(2).unwrap(), 2);
+    /// assert_eq!(Token::from("-").as_index(1).unwrap(), 1);
+    /// assert_eq!(Token::from("1").as_index(1).unwrap(), 1);
+    /// assert_eq!(Token::from("2").as_index(2).unwrap(), 2);
     /// ```
     pub fn as_index(&self, len: usize) -> Result<usize, IndexError> {
         if self.decoded() == "-" {
@@ -89,352 +244,81 @@ impl Token {
                         Err(IndexError::OutOfBounds(OutOfBoundsError {
                             len,
                             index: idx,
-                            token: self.clone(),
                         }))
                     } else {
                         Ok(idx)
                     }
                 }
-                Err(err) => Err(IndexError::Parse(ParseError {
-                    source: err,
-                    token: self.clone(),
-                })),
+                Err(err) => Err(IndexError::Parse(ParseError::new(err))),
             }
         }
     }
-    /// Returns `&String` for usage as a key for `serde_json::Map`
-    pub fn as_key(&self) -> &String {
-        self.value.as_key()
-    }
-    /// Returns the `&str` representation of the `Token`
-    pub fn as_str(&self) -> &str {
-        self.value.decoded()
-    }
 }
 
-impl Serialize for Token {
+impl Serialize for Token<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        serializer.serialize_str(self.decoded())
+        serializer.serialize_str(self.decoded().as_ref())
     }
 }
-impl<'de> Deserialize<'de> for Token {
+
+impl<'de> Deserialize<'de> for Token<'de> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
-        let s = String::deserialize(deserializer)?;
-        Ok(Token::new(s))
+        let s = <&'de str>::deserialize(deserializer)?;
+        Ok(Token::from_raw(s))
     }
 }
-impl Eq for Token {}
-impl Deref for Token {
-    type Target = str;
-    fn deref(&self) -> &Self::Target {
-        self.decoded()
-    }
-}
-impl From<usize> for Token {
+
+impl From<usize> for Token<'static> {
     fn from(v: usize) -> Self {
-        Token::new(v.to_string())
-    }
-}
-impl From<&str> for Token {
-    fn from(s: &str) -> Self {
-        Token::new(s)
-    }
-}
-impl From<&String> for Token {
-    fn from(value: &String) -> Self {
-        Token::new(value.as_str())
+        Token::new(v.to_string().into())
     }
 }
 
-impl From<&&str> for Token {
-    fn from(value: &&str) -> Self {
-        Token::new(*value)
-    }
-}
-
-impl From<&usize> for Token {
-    fn from(value: &usize) -> Self {
-        Token::new(value.to_string())
-    }
-}
-impl From<u32> for Token {
+impl From<u32> for Token<'static> {
     fn from(v: u32) -> Self {
-        Token::new(v.to_string())
+        Token::new(v.to_string().into())
     }
 }
-impl From<&u32> for Token {
-    fn from(v: &u32) -> Self {
-        Token::new(v.to_string())
-    }
-}
-impl From<u64> for Token {
+
+impl From<u64> for Token<'static> {
     fn from(v: u64) -> Self {
-        Token::new(v.to_string())
-    }
-}
-impl From<&u64> for Token {
-    fn from(v: &u64) -> Self {
-        Token::new(v.to_string())
+        Token::new(v.to_string().into())
     }
 }
 
-impl From<String> for Token {
+impl<'a> From<&'a str> for Token<'a> {
+    fn from(value: &'a str) -> Self {
+        Token::from_raw(value)
+    }
+}
+
+impl<'a> From<&'a String> for Token<'a> {
+    fn from(value: &'a String) -> Self {
+        Token::from_raw(value)
+    }
+}
+
+impl From<String> for Token<'static> {
     fn from(value: String) -> Self {
-        Token::new(value)
-    }
-}
-impl AsRef<str> for Token {
-    fn as_ref(&self) -> &str {
-        self.decoded()
-    }
-}
-impl Borrow<str> for Token {
-    fn borrow(&self) -> &str {
-        self.decoded()
+        Token::from_raw(value)
     }
 }
 
-impl Borrow<String> for Token {
-    fn borrow(&self) -> &String {
-        match &self.value {
-            Value::Uncoded(u) => u,
-            Value::Encoded(e) => &e.decoded,
-        }
+impl<'a> From<&Token<'a>> for Token<'a> {
+    fn from(value: &Token<'a>) -> Self {
+        value.clone()
     }
 }
 
-impl From<&Token> for Token {
-    fn from(t: &Token) -> Self {
-        t.clone()
-    }
-}
-
-impl PartialEq<str> for Token {
-    fn eq(&self, other: &str) -> bool {
-        self.decoded() == other
-    }
-}
-
-impl PartialEq<Token> for Token {
-    fn eq(&self, other: &Token) -> bool {
-        self == other.decoded()
-    }
-}
-
-impl PartialEq<Token> for str {
-    fn eq(&self, other: &Token) -> bool {
-        self == other.decoded()
-    }
-}
-impl PartialEq<String> for Token {
-    fn eq(&self, other: &String) -> bool {
-        self == other
-    }
-}
-
-impl PartialEq<&str> for Token {
-    fn eq(&self, other: &&str) -> bool {
-        &self.value.decoded() == other
-    }
-}
-impl PartialEq<&String> for Token {
-    fn eq(&self, other: &&String) -> bool {
-        &self.value.decoded() == other
-    }
-}
-impl PartialEq<Token> for &str {
-    fn eq(&self, other: &Token) -> bool {
-        self == &other.value.decoded()
-    }
-}
-impl PartialEq<&Token> for String {
-    fn eq(&self, other: &&Token) -> bool {
-        self == other.value.decoded()
-    }
-}
-
-impl PartialOrd<str> for Token {
-    fn partial_cmp(&self, other: &str) -> Option<Ordering> {
-        self.decoded().partial_cmp(other)
-    }
-}
-impl PartialOrd<String> for Token {
-    fn partial_cmp(&self, other: &String) -> Option<Ordering> {
-        self.decoded().partial_cmp(other)
-    }
-}
-impl PartialOrd<Token> for Token {
-    fn partial_cmp(&self, other: &Token) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-impl PartialEq<Token> for String {
-    fn eq(&self, other: &Token) -> bool {
-        self == other.decoded()
-    }
-}
-
-impl PartialOrd<Token> for String {
-    fn partial_cmp(&self, other: &Token) -> Option<Ordering> {
-        self.as_str().partial_cmp(other.decoded())
-    }
-}
-
-impl core::hash::Hash for Token {
-    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-        self.value.decoded().hash(state)
-    }
-}
-
-impl core::fmt::Debug for Token {
+impl core::fmt::Display for Token<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}", self.decoded())
-    }
-}
-impl core::fmt::Display for Token {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}", self.decoded())
-    }
-}
-
-impl Ord for Token {
-    fn cmp(&self, other: &Token) -> Ordering {
-        self.decoded().cmp(other.decoded())
-    }
-}
-
-#[derive(Clone, Debug)]
-enum Value {
-    Uncoded(String),
-    Encoded(Encoded),
-}
-
-impl Value {
-    fn decoded(&self) -> &str {
-        match self {
-            Value::Uncoded(u) => u,
-            Value::Encoded(e) => &e.decoded,
-        }
-    }
-    fn encoded(&self) -> &str {
-        match self {
-            Value::Uncoded(u) => u,
-            Value::Encoded(e) => &e.encoded,
-        }
-    }
-    fn as_key(&self) -> &String {
-        match self {
-            Value::Uncoded(u) => u,
-            Value::Encoded(e) => &e.decoded,
-        }
-    }
-    fn from_encoded(s: &str) -> Self {
-        let mut uncoded = String::with_capacity(s.len());
-        let mut encoded = String::with_capacity(s.len());
-
-        let mut is_encoded = false;
-        let mut chars = s.chars();
-        while let Some(c) = chars.next() {
-            encoded.push(c);
-            if c == ENC_PREFIX {
-                let next = chars.next();
-                if next.is_none() {
-                    uncoded.push(c);
-                    break;
-                }
-                let next = next.unwrap();
-                encoded.push(next);
-                match next {
-                    SLASH_ENC => {
-                        is_encoded = true;
-                        uncoded.push('/');
-                    }
-                    TILDE_ENC => {
-                        is_encoded = true;
-                        uncoded.push('~');
-                    }
-                    _ => {
-                        uncoded.push(next);
-                    }
-                }
-            } else {
-                uncoded.push(c);
-            }
-        }
-        if is_encoded {
-            Value::Encoded(Encoded {
-                encoded,
-                decoded: uncoded,
-            })
-        } else {
-            Value::Uncoded(uncoded)
-        }
-    }
-
-    /// parses a string with the expectation that it is not encoded.
-    fn parse(s: &str) -> Self {
-        let mut uncoded = String::with_capacity(s.len());
-        let mut encoded = String::with_capacity(s.len());
-        let mut was_encoded = false;
-        for c in s.chars() {
-            uncoded.push(c);
-            match Char::from(c) {
-                Char::Char(c) => encoded.push(c),
-                Char::Escaped(e) => {
-                    was_encoded = true;
-                    encoded.push_str(e.into());
-                }
-            };
-        }
-        if was_encoded {
-            Value::Encoded(Encoded {
-                encoded,
-                decoded: uncoded,
-            })
-        } else {
-            Value::Uncoded(uncoded)
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-struct Encoded {
-    encoded: String,
-    decoded: String,
-}
-
-enum Char {
-    Char(char),
-    Escaped(Escaped),
-}
-
-impl From<char> for Char {
-    fn from(c: char) -> Self {
-        match c {
-            '/' => Char::Escaped(Escaped::Slash),
-            '~' => Char::Escaped(Escaped::Tilde),
-            _ => Char::Char(c),
-        }
-    }
-}
-
-enum Escaped {
-    Tilde,
-    Slash,
-}
-#[allow(clippy::from_over_into)]
-impl Into<&str> for Escaped {
-    fn into(self) -> &'static str {
-        match self {
-            Escaped::Tilde => ENCODED_TILDE,
-            Escaped::Slash => ENCODED_SLASH,
-        }
+        write!(f, "{}", self.inner.as_ref())
     }
 }
 
@@ -444,9 +328,9 @@ mod tests {
     use quickcheck_macros::quickcheck;
 
     #[quickcheck]
-    fn encode_decode(token: Token) -> bool {
-        let encoded = token.encoded();
-        let decoded = Token::from_encoded(encoded);
+    fn encode_decode(s: String) -> bool {
+        let token = Token::from_raw(s);
+        let decoded = Token::from_encoded(token.encoded());
         token == decoded
     }
 }

@@ -9,7 +9,7 @@ pub struct Tokens<'a> {
 }
 
 impl<'a> Iterator for Tokens<'a> {
-    type Item = Token;
+    type Item = Token<'a>;
     fn next(&mut self) -> Option<Self::Item> {
         self.inner.next().map(Token::from_encoded)
     }
@@ -35,6 +35,5 @@ mod tests {
         assert_eq!(Token::from_encoded("~0~1").encoded(), "~0~1");
         let t = Token::from_encoded("a~1b");
         assert_eq!(t.decoded(), "a/b");
-        assert_eq!(&t, "a/b")
     }
 }
