@@ -74,7 +74,7 @@ impl<'a> Token<'a> {
         }
     }
 
-    /// Constructs a `Token` from an arbitray string.
+    /// Constructs a `Token` from an arbitrary string.
     ///
     /// If the string contains a `/` or a `~`, then it will be assumed not
     /// encoded, in which case this function will encode it, allocating a new
@@ -314,7 +314,7 @@ impl<'a> From<&Token<'a>> for Token<'a> {
 
 impl core::fmt::Display for Token<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}", self.inner.as_ref())
+        write!(f, "{}", self.decoded())
     }
 }
 
