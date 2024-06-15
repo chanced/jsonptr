@@ -341,7 +341,7 @@ impl Pointer {
                     return Err(UnresolvableError::new(partial_path(rem)).into());
                 }
                 Value::Array(v) => {
-                    let idx = token.as_index(v.len()).map_err(Error::Index)?;
+                    let idx = token.to_index()?.inside_incl(v.len())?;
                     value = &v[idx];
                 }
                 Value::Object(v) => {
@@ -370,7 +370,7 @@ impl Pointer {
                     return Err(UnresolvableError::new(partial_path(rem)).into());
                 }
                 Value::Array(v) => {
-                    let idx = token.as_index(v.len()).map_err(Error::Index)?;
+                    let idx = token.to_index()?.inside_incl(v.len())?;
                     value = &mut v[idx];
                 }
                 Value::Object(v) => {
@@ -453,7 +453,7 @@ impl Pointer {
             .ok()
             .and_then(|parent| match parent {
                 Value::Array(children) => {
-                    let idx = last.as_index(children.len()).ok()?;
+                    let idx = last.to_index().ok()?.inside_incl(children.len()).ok()?;
                     children.remove(idx).into()
                 }
                 Value::Object(children) => children.remove(last.decoded().as_ref()),
@@ -523,7 +523,7 @@ impl Pointer {
                     )
                 }
                 Value::Array(v) => {
-                    let idx = token.as_index(v.len()).map_err(Error::Index)?;
+                    let idx = token.to_index()?.inside_incl(v.len())?;
                     debug_assert!(idx <= v.len());
                     if idx == v.len() {
                         assigned_to.push_back(idx.into());
