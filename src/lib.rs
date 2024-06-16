@@ -7,6 +7,8 @@ mod pointer;
 pub use pointer::*;
 mod token;
 pub use token::*;
+pub mod index;
+pub use index::Index;
 
 mod error;
 pub use error::*;

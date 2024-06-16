@@ -1,4 +1,4 @@
-use crate::{IndexError, InvalidEncodingError, OutOfBoundsError, ParseError};
+use crate::{index::Index, InvalidEncodingError, ParseIndexError};
 use alloc::{
     borrow::Cow,
     string::{String, ToString},
@@ -209,45 +209,25 @@ impl<'a> Token<'a> {
         }
     }
 
-    /// Attempts to parse the given `Token` as an array index (`usize`).
+    /// Attempts to parse the given `Token` as an array index.
     ///
-    /// The argument represents the length of the array and is used to check the
-    /// bounds as well as produce the correct index from a `-` token. Per [RFC
-    /// 6901](https://datatracker.ietf.org/doc/html/rfc6901#section-4), the `-`
-    /// token will stand for the next, non-existent member after the last array
+    /// Per [RFC 6901](https://datatracker.ietf.org/doc/html/rfc6901#section-4),
+    /// the acceptable values are non-negative integers and the `-` character,
+    /// which stands for the next, non-existent member after the last array
     /// element.
-    ///
-    /// # Errors
-    /// - `IndexError::Parse` - if the token is not a valid index.
-    /// - `IndexError::OutOfBounds` - if the token is a valid index but exceeds
-    ///   `len`.
     ///
     /// # Examples
     ///
     /// ```
-    /// use jsonptr::Token;
-    /// assert_eq!(Token::new("-").as_index(1).unwrap(), 1);
-    /// assert_eq!(Token::new("1").as_index(1).unwrap(), 1);
-    /// assert_eq!(Token::new("2").as_index(2).unwrap(), 2);
+    /// # use jsonptr::{Index, Token};
+    /// assert_eq!(Token::new("-").to_index(), Ok(Index::Next));
+    /// assert_eq!(Token::new("0").to_index(), Ok(Index::Num(0)));
+    /// assert_eq!(Token::new("2").to_index(), Ok(Index::Num(2)));
+    /// assert!(Token::new("a").to_index().is_err());
+    /// assert!(Token::new("-1").to_index().is_err());
     /// ```
-    pub fn as_index(&self, len: usize) -> Result<usize, IndexError> {
-        if self.decoded() == "-" {
-            Ok(len)
-        } else {
-            match self.decoded().parse().map_err(Into::into) {
-                Ok(idx) => {
-                    if idx > len {
-                        Err(IndexError::OutOfBounds(OutOfBoundsError {
-                            len,
-                            index: idx,
-                        }))
-                    } else {
-                        Ok(idx)
-                    }
-                }
-                Err(err) => Err(IndexError::Parse(ParseError::new(err))),
-            }
-        }
+    pub fn to_index(&self) -> Result<Index, ParseIndexError> {
+        self.try_into()
     }
 }
 

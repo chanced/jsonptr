@@ -5,7 +5,6 @@ use alloc::{
     vec::Vec,
 };
 use core::{
-    // error::Error as StdError,
     fmt::{Debug, Display, Formatter},
     num::ParseIntError,
 };
@@ -23,8 +22,6 @@ pub enum Error {
     Unresolvable(UnresolvableError),
     /// Indicates that a Pointer was not found in the data.
     NotFound(NotFoundError),
-    // /// Indicates that a Pointer was malformed.
-    // MalformedPointer(MalformedPointerError),
 }
 
 impl Error {
@@ -40,30 +37,17 @@ impl Error {
     pub fn is_not_found(&self) -> bool {
         matches!(self, Error::NotFound(_))
     }
-    // /// Returns `true` if the error is `Error::MalformedPointerError`.
-    // pub fn is_malformed_pointer(&self) -> bool {
-    //     matches!(self, Error::MalformedPointer(_))
-    // }
 }
-// impl From<MalformedPointerError> for Error {
-//     fn from(err: MalformedPointerError) -> Self {
-//         Error::MalformedPointer(err)
-//     }
-// }
+
 impl From<IndexError> for Error {
     fn from(err: IndexError) -> Self {
         Error::Index(err)
     }
 }
+
 impl From<NotFoundError> for Error {
     fn from(err: NotFoundError) -> Self {
         Error::NotFound(err)
-    }
-}
-
-impl From<OutOfBoundsError> for Error {
-    fn from(err: OutOfBoundsError) -> Self {
-        Error::Index(IndexError::from(err))
     }
 }
 
@@ -79,7 +63,6 @@ impl Display for Error {
             Error::Index(err) => Display::fmt(err, f),
             Error::Unresolvable(err) => Display::fmt(err, f),
             Error::NotFound(err) => Display::fmt(err, f),
-            // Error::MalformedPointer(err) => Display::fmt(err, f),
         }
     }
 }
@@ -137,70 +120,76 @@ impl Display for UnresolvableError {
     }
 }
 
-/// Indicates an error occurred while parsing a `usize` (`ParseError`) or the
-/// parsed value was out of bounds for the targeted array.
-#[derive(PartialEq, Eq, Clone)]
-pub enum IndexError {
-    /// Represents an that an error occurred when parsing an index.
-    Parse(ParseError),
-    /// Indicates that the Pointer contains an index of an array that is out of
-    /// bounds.
-    OutOfBounds(OutOfBoundsError),
-}
-impl Display for IndexError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        match self {
-            IndexError::Parse(err) => Display::fmt(&err, f),
-            IndexError::OutOfBounds(err) => Display::fmt(&err, f),
-        }
-    }
-}
-impl Debug for IndexError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        Display::fmt(self, f)
-    }
-}
-#[cfg(feature = "std")]
-impl std::error::Error for IndexError {}
-
-impl From<OutOfBoundsError> for IndexError {
-    fn from(err: OutOfBoundsError) -> Self {
-        IndexError::OutOfBounds(err)
-    }
-}
-
-/// ParseError represents an that an error occurred when parsing an index.
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct ParseError {
+/// Indicates that the `Token` could not be parsed as valid RFC 6901 index.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseIndexError {
     source: ParseIntError,
 }
 
-impl ParseError {
+impl ParseIndexError {
     pub(crate) fn new(source: ParseIntError) -> Self {
         Self { source }
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for ParseError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(&self.source)
-    }
-}
-
-impl Display for ParseError {
+impl Display for ParseIndexError {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.source)
     }
 }
 
-/// Indicates that the `Pointer` contains an index of an array that is out of
-/// bounds.
+#[cfg(feature = "std")]
+impl std::error::Error for ParseIndexError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.source)
+    }
+}
+
+/// Indicates an issue while accessing an array item by index.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum IndexError {
+    /// Represents an error while parsing the index from a token.
+    Parse(ParseIndexError),
+    /// Indicates that the resolved index was out of bounds.
+    OutOfBounds(OutOfBoundsError),
+}
+
+impl Display for IndexError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        match self {
+            IndexError::Parse(err) => Display::fmt(err, f),
+            IndexError::OutOfBounds(err) => Display::fmt(err, f),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for IndexError {}
+
+impl From<OutOfBoundsError> for Error {
+    fn from(err: OutOfBoundsError) -> Self {
+        Error::Index(IndexError::OutOfBounds(err))
+    }
+}
+
+impl From<ParseIndexError> for Error {
+    fn from(value: ParseIndexError) -> Self {
+        Error::Index(IndexError::Parse(value))
+    }
+}
+
+/// Indicates that an `Index` is not within the given bounds.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct OutOfBoundsError {
-    /// The length of the array.
-    pub len: usize,
-    /// The index of the array that was out of bounds.
+    /// The provided array length.
+    ///
+    /// If the range is inclusive, the resolved numerical index will be strictly
+    /// less than this value, otherwise it could be equal to it.
+    pub length: usize,
+    /// The resolved numerical index.
+    ///
+    /// Note that [`Index::Next`] always resolves to the given array length,
+    /// so it is only valid when the range is inclusive.
     pub index: usize,
 }
 
@@ -209,7 +198,11 @@ impl std::error::Error for OutOfBoundsError {}
 
 impl Display for OutOfBoundsError {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "index {} out of bounds", self.index)
+        write!(
+            f,
+            "index {} out of bounds (limit: {})",
+            self.index, self.length
+        )
     }
 }
 
@@ -256,6 +249,7 @@ impl From<FromUtf8Error> for MalformedPointerError {
         })
     }
 }
+
 impl Display for MalformedPointerError {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
