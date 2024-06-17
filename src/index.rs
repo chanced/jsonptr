@@ -21,16 +21,16 @@
 //! assert_eq!(Token::new("-").to_index(), Ok(Index::Next));
 //! assert!(Token::new("a").to_index().is_err());
 //!
-//! assert_eq!(Index::Num(0).inside(1), Ok(0));
-//! assert!(Index::Num(1).inside(1).is_err());
-//! assert!(Index::Next.inside(1).is_err());
+//! assert_eq!(Index::Num(0).for_len(1), Ok(0));
+//! assert!(Index::Num(1).for_len(1).is_err());
+//! assert!(Index::Next.for_len(1).is_err());
 //!
-//! assert_eq!(Index::Num(1).inside_incl(1), Ok(1));
-//! assert_eq!(Index::Next.inside_incl(1), Ok(1));
-//! assert!(Index::Num(2).inside_incl(1).is_err());
+//! assert_eq!(Index::Num(1).for_len_incl(1), Ok(1));
+//! assert_eq!(Index::Next.for_len_incl(1), Ok(1));
+//! assert!(Index::Num(2).for_len_incl(1).is_err());
 //!
-//! assert_eq!(Index::Num(42).for_len(30), 42);
-//! assert_eq!(Index::Next.for_len(30), 30);
+//! assert_eq!(Index::Num(42).for_len_unchecked(30), 42);
+//! assert_eq!(Index::Next.for_len_unchecked(30), 30);
 //! ````
 
 use crate::{OutOfBoundsError, ParseIndexError, Token};
@@ -38,7 +38,7 @@ use core::fmt::Display;
 
 /// Represents an abstract index into an array.
 ///
-/// If provided an upper bound with [`Self::inside`] or [`Self::inside_incl`],
+/// If provided an upper bound with [`Self::for_len`] or [`Self::for_len_incl`],
 /// will produce a concrete numerical index.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Index {
@@ -59,18 +59,18 @@ impl Index {
     /// [`Self::Next`], by consequence, is always considered *invalid*, since
     /// it resolves to the array length itself.
     ///
-    /// See also [`Self::inside_incl`] for an alternative if you wish to accept
+    /// See also [`Self::for_len_incl`] for an alternative if you wish to accept
     /// [`Self::Next`] (or its numerical equivalent) as valid.
     ///
     /// # Examples
     ///
     /// ```
     /// # use jsonptr::Index;
-    /// assert_eq!(Index::Num(0).inside(1), Ok(0));
-    /// assert!(Index::Num(1).inside(1).is_err());
-    /// assert!(Index::Next.inside(1).is_err());
+    /// assert_eq!(Index::Num(0).for_len(1), Ok(0));
+    /// assert!(Index::Num(1).for_len(1).is_err());
+    /// assert!(Index::Next.for_len(1).is_err());
     /// ```
-    pub fn inside(&self, length: usize) -> Result<usize, OutOfBoundsError> {
+    pub fn for_len(&self, length: usize) -> Result<usize, OutOfBoundsError> {
         match *self {
             Self::Num(index) if index < length => Ok(index),
             Self::Num(index) => Err(OutOfBoundsError { length, index }),
@@ -89,18 +89,18 @@ impl Index {
     ///
     /// [`Self::Next`] is always considered valid.
     ///
-    /// See also [`Self::inside`] for an alternative if you wish to ensure that
+    /// See also [`Self::for_len`] for an alternative if you wish to ensure that
     /// the resolved index can be used to access an existing array element.
     ///
     /// # Examples
     ///
     /// ```
     /// # use jsonptr::Index;
-    /// assert_eq!(Index::Num(1).inside_incl(1), Ok(1));
-    /// assert_eq!(Index::Next.inside_incl(1), Ok(1));
-    /// assert!(Index::Num(2).inside_incl(1).is_err());
+    /// assert_eq!(Index::Num(1).for_len_incl(1), Ok(1));
+    /// assert_eq!(Index::Next.for_len_incl(1), Ok(1));
+    /// assert!(Index::Num(2).for_len_incl(1).is_err());
     /// ```
-    pub fn inside_incl(&self, length: usize) -> Result<usize, OutOfBoundsError> {
+    pub fn for_len_incl(&self, length: usize) -> Result<usize, OutOfBoundsError> {
         match *self {
             Self::Num(index) if index <= length => Ok(index),
             Self::Num(index) => Err(OutOfBoundsError { length, index }),
@@ -111,18 +111,18 @@ impl Index {
     /// Resolves the index for a given array length.
     ///
     /// No bound checking will take place. If you wish to ensure the index can
-    /// be used to access an existing element in the array, use [`Self::inside`]
-    /// - or use [`Self::inside_incl`] if you wish to accept [`Self::Next`] as
+    /// be used to access an existing element in the array, use [`Self::for_len`]
+    /// - or use [`Self::for_len_incl`] if you wish to accept [`Self::Next`] as
     /// valid as well.
     ///
     /// # Examples
     ///
     /// ```
     /// # use jsonptr::Index;
-    /// assert_eq!(Index::Num(42).for_len(30), 42);
-    /// assert_eq!(Index::Next.for_len(30), 30);
+    /// assert_eq!(Index::Num(42).for_len_unchecked(30), 42);
+    /// assert_eq!(Index::Next.for_len_unchecked(30), 30);
     /// ````
-    pub fn for_len(&self, length: usize) -> usize {
+    pub fn for_len_unchecked(&self, length: usize) -> usize {
         match *self {
             Self::Num(idx) => idx,
             Self::Next => length,
