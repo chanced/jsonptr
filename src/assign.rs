@@ -88,16 +88,21 @@ pub(crate) fn assign_value<'p, 'd>(
     mut dest: &'d mut Value,
     mut src: Value,
 ) -> Result<Assignment<'p, 'd>, AssignError> {
+    let dest_str = dest.to_string();
+    println!("dest: {}", dest_str);
+
     let mut offset = 0;
     let full_ptr = remaining;
     let mut replaced;
     let mut returned_src;
     while let Some((token, tail)) = remaining.split_front() {
-        offset = offset + 1;
         let tok_len = token.encoded().len();
-        let (assigned_to, _) = full_ptr
+        let (assigned_to, rest) = full_ptr
             .split_at(offset)
             .unwrap_or((Pointer::root(), Pointer::root()));
+
+        println!("splitting pointer {full_ptr} at {offset} into \"{assigned_to}\" and \"{rest}\"");
+
         Assigned {
             dest,
             remaining,
@@ -115,7 +120,7 @@ pub(crate) fn assign_value<'p, 'd>(
                 replaced,
             });
         }
-        offset += tok_len;
+        offset += 1 + tok_len;
         src = returned_src.unwrap();
     }
     // Pointer is root, we can replace `dest` directly
@@ -127,15 +132,15 @@ pub(crate) fn assign_value<'p, 'd>(
     })
 }
 fn create_value_path(mut path: &Pointer, mut src: Value) -> Result<Value, AssignError> {
-    while let Some((token, tail)) = path.split_front() {
-        path = tail;
-        match path.as_str() {
+    while let Some((ptr, tok)) = path.split_back() {
+        path = ptr;
+        match tok.decoded().as_ref() {
             "0" | "-" => {
                 src = Value::Array(vec![src]);
             }
             _ => {
                 let mut obj = Map::new();
-                obj.insert(token.to_string(), src);
+                obj.insert(tok.to_string(), src);
                 src = Value::Object(obj);
             }
         }
@@ -231,8 +236,11 @@ fn assign_to_scalar<'p, 'd>(
     dest: &'d mut Value,
     src: Value,
 ) -> Result<Assigned<'p, 'd>, AssignError> {
+    println!("assign_to_scalar \"{remaining}\" -> {src}");
     let src = create_value_path(remaining, src)?;
+    println!("created {src}");
     let replaced = Some(replace(dest, src));
+
     Ok(Assigned {
         remaining: &Pointer::root(),
         dest,

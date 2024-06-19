@@ -1273,14 +1273,14 @@ mod tests {
 
         ptr.assign(&mut data, val).unwrap();
         assert_eq!(
-            json!({
+            &json!({
                 "foo": {
                     "bar": {
                         "baz": "qux"
                     }
                 }
             }),
-            data.clone()
+            &data
         );
     }
 
