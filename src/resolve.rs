@@ -18,7 +18,7 @@ impl Resolve for Value {
         let mut offset = 0;
         let mut value = self;
         while let Some((token, rem)) = ptr.split_front() {
-            offset += 1 + token.encoded().len();
+            let tok_len = token.encoded().len();
             ptr = rem;
             value = match value {
                 Value::Array(v) => {
@@ -36,6 +36,7 @@ impl Resolve for Value {
                 // found a leaf node but the pointer hasn't been exhausted
                 _ => resolve_error::UnreachableSnafu { offset }.fail(),
             }?;
+            offset += 1 + tok_len;
         }
         Ok(value)
     }
@@ -56,7 +57,7 @@ impl ResolveMut for Value {
         let mut offset = 0;
         let mut value = self;
         while let Some((token, rem)) = ptr.split_front() {
-            offset += 1 + token.encoded().len();
+            let tok_len = token.encoded().len();
             ptr = rem;
             value = match value {
                 Value::Array(array) => {
@@ -73,6 +74,7 @@ impl ResolveMut for Value {
                 // found a leaf node but the pointer hasn't been exhausted
                 _ => resolve_error::UnreachableSnafu { offset }.fail(),
             }?;
+            offset += 1 + tok_len;
         }
         Ok(value)
     }

@@ -93,7 +93,8 @@ pub(crate) fn assign_value<'p, 'd>(
     let mut replaced;
     let mut returned_src;
     while let Some((token, tail)) = remaining.split_front() {
-        offset = offset + 1 + token.encoded().len();
+        offset = offset + 1;
+        let tok_len = token.encoded().len();
         let (assigned_to, _) = full_ptr
             .split_at(offset)
             .unwrap_or((Pointer::root(), Pointer::root()));
@@ -114,6 +115,7 @@ pub(crate) fn assign_value<'p, 'd>(
                 replaced,
             });
         }
+        offset += tok_len;
         src = returned_src.unwrap();
     }
     // Pointer is root, we can replace `dest` directly
