@@ -20,6 +20,7 @@ This is a breaking release including [#30](https://github.com/chanced/jsonptr/pu
 
 ### Changed
 
+-   `replaced` in `Assignment` is now `Option<Value>` instead of `Value` as it no longer uses `Value::Null` to indicate no replacement.
 -   Debug implementation now preserves type information (e.g. prints `PathBuf("/foo/bar")` instead of `"/foo/bar"`) - `Display` remains the same
 -   Original `Pointer` type renamed to `PointerBuf`
 -   `Pointer::root` is now `PointerBuf::new`
@@ -33,6 +34,8 @@ This is a breaking release including [#30](https://github.com/chanced/jsonptr/pu
 
 ### Removed
 
+-   Removes `created_or_mutated` from `Assignment`, condensing it into `assigned_to`
+-   Removes `MaybePointer`
 -   Removes `impl Deref<Target=&str>`
 -   Removes optional dependencies of `url`, `fluent-uri` and `uniresid` as well
     as the `TryFrom` implementations for `fluent_uri::Uri<String>`, `url::Url`,

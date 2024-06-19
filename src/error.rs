@@ -1,341 +1,246 @@
-use crate::{PointerBuf, Token};
-use alloc::{
-    format,
-    string::{FromUtf8Error, String, ToString},
-    vec::Vec,
-};
-use core::{
-    fmt::{Debug, Display, Formatter},
-    num::ParseIntError,
-};
+use crate::PointerBuf;
+use core::num::ParseIntError;
+use snafu::{Backtrace, Snafu};
 
-/// An enum representing possible errors that can occur when resolving or
-/// mutating by a JSON Pointer.
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum Error {
-    /// Indicates an error occurred while parsing a `usize` (`ParseError`) or the
-    /// parsed value was out of bounds for the targeted array.
-    Index(IndexError),
-    /// Represents an error that occurs when attempting to resolve a `Pointer` that
-    /// encounters a leaf node (i.e. a scalar / null value) which is not the root
-    /// of the `Pointer`.
-    Unresolvable(UnresolvableError),
-    /// Indicates that a Pointer was not found in the data.
-    NotFound(NotFoundError),
+#[derive(Debug, Snafu)]
+#[snafu(visibility(pub(crate)), module)]
+pub enum ResolveError {
+    /// `Pointer` could not be resolved because a `Token` for an array index is
+    /// not a valid integer or dash (`"-"`).
+    ///
+    /// ## Example
+    /// ```rust
+    /// # use serde_json::json;
+    /// # use jsonptr::Pointer;
+    /// let data = json!({ "foo": ["bar"] });
+    /// let ptr = Pointer::from_static("/foo/invalid");
+    /// assert!(ptr.resolve(&data).unwrap_err().is_failed_to_parse_index());
+    /// ```
+    #[snafu(display("failed to parse index at offset {offset}"))]
+    FailedToParseIndex {
+        offset: usize,
+        source: ParseIndexError,
+        backtrace: Backtrace,
+    },
+    /// `Pointer` could not be resolved due to an index being out of bounds
+    /// within an array.
+    ///
+    /// ## Example
+    /// ```rust
+    /// # use serde_json::json;
+    /// # use jsonptr::Pointer;
+    /// let data = json!({ "foo": ["bar"] });
+    /// let ptr = Pointer::from_static("/foo/1");
+    /// assert!(ptr.resolve(&data).unwrap_err().is_out_of_bounds());
+    #[snafu(display("index at offset {offset} out of bounds"))]
+    OutOfBounds {
+        /// Offset of the pointer starting with the out of bounds index.
+        offset: usize,
+        #[snafu(backtrace)]
+        source: OutOfBoundsError,
+    },
+
+    /// `Pointer` could not be resolved as a segment of the path was not found.
+    ///
+    /// ## Example
+    /// ```rust
+    /// # use serde_json::json;
+    /// # use jsonptr::{Pointer};
+    /// let mut data = json!({ "foo": "bar" });
+    /// let ptr = Pointer::from_static("/bar");
+    /// assert!(ptr.resolve(&data).unwrap_err().is_not_found());
+    /// ```
+    #[snafu(display("pointer starting at offset {offset} not found"))]
+    NotFound {
+        /// Offset of the pointer starting with the `Token` which was not found.
+        offset: usize,
+        /// The backtrace of the error.
+        backtrace: Backtrace,
+    },
+
+    /// `Pointer` could not be resolved as the path contains a scalar value
+    /// before fully exhausting the path.
+    ///
+    /// ## Example
+    /// ```rust
+    /// # use serde_json::json;
+    /// # use jsonptr::Pointer;
+    /// let mut data = json!({ "foo": "bar" });
+    /// let ptr = Pointer::from_static("/foo/unreachable");
+    /// assert!(ptr.resolve(&data).unwrap_err(), err.is_unreachable());
+    /// ```
+    Unreachable {
+        /// Offset of the pointer which was unreachable.
+        offset: usize,
+        /// The backtrace of the error.
+        backtrace: Backtrace,
+    },
 }
-
-impl Error {
-    /// Returns `true` if the error is `Error::IndexError`.
-    pub fn is_index(&self) -> bool {
-        matches!(self, Error::Index(_))
-    }
-    /// Returns `true` if the error is `Error::UnresolvableError`.
-    pub fn is_unresolvable(&self) -> bool {
-        matches!(self, Error::Unresolvable(_))
-    }
-    /// Returns `true` if the error is `Error::NotFoundError`.
-    pub fn is_not_found(&self) -> bool {
-        matches!(self, Error::NotFound(_))
-    }
-}
-
-impl From<IndexError> for Error {
-    fn from(err: IndexError) -> Self {
-        Error::Index(err)
-    }
-}
-
-impl From<NotFoundError> for Error {
-    fn from(err: NotFoundError) -> Self {
-        Error::NotFound(err)
-    }
-}
-
-impl From<UnresolvableError> for Error {
-    fn from(err: UnresolvableError) -> Self {
-        Error::Unresolvable(err)
-    }
-}
-
-impl Display for Error {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+impl ResolveError {
+    pub fn offset(&self) -> usize {
         match self {
-            Error::Index(err) => Display::fmt(err, f),
-            Error::Unresolvable(err) => Display::fmt(err, f),
-            Error::NotFound(err) => Display::fmt(err, f),
+            Self::FailedToParseIndex { offset, .. }
+            | Self::OutOfBounds { offset, .. }
+            | Self::NotFound { offset, .. }
+            | Self::Unreachable { offset, .. } => *offset,
         }
     }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for Error {}
-
-/// Represents an error that occurs when attempting to resolve a `Pointer` that
-/// encounters a leaf node (i.e. a scalar / null value) which is not the root
-/// of the `Pointer`.
-///
-/// ## Example
-/// ```rust
-/// use serde_json::json;
-/// use jsonptr::{Pointer, ResolveMut, Resolve, UnresolvableError};
-/// let mut data = json!({ "foo": "bar" });
-/// let ptr = Pointer::from_static("/foo/unreachable");
-/// let err = data.resolve_mut(&ptr).unwrap_err();
-/// assert_eq!(err, UnresolvableError::new(ptr.to_buf()).into());
-/// ```
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct UnresolvableError {
-    /// The unresolved `Pointer`.
-    pub pointer: PointerBuf,
-    /// The leaf node, if applicable, which was expected to be either an
-    /// `Object` or an `Array`.
-    pub leaf: Option<Token<'static>>,
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for UnresolvableError {}
-
-impl UnresolvableError {
-    /// Creates a new `UnresolvableError` with the given `Pointer`.
-    pub fn new(pointer: PointerBuf) -> Self {
-        let leaf = if pointer.count() >= 2 {
-            Some(pointer.get(pointer.count() - 2).unwrap().into_owned())
-        } else {
-            None
-        };
-        Self { pointer, leaf }
+    pub fn is_unreachable(&self) -> bool {
+        matches!(self, Self::Unreachable { .. })
+    }
+    pub fn is_not_found(&self) -> bool {
+        matches!(self, Self::NotFound { .. })
+    }
+    pub fn is_out_of_bounds(&self) -> bool {
+        matches!(self, Self::OutOfBounds { .. })
+    }
+    pub fn is_failed_to_parse_index(&self) -> bool {
+        matches!(self, Self::FailedToParseIndex { .. })
     }
 }
 
-impl Display for UnresolvableError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(
-            f,
-            "can not resolve \"{}\" due to {} being a scalar value",
-            self.pointer,
-            self.leaf
-                .as_ref()
-                .map_or_else(|| "the root value".to_string(), |l| format!("\"{l}\""))
-        )
-    }
+/// Indicates error occurred during an assignment
+#[derive(Debug, Snafu)]
+#[snafu(visibility(pub(crate)), module)]
+pub enum AssignError {
+    #[snafu(display("failed to parse index at offset {offset}"))]
+    FailedToParseIndex {
+        offset: usize,
+        source: ParseIndexError,
+        backtrace: Backtrace,
+    },
+    #[snafu(display("index at offset {offset} out of bounds"))]
+    OutOfBounds {
+        offset: usize,
+        #[snafu(backtrace)]
+        source: OutOfBoundsError,
+    },
 }
 
 /// Indicates that the `Token` could not be parsed as valid RFC 6901 index.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ParseIndexError {
+#[derive(Debug, Snafu)]
+#[snafu(display("failed to parse token as an integer"))]
+pub struct IndexError {
     source: ParseIntError,
-}
-
-impl ParseIndexError {
-    pub(crate) fn new(source: ParseIntError) -> Self {
-        Self { source }
-    }
-}
-
-impl Display for ParseIndexError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}", self.source)
-    }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for ParseIndexError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(&self.source)
-    }
-}
-
-/// Indicates an issue while accessing an array item by index.
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum IndexError {
-    /// Represents an error while parsing the index from a token.
-    Parse(ParseIndexError),
-    /// Indicates that the resolved index was out of bounds.
-    OutOfBounds(OutOfBoundsError),
-}
-
-impl Display for IndexError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        match self {
-            IndexError::Parse(err) => Display::fmt(err, f),
-            IndexError::OutOfBounds(err) => Display::fmt(err, f),
-        }
-    }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for IndexError {}
-
-impl From<OutOfBoundsError> for Error {
-    fn from(err: OutOfBoundsError) -> Self {
-        Error::Index(IndexError::OutOfBounds(err))
-    }
-}
-
-impl From<ParseIndexError> for Error {
-    fn from(value: ParseIndexError) -> Self {
-        Error::Index(IndexError::Parse(value))
-    }
+    backtrace: Backtrace,
 }
 
 /// Indicates that an `Index` is not within the given bounds.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Snafu)]
+#[snafu(
+    visibility(pub(crate)),
+    display("index {index} out of bounds (limit: {length})")
+)]
 pub struct OutOfBoundsError {
     /// The provided array length.
     ///
     /// If the range is inclusive, the resolved numerical index will be strictly
     /// less than this value, otherwise it could be equal to it.
     pub length: usize,
+
     /// The resolved numerical index.
     ///
     /// Note that [`Index::Next`] always resolves to the given array length,
     /// so it is only valid when the range is inclusive.
     pub index: usize,
+
+    /// The backtrace of the error.
+    pub backtrace: Backtrace,
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for OutOfBoundsError {}
+/// Indicates that a `Pointer` was malformed and unable to be parsed.
+#[derive(Debug, Snafu)]
+#[snafu(visibility(pub(crate)), module)]
+pub enum ParseError {
+    /// `Pointer` did not start with a backslash (`'/'`).
+    #[snafu(display("json pointer is malformed as it does not start with a backslash ('/')"))]
+    NoLeadingBackslash { backtrace: Backtrace },
 
-impl Display for OutOfBoundsError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(
-            f,
-            "index {} out of bounds (limit: {})",
-            self.index, self.length
-        )
+    /// `Pointer` contained invalid encoding (e.g. `~` not followed by `0` or
+    /// `1`).
+    #[snafu(transparent)]
+    InvalidEncoding { source: InvalidEncodingError },
+}
+
+impl ParseError {
+    pub fn is_no_leading_backslash(&self) -> bool {
+        matches!(self, Self::NoLeadingBackslash { .. })
     }
-}
-
-/// Pointer was not in UTF-8 format.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct NotUtf8Error {
-    /// Underlying `std::str::Utf8Error`.
-    pub source: FromUtf8Error,
-    /// Byte slice that was not in UTF-8 format.
-    pub path: Vec<u8>,
-}
-
-impl core::fmt::Display for NotUtf8Error {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "not utf8: {}", self.source)
+    pub fn is_invalid_encoding(&self) -> bool {
+        matches!(self, Self::InvalidEncoding { .. })
     }
-}
-#[cfg(feature = "std")]
-impl std::error::Error for NotUtf8Error {}
-
-/// Indicates that a Pointer was malformed.
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum MalformedPointerError {
-    /// Indicates that the Pointer was malformed because it did not contain a
-    /// leading slash (`'/'`).
-    NoLeadingSlash(String),
-    /// Indicates that the Pointer was malformed because it contained invalid
-    /// encoding.
-    InvalidEncoding(String),
-    /// NonUTF8
-    NotUtf8(NotUtf8Error),
-}
-impl From<NotUtf8Error> for MalformedPointerError {
-    fn from(err: NotUtf8Error) -> Self {
-        MalformedPointerError::NotUtf8(err)
-    }
-}
-
-impl From<FromUtf8Error> for MalformedPointerError {
-    fn from(err: FromUtf8Error) -> Self {
-        MalformedPointerError::NotUtf8(NotUtf8Error {
-            source: err,
-            path: Vec::new(),
-        })
-    }
-}
-
-impl Display for MalformedPointerError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+    pub fn offset(&self) -> usize {
         match self {
-            MalformedPointerError::NoLeadingSlash(s) => {
-                write!(
-                    f,
-                    "json pointer \"{s}\" is malformed due to missing starting slash",
-                )
-            }
-            MalformedPointerError::InvalidEncoding(s) => {
-                write!(f, "json pointer \"{s}\" is improperly encoded")
-            }
-            MalformedPointerError::NotUtf8(err) => {
-                write!(f, "json pointer is not UTF-8: {}", err.source)
-            }
+            Self::NoLeadingBackslash { .. } => 0,
+            Self::InvalidEncoding { source } => source.offset(),
         }
     }
 }
-
-#[cfg(feature = "std")]
-impl std::error::Error for MalformedPointerError {}
-
-/// NotFoundError indicates that a Pointer was not found in the data.
-#[derive(Debug, PartialEq, Eq, Clone)]
+/// NotFoundError indicates that a Pointer's path was not found in the data.
+#[derive(Debug, Snafu)]
+#[snafu(display("the resource at json pointer \"{pointer}\" was not found"))]
 pub struct NotFoundError {
-    /// The `Pointer` which could not be resolved.
+    /// The path which could not be resolved.
     pub pointer: PointerBuf,
+    pub backtrace: Backtrace,
 }
-impl NotFoundError {
-    /// Creates a new `NotFoundError` with the given `Pointer`.
-    pub fn new(pointer: PointerBuf) -> Self {
-        NotFoundError { pointer }
-    }
-}
-impl Display for NotFoundError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(
-            f,
-            "the resource at json pointer \"{}\" was not found",
-            self.pointer
-        )
-    }
-}
-#[cfg(feature = "std")]
-impl std::error::Error for NotFoundError {}
 
 /// Returned from `Pointer::replace_token` when the provided index is out of
 /// bounds.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Snafu)]
+#[snafu(display("index {index} is out of bounds ({count})"))]
 pub struct ReplaceTokenError {
     /// The index of the token that was out of bounds.
     pub index: usize,
     /// The number of tokens in the `Pointer`.
     pub count: usize,
-    /// The subject `Pointer`.
-    pub pointer: PointerBuf,
-}
-#[cfg(feature = "std")]
-impl std::error::Error for ReplaceTokenError {}
-
-impl Display for ReplaceTokenError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(
-            f,
-            "index {} is out of bounds ({}) for the pointer {}",
-            self.index, self.count, self.pointer
-        )
-    }
 }
 
-/// Represents that the string is not a valid token under RFC 6901.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// A token within a json pointer contained invalid encoding (`~` not followed
+/// by `0` or `1`).
+///
+#[derive(Debug, Snafu)]
+#[snafu(
+    visibility(pub(crate)),
+    display("json pointer is malformed due to invalid encoding ('~' not followed by '0' or '1')")
+)]
 pub struct InvalidEncodingError {
+    /// offset of the erroneous `~`
     offset: usize,
+    backtrace: Backtrace,
 }
-
 impl InvalidEncodingError {
-    pub(crate) fn new(offset: usize) -> Self {
-        Self { offset }
-    }
-
-    /// The byte offset where the first invalid character occurs.
-    ///
-    /// Note that this may be equal to the length of the string if the string
-    /// ends with an incomplete escaped sequence.
+    /// The byte offset of the first invalid `~`.
     pub fn offset(&self) -> usize {
         self.offset
     }
+}
+
+/// Indicates that the `Token` could not be parsed as valid RFC 6901 index.
+#[derive(Debug, Snafu)]
+#[snafu(transparent)]
+pub struct ParseIndexError {
+    source: ParseIntError,
+    backtrace: Backtrace,
+}
+
+#[derive(Debug, Snafu)]
+pub enum DeleteError {
+    /// `Value` at `Pointer` could not be because a `Token` for an array index
+    /// is not a valid integer or dash (`"-"`).
+    ///
+    /// ## Example
+    /// ```rust
+    /// # use serde_json::json;
+    /// # use jsonptr::Pointer;
+    /// let data = json!({ "foo": ["bar"] });
+    /// let ptr = Pointer::from_static("/foo/invalid");
+    /// assert!(ptr.resolve(&data).unwrap_err().is_failed_to_parse_index());
+    /// ```
+    #[snafu(display("failed to parse index at offset {offset}"))]
+    FailedToParseIndex {
+        offset: usize,
+        source: ParseIndexError,
+        backtrace: Backtrace,
+    },
 }

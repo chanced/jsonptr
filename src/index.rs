@@ -33,7 +33,9 @@
 //! assert_eq!(Index::Next.for_len_unchecked(30), 30);
 //! ````
 
-use crate::{OutOfBoundsError, ParseIndexError, Token};
+use snafu::ResultExt;
+
+use crate::{OutOfBoundsError, OutOfBoundsSnafu, ParseIndexError, Token};
 use core::fmt::Display;
 
 /// Represents an abstract index into an array.
@@ -73,11 +75,12 @@ impl Index {
     pub fn for_len(&self, length: usize) -> Result<usize, OutOfBoundsError> {
         match *self {
             Self::Num(index) if index < length => Ok(index),
-            Self::Num(index) => Err(OutOfBoundsError { length, index }),
-            Self::Next => Err(OutOfBoundsError {
+            Self::Num(index) => OutOfBoundsSnafu { length, index }.fail(),
+            Self::Next => OutOfBoundsSnafu {
                 length,
                 index: length,
-            }),
+            }
+            .fail(),
         }
     }
 
@@ -103,7 +106,7 @@ impl Index {
     pub fn for_len_incl(&self, length: usize) -> Result<usize, OutOfBoundsError> {
         match *self {
             Self::Num(index) if index <= length => Ok(index),
-            Self::Num(index) => Err(OutOfBoundsError { length, index }),
+            Self::Num(index) => OutOfBoundsSnafu { length, index }.fail(),
             Self::Next => Ok(length),
         }
     }
@@ -153,11 +156,7 @@ impl TryFrom<&Token<'_>> for Index {
         if value.encoded() == "-" {
             Ok(Index::Next)
         } else {
-            value
-                .decoded()
-                .parse::<usize>()
-                .map(Index::Num)
-                .map_err(ParseIndexError::new)
+            Ok(value.decoded().parse::<usize>().map(Index::Num)?)
         }
     }
 }
@@ -169,10 +168,7 @@ impl TryFrom<&str> for Index {
         if value == "-" {
             Ok(Index::Next)
         } else {
-            value
-                .parse::<usize>()
-                .map(Index::Num)
-                .map_err(ParseIndexError::new)
+            Ok(value.parse::<usize>().map(Index::Num)?)
         }
     }
 }

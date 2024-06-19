@@ -1,9 +1,10 @@
-use crate::{index::Index, InvalidEncodingError, ParseIndexError};
+use crate::{index::Index, InvalidEncodingError, InvalidEncodingSnafu, ParseIndexError};
 use alloc::{
     borrow::Cow,
     string::{String, ToString},
 };
 use serde::{Deserialize, Serialize};
+use snafu::ensure;
 
 const ENCODED_TILDE: &[u8] = b"~0";
 const ENCODED_SLASH: &[u8] = b"~1";
@@ -49,11 +50,10 @@ impl<'a> Token<'a> {
     /// assert_eq!(err.offset(), 3);
     /// ```
     pub fn from_encoded(s: &'a str) -> Result<Self, InvalidEncodingError> {
-        let err_at = |i| Err(InvalidEncodingError::new(i));
         let mut escaped = false;
-        for (i, b) in s.bytes().enumerate() {
+        for (offset, b) in s.bytes().enumerate() {
             match b {
-                b'/' => return err_at(i),
+                b'/' => InvalidEncodingSnafu { offset }.fail()?,
                 ENC_PREFIX => {
                     escaped = true;
                 }
@@ -62,16 +62,13 @@ impl<'a> Token<'a> {
                 }
                 _ => {
                     if escaped {
-                        return err_at(i);
+                        InvalidEncodingSnafu { offset }.fail()?;
                     }
                 }
             }
         }
-        if escaped {
-            err_at(s.len())
-        } else {
-            Ok(Self { inner: s.into() })
-        }
+        ensure!(!escaped, InvalidEncodingSnafu { offset: s.len() });
+        Ok(Self { inner: s.into() })
     }
 
     /// Constructs a `Token` from an arbitrary string.

@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use crate::{MalformedPointerError, Pointer};
+use crate::{DeleteError, Pointer};
 /// Delete is implemented by types which can internally remove a value based on
 /// a JSON Pointer
 pub trait Delete {
@@ -11,7 +11,7 @@ pub trait Delete {
 }
 
 impl Delete for Value {
-    type Error = MalformedPointerError;
+    type Error = DeleteError;
     fn delete(&mut self, ptr: &Pointer) -> Option<Value> {
         ptr.delete(self)
     }
