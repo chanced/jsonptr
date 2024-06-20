@@ -1,10 +1,9 @@
-use crate::{index::Index, InvalidEncodingError, InvalidEncodingSnafu, ParseIndexError};
+use crate::{index::Index, InvalidEncodingError, ParseIndexError};
 use alloc::{
     borrow::Cow,
     string::{String, ToString},
 };
 use serde::{Deserialize, Serialize};
-use snafu::ensure;
 
 const ENCODED_TILDE: &[u8] = b"~0";
 const ENCODED_SLASH: &[u8] = b"~1";
@@ -53,7 +52,7 @@ impl<'a> Token<'a> {
         let mut escaped = false;
         for (offset, b) in s.bytes().enumerate() {
             match b {
-                b'/' => InvalidEncodingSnafu { offset }.fail()?,
+                b'/' => return Err(InvalidEncodingError { offset }),
                 ENC_PREFIX => {
                     escaped = true;
                 }
@@ -62,12 +61,14 @@ impl<'a> Token<'a> {
                 }
                 _ => {
                     if escaped {
-                        InvalidEncodingSnafu { offset }.fail()?;
+                        return Err(InvalidEncodingError { offset });
                     }
                 }
             }
         }
-        ensure!(!escaped, InvalidEncodingSnafu { offset: s.len() });
+        if escaped {
+            return Err(InvalidEncodingError { offset: s.len() });
+        }
         Ok(Self { inner: s.into() })
     }
 

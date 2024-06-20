@@ -1,5 +1,5 @@
 use crate::{
-    assign::assign_value, parse_error, AssignError, Assignment, InvalidEncodingSnafu, ParseError,
+    assign::assign_value, AssignError, Assignment, InvalidEncodingError, ParseError,
     ReplaceTokenError, Resolve, ResolveMut, Token, Tokens,
 };
 use alloc::{
@@ -10,42 +10,30 @@ use alloc::{
 use core::{borrow::Borrow, cmp::Ordering, mem, ops::Deref, slice, str::FromStr};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use snafu::ensure;
 
 fn validate(value: &str) -> Result<&str, ParseError> {
-    let mut chars = value.chars();
-    match chars.next() {
-        Some('#') => {
-            // we forgive the usage of `'#'` at the beginning of a pointer even
-            // though this is technically incorrect.
-            // it is a common enough mistake as json pointers are often used in
-            // fragments of URIs to indicate sub-resources.
-            let next = chars.next();
-            if next.is_none() {
-                // root pointer
-                return Ok(value);
-            }
-            ensure!(next == Some('/'), parse_error::NoLeadingBackslashSnafu)
-        }
-        Some('/') => {}                                          // expected
-        Some(_) => parse_error::NoLeadingBackslashSnafu.fail()?, // invalid pointer - missing leading slash
-        None => {
-            // done
-            return Ok(value);
-        }
+    let mut chars = value.char_indices();
+    match chars.next().map(|(_, c)| c) {
+        Some('/') => {}                                        // expected
+        Some(_) => return Err(ParseError::NoLeadingBackslash), // invalid pointer - missing leading slash
+        None => return Ok(value),                              // done
     }
-    let mut offset = 1usize;
-    while let Some(c) = chars.next() {
-        offset += 1;
-        if c == '~' {
-            // '~' must be followed by '0' or '1' in order to be properly encoded
-            ensure!(
-                matches!(chars.next(), Some('0') | Some('1')),
-                InvalidEncodingSnafu { offset }
-            );
-        }
-    }
+    let mut tok_idx = 0;
 
+    while let Some((offset, c)) = chars.next() {
+        if c == '/' {
+            tok_idx = 0;
+            continue;
+        }
+        if c == '~' && !matches!(chars.next().map(|(_, c)| c), Some('0') | Some('1')) {
+            // '~' must be followed by '0' or '1' in order to be properly encoded
+            return Err(ParseError::InvalidEncoding {
+                offset,
+                source: InvalidEncodingError { offset: tok_idx },
+            });
+        }
+        tok_idx += 1;
+    }
     Ok(value)
 }
 

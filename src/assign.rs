@@ -1,9 +1,8 @@
 use core::mem::replace;
 
 use serde_json::{map::Entry, Map, Value};
-use snafu::ResultExt;
 
-use crate::{assign_error, AssignError, Pointer, Token};
+use crate::{AssignError, Pointer, Token};
 
 /// Assign is implemented by types which can internally assign a
 /// `serde_json::Value` by a JSON Pointer.
@@ -164,9 +163,9 @@ fn assign_to_array<'p, 'd>(
 ) -> Result<Assigned<'p, 'd>, AssignError> {
     let idx = token
         .to_index()
-        .with_context(|_| assign_error::FailedToParseIndexSnafu { offset })?
+        .map_err(|source| AssignError::FailedToParseIndex { offset, source })?
         .for_len_incl(dest.len())
-        .with_context(|_| assign_error::OutOfBoundsSnafu { offset })?;
+        .map_err(|source| AssignError::OutOfBounds { offset, source })?;
     debug_assert!(idx <= dest.len());
     if idx < dest.len() {
         let returned_src;

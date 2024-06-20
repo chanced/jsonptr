@@ -1,6 +1,5 @@
-use crate::{resolve_error, Pointer, ResolveError};
+use crate::{Pointer, ResolveError};
 use serde_json::Value;
-use snafu::ResultExt;
 
 /// Resolve is implemented by types which can resolve a reference to a
 /// `serde_json::Value` from the path in a JSON Pointer.
@@ -24,17 +23,17 @@ impl Resolve for Value {
                 Value::Array(v) => {
                     let idx = token
                         .to_index()
-                        .with_context(|_| resolve_error::FailedToParseIndexSnafu { offset })?
+                        .map_err(|source| ResolveError::FailedToParseIndex { offset, source })?
                         .for_len(v.len())
-                        .with_context(|_| resolve_error::OutOfBoundsSnafu { offset })?;
+                        .map_err(|source| ResolveError::OutOfBounds { offset, source })?;
                     Ok(&v[idx])
                 }
 
                 Value::Object(v) => v
                     .get(token.decoded().as_ref())
-                    .ok_or_else(|| resolve_error::NotFoundSnafu { offset }.build()),
+                    .ok_or_else(|| ResolveError::NotFound { offset }),
                 // found a leaf node but the pointer hasn't been exhausted
-                _ => resolve_error::UnreachableSnafu { offset }.fail(),
+                _ => Err(ResolveError::Unreachable { offset }),
             }?;
             offset += 1 + tok_len;
         }
@@ -63,16 +62,16 @@ impl ResolveMut for Value {
                 Value::Array(array) => {
                     let idx = token
                         .to_index()
-                        .with_context(|_| resolve_error::FailedToParseIndexSnafu { offset })?
+                        .map_err(|source| ResolveError::FailedToParseIndex { offset, source })?
                         .for_len(array.len())
-                        .with_context(|_| resolve_error::OutOfBoundsSnafu { offset })?;
+                        .map_err(|source| ResolveError::OutOfBounds { offset, source })?;
                     Ok(&mut array[idx])
                 }
                 Value::Object(v) => v
                     .get_mut(token.decoded().as_ref())
-                    .ok_or_else(|| resolve_error::NotFoundSnafu { offset }.build()),
+                    .ok_or_else(|| ResolveError::NotFound { offset }),
                 // found a leaf node but the pointer hasn't been exhausted
-                _ => resolve_error::UnreachableSnafu { offset }.fail(),
+                _ => Err(ResolveError::Unreachable { offset }),
             }?;
             offset += 1 + tok_len;
         }
