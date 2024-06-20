@@ -4,7 +4,6 @@ use core::{
 };
 
 #[derive(Debug)]
-// #[snafu(visibility(pub(crate)), module)]
 pub enum ResolveError {
     /// `Pointer` could not be resolved because a `Token` for an array index is
     /// not a valid integer or dash (`"-"`).
