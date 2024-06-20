@@ -1148,106 +1148,106 @@ mod tests {
 
     #[test]
     fn test_assign_with_explicit_array_path() {
-        // let mut data = json!({});
-        // let ptr = Pointer::from_static("/foo/0/bar");
-        // let val = json!("baz");
+        let mut data = json!({});
+        let ptr = Pointer::from_static("/foo/0/bar");
+        let val = json!("baz");
 
-        // let assignment = ptr.assign(&mut data, val).unwrap();
-        // assert_eq!(assignment.replaced, Value::Null);
-        // assert_eq!(assignment.assigned_to, "/foo/0/bar");
-        // assert_eq!(assignment.replaced, Value::Null);
-        // assert_eq!(
-        //     json!({
-        //         "foo": [
-        //             {
-        //                 "bar": "baz"
-        //             }
-        //         ]
-        //     }),
-        //     data.clone()
-        // );
+        let assignment = ptr.assign(&mut data, val).unwrap();
+        assert_eq!(assignment.replaced, None);
+        assert_eq!(assignment.assigned_to, "/foo/0/bar");
+        assert_eq!(assignment.replaced, None);
+        assert_eq!(
+            json!({
+                "foo": [
+                    {
+                        "bar": "baz"
+                    }
+                ]
+            }),
+            data.clone()
+        );
     }
 
     #[test]
     fn test_assign_array_with_next_token() {
-        // let mut data = json!({});
-        // let ptr = PointerBuf::try_from("/foo/-/bar").unwrap();
-        // let val = json!("baz");
-        // let assignment = ptr.assign(&mut data, val).unwrap();
-        // assert_eq!(assignment.replaced, Value::Null);
-        // assert_eq!(
-        //     assignment.assigned_to, "/foo/0/bar",
-        //     "`assigned_to` should equal \"/foo/0/bar\""
-        // );
-        // assert_eq!(assignment.replaced, Value::Null);
-        // assert_eq!(
-        //     json!({
-        //         "foo": [
-        //             {
-        //                 "bar": "baz"
-        //             }
-        //         ]
-        //     }),
-        //     data.clone()
-        // );
-        // let val = json!("baz2");
-        // let assignment = ptr.assign(&mut data, val).unwrap();
-        // assert_eq!(assignment.replaced, Value::Null);
-        // assert_eq!(
-        //     assignment.assigned_to, "/foo/1/bar",
-        //     "`assigned_to` should equal \"/foo/1/bar\""
-        // );
-        // assert_eq!(assignment.replaced, Value::Null);
-        // assert_eq!(
-        //     json!({
-        //         "foo": [
-        //             {
-        //                 "bar": "baz"
-        //             },
-        //             {
-        //                 "bar": "baz2"
-        //             }
-        //         ]
-        //     }),
-        //     data.clone()
-        // );
-        // let ptr = PointerBuf::try_from("/foo/0/bar").unwrap();
-        // let val = json!("qux");
-        // let assignment = ptr.assign(&mut data, val).unwrap();
-        // // assert_eq!(assignment.assigned_to, "/foo/0/bar");
-        // assert_eq!(assignment.replaced, Value::String("baz".to_string()));
-        // assert_eq!(
-        //     json!({
-        //         "foo": [
-        //             {
-        //                 "bar": "qux"
-        //             },
-        //             {
-        //                 "bar": "baz2"
-        //             }
-        //         ]
-        //     }),
-        //     data.clone()
-        // );
+        let mut data = json!({});
+        let ptr = PointerBuf::try_from("/foo/-/bar").unwrap();
+        let val = json!("baz");
+        let assignment = ptr.assign(&mut data, val).unwrap();
+        assert_eq!(assignment.replaced, None);
+        assert_eq!(
+            assignment.assigned_to, "/foo/0/bar",
+            "`assigned_to` should equal \"/foo/0/bar\""
+        );
+        assert_eq!(assignment.replaced, None);
+        assert_eq!(
+            json!({
+                "foo": [
+                    {
+                        "bar": "baz"
+                    }
+                ]
+            }),
+            data.clone()
+        );
+        let val = json!("baz2");
+        let assignment = ptr.assign(&mut data, val).unwrap();
+        assert_eq!(assignment.replaced, None);
+        assert_eq!(
+            assignment.assigned_to, "/foo/1/bar",
+            "`assigned_to` should equal \"/foo/1/bar\""
+        );
+        assert_eq!(assignment.replaced, None);
+        assert_eq!(
+            json!({
+                "foo": [
+                    {
+                        "bar": "baz"
+                    },
+                    {
+                        "bar": "baz2"
+                    }
+                ]
+            }),
+            data.clone()
+        );
+        let ptr = PointerBuf::try_from("/foo/0/bar").unwrap();
+        let val = json!("qux");
+        let assignment = ptr.assign(&mut data, val).unwrap();
+        // assert_eq!(assignment.assigned_to, "/foo/0/bar");
+        assert_eq!(assignment.replaced, Some(Value::String("baz".to_string())));
+        assert_eq!(
+            json!({
+                "foo": [
+                    {
+                        "bar": "qux"
+                    },
+                    {
+                        "bar": "baz2"
+                    }
+                ]
+            }),
+            data.clone()
+        );
     }
 
     #[test]
     fn test_assign_with_obj_path() {
-        // let mut data = json!({});
-        // let ptr = PointerBuf::try_from("/foo/bar").unwrap();
-        // let val = json!("baz");
+        let mut data = json!({});
+        let ptr = PointerBuf::try_from("/foo/bar").unwrap();
+        let val = json!("baz");
 
-        // let assignment = ptr.assign(&mut data, val).unwrap();
-        // assert_eq!(assignment.assigned_to, "/foo/bar");
-        // assert_eq!(assignment.replaced, Value::Null);
-        // assert_eq!(
-        //     json!({
-        //         "foo": {
-        //             "bar": "baz"
-        //         }
-        //     }),
-        //     data.clone()
-        // );
+        let assignment = ptr.assign(&mut data, val).unwrap();
+        assert_eq!(assignment.assigned_to, "/foo/bar");
+        assert_eq!(assignment.replaced, None);
+        assert_eq!(
+            json!({
+                "foo": {
+                    "bar": "baz"
+                }
+            }),
+            data.clone()
+        );
     }
 
     #[test]

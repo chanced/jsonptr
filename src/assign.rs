@@ -202,6 +202,7 @@ fn assign_to_object<'p, 'd>(
     src: Value,
 ) -> Result<Assigned<'p, 'd>, AssignError> {
     let mut returned_src = None;
+
     match dest.entry(token.to_string()) {
         Entry::Occupied(entry) => {
             let entry = entry.into_mut();
