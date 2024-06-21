@@ -1,6 +1,9 @@
+use core::fmt;
+
 use serde_json::Value;
 
-use crate::{DeleteError, Pointer};
+use crate::{ParseIndexError, Pointer};
+
 /// Delete is implemented by types which can internally remove a value based on
 /// a JSON Pointer
 pub trait Delete {
@@ -14,6 +17,44 @@ impl Delete for Value {
     type Error = DeleteError;
     fn delete(&mut self, ptr: &Pointer) -> Option<Value> {
         ptr.delete(self)
+    }
+}
+
+#[derive(Debug)]
+pub enum DeleteError {
+    /// `Value` at `Pointer` could not be because a `Token` for an array index
+    /// is not a valid integer or dash (`"-"`).
+    ///
+    /// ## Example
+    /// ```rust
+    /// # use serde_json::json;
+    /// # use jsonptr::Pointer;
+    /// let data = json!({ "foo": ["bar"] });
+    /// let ptr = Pointer::from_static("/foo/invalid");
+    /// assert!(ptr.resolve(&data).unwrap_err().is_failed_to_parse_index());
+    /// ```
+    FailedToParseIndex {
+        offset: usize,
+        source: ParseIndexError,
+    },
+}
+
+impl fmt::Display for DeleteError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::FailedToParseIndex { offset, .. } => {
+                write!(f, "failed to parse index at offset {}", offset)
+            }
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for DeleteError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::FailedToParseIndex { source, .. } => Some(source),
+        }
     }
 }
 

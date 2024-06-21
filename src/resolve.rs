@@ -1,4 +1,4 @@
-use crate::{Pointer, ResolveError};
+use crate::{OutOfBoundsError, ParseIndexError, Pointer};
 use serde_json::Value;
 
 /// Resolve is implemented by types which can resolve a reference to a
@@ -76,5 +76,121 @@ impl ResolveMut for Value {
             offset += 1 + tok_len;
         }
         Ok(value)
+    }
+}
+
+#[derive(Debug)]
+pub enum ResolveError {
+    /// `Pointer` could not be resolved because a `Token` for an array index is
+    /// not a valid integer or dash (`"-"`).
+    ///
+    /// ## Example
+    /// ```rust
+    /// # use serde_json::json;
+    /// # use jsonptr::Pointer;
+    /// let data = json!({ "foo": ["bar"] });
+    /// let ptr = Pointer::from_static("/foo/invalid");
+    /// assert!(ptr.resolve(&data).unwrap_err().is_failed_to_parse_index());
+    /// ```
+    FailedToParseIndex {
+        offset: usize,
+        source: ParseIndexError,
+    },
+    /// `Pointer` could not be resolved due to an index being out of bounds
+    /// within an array.
+    ///
+    /// ## Example
+    /// ```rust
+    /// # use serde_json::json;
+    /// # use jsonptr::Pointer;
+    /// let data = json!({ "foo": ["bar"] });
+    /// let ptr = Pointer::from_static("/foo/1");
+    /// assert!(ptr.resolve(&data).unwrap_err().is_out_of_bounds());
+    OutOfBounds {
+        /// Offset of the pointer starting with the out of bounds index.
+        offset: usize,
+        source: OutOfBoundsError,
+    },
+
+    /// `Pointer` could not be resolved as a segment of the path was not found.
+    ///
+    /// ## Example
+    /// ```rust
+    /// # use serde_json::json;
+    /// # use jsonptr::{Pointer};
+    /// let mut data = json!({ "foo": "bar" });
+    /// let ptr = Pointer::from_static("/bar");
+    /// assert!(ptr.resolve(&data).unwrap_err().is_not_found());
+    /// ```
+    NotFound {
+        /// Offset of the pointer starting with the `Token` which was not found.
+        offset: usize,
+    },
+
+    /// `Pointer` could not be resolved as the path contains a scalar value
+    /// before fully exhausting the path.
+    ///
+    /// ## Example
+    /// ```rust
+    /// # use serde_json::json;
+    /// # use jsonptr::Pointer;
+    /// let mut data = json!({ "foo": "bar" });
+    /// let ptr = Pointer::from_static("/foo/unreachable");
+    /// assert!(ptr.resolve(&data).unwrap_err(), err.is_unreachable());
+    /// ```
+    Unreachable {
+        /// Offset of the pointer which was unreachable.
+        offset: usize,
+    },
+}
+impl ResolveError {
+    pub fn offset(&self) -> usize {
+        match self {
+            Self::FailedToParseIndex { offset, .. }
+            | Self::OutOfBounds { offset, .. }
+            | Self::NotFound { offset, .. }
+            | Self::Unreachable { offset, .. } => *offset,
+        }
+    }
+    pub fn is_unreachable(&self) -> bool {
+        matches!(self, Self::Unreachable { .. })
+    }
+    pub fn is_not_found(&self) -> bool {
+        matches!(self, Self::NotFound { .. })
+    }
+    pub fn is_out_of_bounds(&self) -> bool {
+        matches!(self, Self::OutOfBounds { .. })
+    }
+    pub fn is_failed_to_parse_index(&self) -> bool {
+        matches!(self, Self::FailedToParseIndex { .. })
+    }
+}
+impl core::fmt::Display for ResolveError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::FailedToParseIndex { offset, .. } => {
+                write!(f, "failed to parse index at offset {}", offset)
+            }
+            Self::OutOfBounds { offset, .. } => {
+                write!(f, "index at offset {} out of bounds", offset)
+            }
+            Self::NotFound { offset, .. } => {
+                write!(f, "pointer starting at offset {} not found", offset)
+            }
+            Self::Unreachable { offset, .. } => {
+                write!(f, "pointer starting at offset {} is unreachable", offset)
+            }
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for ResolveError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::FailedToParseIndex { source, .. } => Some(source),
+            Self::OutOfBounds { source, .. } => Some(source),
+            _ => None,
+        }
     }
 }

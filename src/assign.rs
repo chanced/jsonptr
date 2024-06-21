@@ -1,5 +1,5 @@
-use crate::{AssignError, Pointer, PointerBuf, Token};
-use core::mem::replace;
+use crate::{OutOfBoundsError, ParseIndexError, Pointer, PointerBuf, Token};
+use core::{fmt, mem::replace};
 use serde_json::{map::Entry, Map, Value};
 
 /// Assign is implemented by types which can internally assign a
@@ -115,8 +115,41 @@ pub(crate) fn assign_value<'v>(
     })
 }
 
+/// Indicates error occurred during an assignment
+#[derive(Debug)]
+pub enum AssignError {
+    FailedToParseIndex {
+        offset: usize,
+        source: ParseIndexError,
+    },
+    OutOfBounds {
+        offset: usize,
+        source: OutOfBoundsError,
+    },
+}
+impl fmt::Display for AssignError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::FailedToParseIndex { offset, .. } => {
+                write!(f, "failed to parse index at offset {}", offset)
+            }
+            Self::OutOfBounds { offset, .. } => {
+                write!(f, "index at offset {} out of bounds", offset)
+            }
+        }
+    }
+}
+#[cfg(feature = "std")]
+impl std::error::Error for AssignError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::FailedToParseIndex { source, .. } => Some(source),
+            Self::OutOfBounds { source, .. } => Some(source),
+        }
+    }
+}
+
 enum Assigned<'v> {
-    // TODO: Change this to return Assignment
     Done(Assignment<'v>),
     Continue {
         next_buf: PointerBuf,
