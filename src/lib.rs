@@ -258,6 +258,7 @@ pub struct ReplaceTokenError {
     /// The number of tokens in the `Pointer`.
     pub count: usize,
 }
+
 impl fmt::Display for ReplaceTokenError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "index {} is out of bounds ({})", self.index, self.count)
