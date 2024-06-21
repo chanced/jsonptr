@@ -169,6 +169,7 @@ pub struct InvalidEncodingError {
     /// offset of the erroneous `~` from within the `Token`
     pub offset: usize,
 }
+
 impl InvalidEncodingError {
     /// The byte offset of the first invalid `~`.
     pub fn offset(&self) -> usize {
