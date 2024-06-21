@@ -11,12 +11,18 @@ repository    = "https://github.com/chanced/jsonptr"
 version       = "0.4.7"
 
 [dependencies]
-serde      = { version = "1.0", default-features = false, features = ["alloc"] }
-serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+serde = { version = "1.0", default-features = false, features = ["alloc"] }
+serde_json = { version = "1.0", optional = true, default-features = false, features = [
+	"alloc",
+] }
+serde_yaml = { version = "0.9.34", optional = true }
+toml = { version = "0.8", optional = true }
 
 [features]
-default = ["std"]
+default = ["std", "json"]
+json    = ["serde_json"]
 std     = ["serde/std", "serde_json/std"]
+yaml    = ["serde_yaml"]
 
 [dev-dependencies]
 quickcheck        = "1.0.3"

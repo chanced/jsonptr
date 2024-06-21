@@ -135,6 +135,10 @@ impl Pointer {
         validate(s.as_ref()).map(Self::new)
     }
 
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
     /// Creates a static `Pointer` from a string.
     ///
     /// # Panics
@@ -312,7 +316,7 @@ impl Pointer {
     }
 
     /// Attempts to resolve a `Value` based on the path in this `Pointer`.
-    pub fn resolve<'v, R: Resolve>(&self, value: &'v R) -> Result<&'v Value, R::Error> {
+    pub fn resolve<'v, R: Resolve>(&self, value: &'v R) -> Result<&'v R::Value, R::Error> {
         value.resolve(self)
     }
 
@@ -321,7 +325,7 @@ impl Pointer {
     pub fn resolve_mut<'v, R: ResolveMut>(
         &self,
         value: &'v mut R,
-    ) -> Result<&'v mut Value, R::Error> {
+    ) -> Result<&'v mut R::Value, R::Error> {
         value.resolve_mut(self)
     }
 
@@ -384,7 +388,7 @@ impl Pointer {
     /// assert_eq!(data.delete(&ptr), Some(json!({ "foo": { "bar": "baz" } })));
     /// assert!(data.is_null());
     /// ```
-    pub fn delete<D: Delete>(&self, value: &mut D) -> Option<Value> {
+    pub fn delete<D: Delete>(&self, value: &mut D) -> Option<D::Value> {
         value.delete(self)
     }
 
