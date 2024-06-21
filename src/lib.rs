@@ -65,6 +65,7 @@ impl ParseError {
     pub fn is_no_leading_backslash(&self) -> bool {
         matches!(self, Self::NoLeadingBackslash { .. })
     }
+    
     /// Returns `true` if this error is `InvalidEncoding`; otherwise returns
     /// `false`.
     pub fn is_invalid_encoding(&self) -> bool {
