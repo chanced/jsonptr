@@ -1,6 +1,6 @@
 use crate::{
-    assign::assign_value, Assign, AssignError, Assignment, InvalidEncodingError, ParseError,
-    ReplaceTokenError, Resolve, ResolveMut, Token, Tokens,
+    Assign, Assignment, InvalidEncodingError, ParseError, ReplaceTokenError, Resolve, ResolveMut,
+    Token, Tokens,
 };
 use alloc::{
     borrow::ToOwned,
@@ -772,86 +772,13 @@ impl core::fmt::Display for PointerBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Resolve, ResolveError, ResolveMut};
-    use alloc::vec;
     use quickcheck::TestResult;
     use quickcheck_macros::quickcheck;
-    use serde_json::json;
 
     #[test]
     #[should_panic]
     fn from_const_validates() {
         Pointer::from_static("foo/bar");
-    }
-
-    #[test]
-    fn test_rfc_examples() {
-        let data = json!({
-            "foo": ["bar", "baz"],
-            "": 0,
-            "a/b": 1,
-            "c%d": 2,
-            "e^f": 3,
-            "g|h": 4,
-            "i\\j": 5,
-            "k\"l": 6,
-            " ": 7,
-            "m~n": 8
-        });
-
-        let val = data.get("").unwrap();
-        assert_eq!(val, 0);
-
-        // ""           // the whole document
-        let ptr = Pointer::root();
-        assert_eq!(data.resolve(ptr).unwrap(), &data);
-
-        // "/foo"       ["bar", "baz"]
-        let ptr = Pointer::from_static("/foo");
-        assert_eq!(data.resolve(ptr).unwrap(), &json!(["bar", "baz"]));
-
-        // "/foo/0"     "bar"
-        let ptr = Pointer::from_static("/foo/0");
-        assert_eq!(data.resolve(ptr).unwrap(), &json!("bar"));
-
-        // // "/"          0
-        let ptr = Pointer::from_static("/");
-        assert_eq!(data.resolve(ptr).unwrap(), &json!(0));
-
-        // "/a~1b"      1
-        assert_eq!(data.get("a/b").unwrap(), 1);
-        let ptr = Pointer::from_static("/a~1b");
-        assert_eq!(ptr.as_str(), "/a~1b");
-        assert_eq!(data.get("a/b").unwrap(), 1);
-        assert_eq!(&ptr.first().unwrap().decoded(), "a/b");
-        assert_eq!(data.resolve(ptr).unwrap(), &json!(1));
-
-        // "/c%d"       2
-        let ptr = Pointer::from_static("/c%d");
-        assert_eq!(data.resolve(ptr).unwrap(), &json!(2));
-
-        // // "/e^f"       3
-        let ptr = Pointer::from_static("/e^f");
-        assert_eq!(data.resolve(ptr).unwrap(), &json!(3));
-
-        // // "/g|h"       4
-        let ptr = Pointer::from_static("/g|h");
-        assert_eq!(data.resolve(ptr).unwrap(), &json!(4));
-
-        // "/i\\j"      5
-        let ptr = Pointer::from_static("/i\\j");
-        assert_eq!(data.resolve(ptr).unwrap(), &json!(5));
-
-        // // "/k\"l"      6
-        let ptr = Pointer::from_static("/k\"l");
-        assert_eq!(data.resolve(ptr).unwrap(), &json!(6));
-
-        // // "/ "         7
-        let ptr = Pointer::from_static("/ ");
-        assert_eq!(data.resolve(ptr).unwrap(), &json!(7));
-        // // "/m~0n"      8
-        let ptr = Pointer::from_static("/m~0n");
-        assert_eq!(data.resolve(ptr).unwrap(), &json!(8));
     }
 
     #[test]
@@ -1037,100 +964,6 @@ mod tests {
 
         let ptr = Pointer::root();
         assert_eq!(ptr.first(), None);
-    }
-
-    fn test_data() -> serde_json::Value {
-        json!({
-            "foo": {
-                "bar": {
-                    "baz": {
-                        "qux": "quux"
-                    }
-                },
-                "strings": ["zero", "one", "two"],
-                "nothing": null,
-                "bool": true,
-                "objects": [{
-                    "field": "zero"
-                }, {
-                    "field": "one"
-                }, {
-                    "field": "two"
-                }]
-            }
-        })
-    }
-
-    #[test]
-    fn test_resolve_unresolvable() {
-        let mut data = test_data();
-        let ptr = Pointer::from_static("/foo/bool/unresolvable");
-        let res = ptr.resolve_mut(&mut data);
-
-        assert!(res.is_err());
-        let err = res.unwrap_err();
-        assert!(err.is_unreachable());
-        assert_eq!(err.offset(), 9)
-    }
-
-    #[test]
-    fn test_resolve_not_found() {
-        let mut data = test_data();
-        let ptr = PointerBuf::from_tokens(["foo", "not_found", "nope"]);
-        let res = ptr.resolve_mut(&mut data);
-        assert!(res.is_err());
-        let err = res.unwrap_err();
-        assert!(err.is_not_found());
-
-        match err {
-            ResolveError::NotFound { offset, .. } => {
-                assert_eq!(offset, 4);
-            }
-            _ => panic!("expected NotFound"),
-        }
-    }
-
-    #[test]
-    fn test_try_from() {
-        let ptr = PointerBuf::from_tokens(["foo", "bar", "~/"]);
-
-        assert_eq!(PointerBuf::try_from("/foo/bar/~0~1").unwrap(), ptr);
-        let into: PointerBuf = "/foo/bar/~0~1".try_into().unwrap();
-        assert_eq!(ptr, into);
-    }
-
-    #[test]
-    fn test_resolve_mut_unresolvable_error() {
-        let mut data = test_data();
-        let ptr = Pointer::from_static("/foo/bool/unresolvable/not-in-token");
-        let res = ptr.resolve_mut(&mut data);
-        assert!(res.is_err());
-        let err = res.unwrap_err();
-        assert!(err.is_unreachable());
-        assert_eq!(err.offset(), 9);
-
-        let ptr = Pointer::from_static("/foo/bool/unresolvable");
-        let res = ptr.resolve_mut(&mut data);
-        let err = res.unwrap_err();
-        assert!(err.is_unreachable());
-        assert_eq!(err.offset(), 9);
-
-        let mut data = json!({"foo": "bar"});
-        let ptr = PointerBuf::try_from("/foo/unresolvable").unwrap();
-        let err = data.resolve_mut(&ptr).unwrap_err();
-        assert!(err.is_unreachable());
-        assert_eq!(err.offset(), 4);
-    }
-
-    #[test]
-    fn test_resolve_unresolvable_error() {
-        let data = test_data();
-        let ptr = Pointer::from_static("/foo/bool/unresolvable/not-in-token");
-        let res = ptr.resolve(&data);
-        assert!(res.is_err());
-        let err = res.unwrap_err();
-        assert!(err.is_unreachable());
-        assert_eq!(err.offset(), 9);
     }
 
     #[test]

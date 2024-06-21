@@ -5,25 +5,32 @@ extern crate alloc;
 
 use core::{fmt, num::ParseIntError};
 
-mod pointer;
-
-pub use pointer::*;
-mod token;
-pub use token::*;
-pub mod index;
-pub use index::Index;
-
 mod assign;
-pub use assign::*;
+pub use assign::{Assign, AssignError, Assignment};
+
 mod delete;
-pub use delete::*;
+pub use delete::{Delete, DeleteError};
+
 mod resolve;
-pub use resolve::*;
+pub use resolve::{Resolve, ResolveError, ResolveMut};
 
 pub mod prelude;
 
+// TODO: move this into lib.rs
 mod tokens;
 pub use tokens::*;
+
+// TODO: move this into lib.rs
+mod pointer;
+pub use pointer::*;
+
+// TODO: move this into lib.rs
+mod token;
+pub use token::*;
+
+// TODO: move this into lib.rs
+pub mod index;
+pub use index::Index;
 
 #[cfg(test)]
 mod arbitrary;
