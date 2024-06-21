@@ -228,6 +228,7 @@ impl fmt::Display for OutOfBoundsError {
         )
     }
 }
+
 #[cfg(feature = "std")]
 impl std::error::Error for OutOfBoundsError {}
 
