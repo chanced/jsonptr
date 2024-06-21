@@ -148,6 +148,7 @@ impl From<ParseIntError> for ParseIndexError {
         Self { source }
     }
 }
+
 impl fmt::Display for ParseIndexError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "failed to parse token as an integer")
