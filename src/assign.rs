@@ -173,6 +173,7 @@ fn assign_array<'v>(
     src: Value,
     offset: usize,
 ) -> Result<Assigned<'v>, AssignError> {
+    // parsing the index
     let idx = token
         .to_index()
         .map_err(|source| AssignError::FailedToParseIndex { offset, source })?
@@ -184,8 +185,9 @@ fn assign_array<'v>(
 
     if idx < array.len() {
         // element exists in the array, we either need to replace it or continue
-        // depending on whether this is the last elem or not
+        // depending on whether this is the last token or not
         if remaining.is_root() {
+            // last token, we replace the value and call it a day
             let replaced = Some(mem::replace(&mut array[idx], src));
             let assigned = &mut array[idx];
             Ok(Assigned::Done(Assignment {
@@ -194,6 +196,8 @@ fn assign_array<'v>(
                 replaced,
             }))
         } else {
+            // not the last token, we continue with a mut ref to the element as
+            // the next value
             Ok(Assigned::Continue {
                 next_value: &mut array[idx],
                 same_src: src,
@@ -222,14 +226,18 @@ fn assign_object<'v>(
     obj: &'v mut Map<String, Value>,
     src: Value,
 ) -> Result<Assigned<'v>, AssignError> {
+    // grabbing the entry of the token
     let entry = obj.entry(token.to_string());
+    // adding token to the pointer buf
     buf.push_back(token);
 
     match entry {
         Entry::Occupied(entry) => {
+            // if the entry exists, we either replace it or continue
             let entry = entry.into_mut();
-            // if this is the last element, we return the full pointer up to this point
             if remaining.is_root() {
+                // if this is the last token, we are done
+                // grab the old value and replace it with the new one
                 let replaced = Some(mem::replace(entry, src));
                 Ok(Assigned::Done(Assignment {
                     assigned: entry,
@@ -237,6 +245,8 @@ fn assign_object<'v>(
                     replaced,
                 }))
             } else {
+                // if this is not the last token, we continue with a mutable
+                // reference to the entry as the next value
                 Ok(Assigned::Continue {
                     same_src: src,
                     next_buf: buf,
@@ -245,6 +255,8 @@ fn assign_object<'v>(
             }
         }
         Entry::Vacant(entry) => {
+            // if the entry does not exist, we create a value based on the
+            // remaining path with the src value as a leaf
             let src = expand_src_path(remaining, src)?;
             let assigned = entry.insert(src);
             Ok(Assigned::Done(Assignment {
@@ -263,6 +275,9 @@ fn assign_scalar<'v>(
     value: &'v mut Value,
     src: Value,
 ) -> Result<Assigned<'v>, AssignError> {
+    // scalar values are always replaced at the current buf (with its token)
+    // build the new src and we replace the value with it.
+
     buf.push_back(token);
     let src = expand_src_path(remaining, src)?;
     let replaced = Some(mem::replace(value, src));
