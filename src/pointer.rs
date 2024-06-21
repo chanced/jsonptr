@@ -1,5 +1,5 @@
 use crate::{
-    assign::assign_value, AssignError, Assignment, InvalidEncodingError, ParseError,
+    assign::assign_value, Assign, AssignError, Assignment, InvalidEncodingError, ParseError,
     ReplaceTokenError, Resolve, ResolveMut, Token, Tokens,
 };
 use alloc::{
@@ -417,11 +417,12 @@ impl Pointer {
     /// let assignment = data.assign(&ptr, src).unwrap();
     /// assert_eq!(data, json!([{ "foo": "bar" } ]));
     /// ```
-    pub fn assign<'d, V>(&self, dest: &'d mut Value, src: V) -> Result<Assignment<'d>, AssignError>
+    pub fn assign<'d, D, V>(&self, dest: &'d mut D, src: V) -> Result<Assignment<'d>, D::Error>
     where
+        D: Assign,
         V: Into<Value>,
     {
-        assign_value(self, dest, src.into())
+        dest.assign(self, src)
     }
 }
 

@@ -19,7 +19,7 @@ impl Assign for Value {
     where
         V: Into<Value>,
     {
-        ptr.assign(self, value.into())
+        assign_value(ptr, self, value.into())
     }
 }
 
