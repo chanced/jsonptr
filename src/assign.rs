@@ -134,6 +134,7 @@ pub enum AssignError {
         source: OutOfBoundsError,
     },
 }
+
 impl fmt::Display for AssignError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
