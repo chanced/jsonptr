@@ -244,6 +244,7 @@ impl fmt::Display for NotFoundError {
         write!(f, "path starting at offset {} not found", self.offset)
     }
 }
+
 #[cfg(feature = "std")]
 impl std::error::Error for NotFoundError {}
 
