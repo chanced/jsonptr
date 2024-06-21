@@ -1,4 +1,4 @@
-use core::mem::replace;
+use core::{mem::replace, ptr};
 
 use serde_json::{map::Entry, Map, Value};
 
@@ -241,7 +241,7 @@ fn expand_src_path(
     mut path: &Pointer,
     mut src: Value,
 ) -> Result<(PointerBuf, Value), AssignError> {
-    while let Some((ptr, tok)) = path.split_back() {
+    while let Some((tok, ptr)) = path.split_front() {
         path = ptr;
         match tok.decoded().as_ref() {
             "0" | "-" => {
@@ -257,4 +257,179 @@ fn expand_src_path(
         }
     }
     Ok((buf, src))
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::{json, Value};
+
+    use crate::{Pointer, PointerBuf};
+
+    #[test]
+    fn test_assign() {
+        let mut data = json!({});
+        let ptr = Pointer::from_static("/foo");
+        let val = json!("bar");
+
+        let assignment = ptr.assign(&mut data, val.clone()).unwrap();
+        assert_eq!(assignment.replaced, None);
+        assert_eq!(assignment.assigned, &val);
+        assert_eq!(assignment.assigned_to, "/foo");
+
+        // now testing replacement
+        let val2 = json!("baz");
+        let assignment = ptr.assign(&mut data, val2.clone()).unwrap();
+        assert_eq!(assignment.replaced, Some(Value::String("bar".to_string())));
+        assert_eq!(assignment.assigned, &val2);
+        assert_eq!(assignment.assigned_to, "/foo");
+    }
+
+    #[test]
+    fn test_assign_with_explicit_array_path() {
+        let mut data = json!({});
+        let ptr = Pointer::from_static("/foo/0/bar");
+        let val = json!("baz");
+
+        let assignment = ptr.assign(&mut data, val).unwrap();
+        assert_eq!(assignment.replaced, None);
+        assert_eq!(assignment.assigned_to, "/foo/0/bar");
+        assert_eq!(assignment.replaced, None);
+        assert_eq!(
+            json!({
+                "foo": [
+                    {
+                        "bar": "baz"
+                    }
+                ]
+            }),
+            data.clone()
+        );
+    }
+
+    #[test]
+    fn test_assign_array_with_next_token() {
+        let mut data = json!({});
+        let ptr = PointerBuf::try_from("/foo/-/bar").unwrap();
+        let val = json!("baz");
+        let assignment = ptr.assign(&mut data, val).unwrap();
+        assert_eq!(assignment.replaced, None);
+        assert_eq!(
+            assignment.assigned_to, "/foo/0/bar",
+            "`assigned_to` should equal \"/foo/0/bar\""
+        );
+        assert_eq!(assignment.replaced, None);
+        assert_eq!(
+            json!({
+                "foo": [
+                    {
+                        "bar": "baz"
+                    }
+                ]
+            }),
+            data.clone()
+        );
+        let val = json!("baz2");
+        let assignment = ptr.assign(&mut data, val).unwrap();
+        assert_eq!(assignment.replaced, None);
+        assert_eq!(
+            assignment.assigned_to, "/foo/1/bar",
+            "`assigned_to` should equal \"/foo/1/bar\""
+        );
+        assert_eq!(assignment.replaced, None);
+        assert_eq!(
+            json!({
+                "foo": [
+                    {
+                        "bar": "baz"
+                    },
+                    {
+                        "bar": "baz2"
+                    }
+                ]
+            }),
+            data.clone()
+        );
+        let ptr = PointerBuf::try_from("/foo/0/bar").unwrap();
+        let val = json!("qux");
+        let assignment = ptr.assign(&mut data, val).unwrap();
+        // assert_eq!(assignment.assigned_to, "/foo/0/bar");
+        assert_eq!(assignment.replaced, Some(Value::String("baz".to_string())));
+        assert_eq!(
+            json!({
+                "foo": [
+                    {
+                        "bar": "qux"
+                    },
+                    {
+                        "bar": "baz2"
+                    }
+                ]
+            }),
+            data.clone()
+        );
+    }
+
+    #[test]
+    fn test_assign_with_obj_path() {
+        let mut data = json!({});
+        let ptr = PointerBuf::try_from("/foo/bar").unwrap();
+        let val = json!("baz");
+
+        let assignment = ptr.assign(&mut data, val).unwrap();
+        assert_eq!(assignment.assigned_to, "/foo/bar");
+        assert_eq!(assignment.replaced, None);
+        assert_eq!(
+            json!({
+                "foo": {
+                    "bar": "baz"
+                }
+            }),
+            data.clone()
+        );
+    }
+
+    #[test]
+    fn test_assign_with_scalar_replace() {
+        let mut data = json!({
+            "foo": "bar"
+        });
+
+        let ptr = Pointer::from_static("/foo/bar/baz");
+        let val = json!("qux");
+
+        ptr.assign(&mut data, val).unwrap();
+        assert_eq!(
+            &json!({
+                "foo": {
+                    "bar": {
+                        "baz": "qux"
+                    }
+                }
+            }),
+            &data
+        );
+    }
+
+    #[test]
+    fn nested_maps_with_empty_keys() {
+        let data = json!({
+            "": {
+                "": {
+                    "bar": 42,
+                }
+            }
+        });
+
+        {
+            let ptr = Pointer::from_static("///bar");
+            assert_eq!(ptr.resolve(&data).unwrap(), 42);
+        }
+        {
+            let mut ptr = PointerBuf::new();
+            ptr.push_back("".into());
+            ptr.push_back("".into());
+            ptr.push_back("bar".into());
+            assert_eq!(ptr.resolve(&data).unwrap(), 42);
+        }
+    }
 }
