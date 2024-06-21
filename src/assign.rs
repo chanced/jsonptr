@@ -1,8 +1,6 @@
-use core::{mem::replace, ptr};
-
-use serde_json::{map::Entry, Map, Value};
-
 use crate::{AssignError, Pointer, PointerBuf, Token};
+use core::mem::replace;
+use serde_json::{map::Entry, Map, Value};
 
 /// Assign is implemented by types which can internally assign a
 /// `serde_json::Value` by a JSON Pointer.
@@ -79,9 +77,6 @@ pub(crate) fn assign_value<'v>(
     mut value: &'v mut Value,
     mut src: Value,
 ) -> Result<Assignment<'v>, AssignError> {
-    // debugging purposes
-    let value_string = value.to_string();
-    println!("value: {}", value_string);
     let mut offset = 0;
     let mut buf = PointerBuf::with_capacity(ptr.as_str().len());
 
@@ -244,14 +239,9 @@ fn expand_src_path(
     mut path: &Pointer,
     mut src: Value,
 ) -> Result<(PointerBuf, Value), AssignError> {
-    println!("src: {}", src.to_string());
-    println!("path: {path}");
-    println!("buf: {buf}");
     let mut assigned_buf = PointerBuf::with_capacity(path.to_string().len());
     while let Some((ptr, tok)) = path.split_back() {
         path = ptr;
-        println!("path: {path}");
-        println!("buf: {buf}");
         match tok.decoded().as_ref() {
             "0" | "-" => {
                 src = Value::Array(vec![src]);
@@ -391,10 +381,6 @@ mod tests {
         ];
 
         for (path, assigned_to, val, expected, replaced) in tests {
-            println!("path: {path}");
-            println!("expected assigned_to: {assigned_to}");
-            println!("val: {val}");
-            println!("expected: {}", expected.to_string());
             let ptr = PointerBuf::parse(path).expect(&format!("failed to parse \"{path}\""));
             let assignment = ptr
                 .assign(&mut data, val.clone())
@@ -405,7 +391,6 @@ mod tests {
             );
             assert_eq!(assignment.replaced, replaced, "replaced not equal");
             assert_eq!(&expected, &data);
-            println!("--------------");
         }
     }
 
