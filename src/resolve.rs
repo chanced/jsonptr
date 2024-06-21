@@ -81,7 +81,7 @@ impl ResolveMut for Value {
 }
 
 /// Indicates that the `Pointer` could not be resolved.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ResolveError {
     /// `Pointer` could not be resolved because a `Token` for an array index is
     /// not a valid integer or dash (`"-"`).
@@ -141,7 +141,8 @@ pub enum ResolveError {
     /// # use jsonptr::Pointer;
     /// let mut data = json!({ "foo": "bar" });
     /// let ptr = Pointer::from_static("/foo/unreachable");
-    /// assert!(ptr.resolve(&data).unwrap_err(), err.is_unreachable());
+    /// let err = ptr.resolve(&data).unwrap_err();
+    /// assert!(err.is_unreachable());
     /// ```
     Unreachable {
         /// Offset of the pointer which was unreachable.

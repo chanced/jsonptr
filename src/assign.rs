@@ -116,7 +116,7 @@ pub(crate) fn assign_value<'v>(
 }
 
 /// Indicates error occurred during an assignment
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum AssignError {
     /// A `Token` within the `Pointer` failed to be parsed as an array index.
     FailedToParseIndex {

@@ -29,7 +29,7 @@ pub use index::Index;
 mod arbitrary;
 
 /// Indicates that a `Pointer` was malformed and unable to be parsed.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ParseError {
     /// `Pointer` did not start with a backslash (`'/'`).
     NoLeadingBackslash,
@@ -91,7 +91,7 @@ impl std::error::Error for ParseError {
 }
 
 /// Indicates that the `Token` could not be parsed as valid RFC 6901 index.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct ParseIndexError {
     /// The source `ParseIntError`
     pub source: ParseIntError,
@@ -117,7 +117,7 @@ impl std::error::Error for ParseIndexError {
 /// A token within a json pointer contained invalid encoding (`~` not followed
 /// by `0` or `1`).
 ///
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct InvalidEncodingError {
     /// offset of the erroneous `~` from within the `Token`
     pub offset: usize,
@@ -141,7 +141,7 @@ impl fmt::Display for InvalidEncodingError {
 impl std::error::Error for InvalidEncodingError {}
 
 /// Indicates that the `Token` could not be parsed as valid RFC 6901 index.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct IndexError {
     source: ParseIntError,
 }
@@ -160,7 +160,7 @@ impl std::error::Error for IndexError {
 }
 
 /// Indicates that an `Index` is not within the given bounds.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct OutOfBoundsError {
     /// The provided array length.
     ///
@@ -188,7 +188,7 @@ impl fmt::Display for OutOfBoundsError {
 impl std::error::Error for OutOfBoundsError {}
 
 /// NotFoundError indicates that a Pointer's path was not found in the data.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct NotFoundError {
     /// The starting offset of the `Token` within the `Pointer` which could not
     /// be resolved.
@@ -205,7 +205,7 @@ impl std::error::Error for NotFoundError {}
 
 /// Returned from `Pointer::replace_token` when the provided index is out of
 /// bounds.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct ReplaceTokenError {
     /// The index of the token that was out of bounds.
     pub index: usize,

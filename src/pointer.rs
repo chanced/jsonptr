@@ -12,14 +12,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 fn validate(value: &str) -> Result<&str, ParseError> {
-    let mut chars = value.char_indices();
-    match chars.next().map(|(_, c)| c) {
+    match value.chars().next() {
         Some('/') => {}                                        // expected
         Some(_) => return Err(ParseError::NoLeadingBackslash), // invalid pointer - missing leading slash
         None => return Ok(value),                              // done
     }
     let mut tok_idx = 0;
-
+    let mut chars = value.char_indices();
     while let Some((offset, c)) = chars.next() {
         if c == '/' {
             tok_idx = 0;
