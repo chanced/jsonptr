@@ -241,21 +241,23 @@ fn expand_src_path(
     mut path: &Pointer,
     mut src: Value,
 ) -> Result<(PointerBuf, Value), AssignError> {
-    while let Some((tok, ptr)) = path.split_front() {
+    let mut assigned_buf = PointerBuf::with_capacity(path.to_string().len());
+    while let Some((ptr, tok)) = path.split_back() {
         path = ptr;
         match tok.decoded().as_ref() {
             "0" | "-" => {
                 src = Value::Array(vec![src]);
-                buf.push_back("0".into())
+                assigned_buf.push_front("0".into())
             }
             _ => {
                 let mut obj = Map::new();
                 obj.insert(tok.to_string(), src);
                 src = Value::Object(obj);
-                buf.push_back(tok)
+                assigned_buf.push_front(tok)
             }
         }
     }
+    buf.append(&assigned_buf);
     Ok((buf, src))
 }
 
@@ -311,30 +313,26 @@ mod tests {
         let mut data = json!({});
         let ptr = PointerBuf::try_from("/foo/-/bar").unwrap();
         let val = json!("baz");
-        let assignment = ptr.assign(&mut data, val).unwrap();
+        let assignment = ptr
+            .assign(&mut data, val)
+            .expect("failed to assign with dash");
+        assert_eq!(assignment.replaced, None);
+        assert_eq!(assignment.assigned_to, "/foo/0/bar",);
         assert_eq!(assignment.replaced, None);
         assert_eq!(
-            assignment.assigned_to, "/foo/0/bar",
-            "`assigned_to` should equal \"/foo/0/bar\""
-        );
-        assert_eq!(assignment.replaced, None);
-        assert_eq!(
-            json!({
+            &json!({
                 "foo": [
                     {
                         "bar": "baz"
                     }
                 ]
             }),
-            data.clone()
+            &data
         );
         let val = json!("baz2");
         let assignment = ptr.assign(&mut data, val).unwrap();
         assert_eq!(assignment.replaced, None);
-        assert_eq!(
-            assignment.assigned_to, "/foo/1/bar",
-            "`assigned_to` should equal \"/foo/1/bar\""
-        );
+        assert_eq!(assignment.assigned_to, "/foo/1/bar",);
         assert_eq!(assignment.replaced, None);
         assert_eq!(
             json!({
