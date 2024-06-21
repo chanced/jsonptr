@@ -58,6 +58,7 @@ impl fmt::Display for ParseError {
         }
     }
 }
+
 impl ParseError {
     /// Returns `true` if this error is `NoLeadingBackslash`; otherwise returns
     /// `false`.
