@@ -1,6 +1,9 @@
 use core::mem::replace;
 
-use serde_json::{map::Entry, Map, Value};
+use serde_json::{
+    map::{Entry, OccupiedEntry, VacantEntry},
+    Map, Value,
+};
 
 use crate::{AssignError, Pointer, Token};
 
@@ -92,35 +95,53 @@ pub(crate) fn assign_value<'p, 'd>(
 
     let mut offset = 0;
     let full_ptr = remaining;
-    let mut replaced;
-    let mut returned_src;
     while let Some((token, tail)) = remaining.split_front() {
         let tok_len = token.encoded().len();
         let (assigned_to, rest) = full_ptr
             .split_at(offset)
             .unwrap_or((Pointer::root(), Pointer::root()));
-
         println!("splitting pointer {full_ptr} at {offset} into \"{assigned_to}\" and \"{rest}\"");
-
-        Assigned {
-            dest,
-            remaining,
-            replaced,
-            src: returned_src,
-        } = match dest {
-            Value::Array(array) => assign_to_array(token, tail, array, src, offset)?,
-            Value::Object(obj) => assign_to_object(token, tail, obj, src)?,
-            _ => assign_to_scalar(remaining, dest, src)?,
+        let assigned = match dest {
+            Value::Array(array) => AssignArray {
+                token,
+                remaining,
+                current: assigned_to,
+                dest: array,
+                src,
+                offset,
+            }
+            .assign()?,
+            Value::Object(obj) => AssignObject {
+                token,
+                remaining,
+                current: assigned_to,
+                dest: obj,
+                src,
+                offset,
+            }
+            .assign()?,
+            _ => AssignToScalar {
+                remaining,
+                current: assigned_to,
+                dest,
+                src,
+                offset,
+            }
+            .assign()?,
         };
-        if remaining.is_root() {
-            return Ok(Assignment {
-                assigned: dest,
+        match assigned {
+            Assigned::Done {
                 assigned_to,
                 replaced,
-            });
+                assigned,
+            } => todo!(),
+            Assigned::Continue {
+                remaining,
+                dest,
+                src,
+            } => todo!(),
         }
         offset += 1 + tok_len;
-        src = returned_src.unwrap();
     }
     // Pointer is root, we can replace `dest` directly
     let replaced = Some(core::mem::replace(dest, src.into()));
@@ -130,7 +151,7 @@ pub(crate) fn assign_value<'p, 'd>(
         assigned_to: remaining,
     })
 }
-fn create_value_path(mut path: &Pointer, mut src: Value) -> Result<Value, AssignError> {
+fn expand_src_path(mut path: &Pointer, mut src: Value) -> Result<Value, AssignError> {
     while let Some((ptr, tok)) = path.split_back() {
         path = ptr;
         match tok.decoded().as_ref() {
@@ -147,104 +168,155 @@ fn create_value_path(mut path: &Pointer, mut src: Value) -> Result<Value, Assign
     Ok(src)
 }
 
-struct Assigned<'p, 'd> {
-    remaining: &'p Pointer,
-    dest: &'d mut Value,
-    replaced: Option<Value>,
-    src: Option<Value>,
+enum Assigned<'p, 'd> {
+    // TODO: Change this to return Assignment
+    Done {
+        assigned_to: &'p Pointer,
+        replaced: Option<Value>,
+        assigned: &'d mut Value,
+    },
+    Continue {
+        remaining: &'p Pointer,
+        dest: &'d mut Value,
+        src: Value,
+    },
 }
 
-fn assign_to_array<'p, 'd>(
-    token: Token<'_>,
+struct AssignArray<'p, 'd> {
+    token: Token<'p>,
     remaining: &'p Pointer,
+    current: &'p Pointer,
     dest: &'d mut Vec<Value>,
     src: Value,
     offset: usize,
-) -> Result<Assigned<'p, 'd>, AssignError> {
-    let idx = token
-        .to_index()
-        .map_err(|source| AssignError::FailedToParseIndex { offset, source })?
-        .for_len_incl(dest.len())
-        .map_err(|source| AssignError::OutOfBounds { offset, source })?;
-    debug_assert!(idx <= dest.len());
-    if idx < dest.len() {
-        let returned_src;
-        let replaced;
-        if remaining.is_root() {
-            replaced = Some(replace(&mut dest[idx], src));
-            returned_src = Some(dest[idx].clone());
-        } else {
-            replaced = None;
-            returned_src = Some(src);
-        }
-        Ok(Assigned {
+}
+impl<'p, 'd> AssignArray<'p, 'd> {
+    fn assign(self) -> Result<Assigned<'p, 'd>, AssignError> {
+        let AssignArray {
+            token,
             remaining,
-            dest: &mut dest[idx],
-            replaced,
-            src: returned_src,
-        })
-    } else {
-        let src = create_value_path(remaining, src)?;
-        dest.push(src);
-        Ok(Assigned {
-            remaining: Pointer::root(),
-            dest: &mut dest[idx],
-            replaced: None,
-            src: None,
-        })
+            dest,
+            src,
+            offset,
+            current,
+        } = self;
+        let idx = token
+            .to_index()
+            .map_err(|source| AssignError::FailedToParseIndex { offset, source })?
+            .for_len_incl(dest.len())
+            .map_err(|source| AssignError::OutOfBounds { offset, source })?;
+        debug_assert!(idx <= dest.len());
+
+        if idx < dest.len() {
+            // element exists in the array, we either need to replace it or continue
+            // depending on whether this is the last elem or not
+            if remaining.is_root() {
+                let replaced = Some(replace(&mut dest[idx], src));
+                let assigned = &mut dest[idx];
+                Ok(Assigned::Done {
+                    assigned_to: current,
+                    replaced,
+                    assigned,
+                })
+            } else {
+                Ok(Assigned::Continue {
+                    remaining,
+                    dest: &mut dest[idx],
+                    src,
+                })
+            }
+        } else {
+            // element does not exist in the array.
+            // we create the path and assign the value
+            dest.push(src);
+            // SAFETY: just pushed.
+            let assigned_to = dest.last_mut().unwrap();
+            Ok(Assigned::Done {
+                assigned_to: current,
+                replaced: None,
+                assigned: assigned_to,
+            })
+        }
+
+        // if idx < dest.len() {
+        //     let replaced;
+        //     if remaining.is_root() {
+        //         replaced = Some(replace(&mut dest[idx], src));
+        //         returned_src = Some(dest[idx].clone());
+        //     } else {
+        //         replaced = None;
+        //         returned_src = Some(src);
+        //     }
+        // } else {
+        //     let src = create_value_path(remaining, src)?;
+        //     dest.push(src);
+        //     Ok(Assigned {
+        //         remaining: Pointer::root(),
+        //         dest: &mut dest[idx],
+        //         replaced: None,
+        //         src: None,
+        //     })
+        // }
     }
 }
-
-fn assign_to_object<'p, 'd>(
-    token: Token<'_>,
+struct AssignObject<'p, 'd> {
+    token: Token<'p>,
     remaining: &'p Pointer,
+    current: &'p Pointer,
     dest: &'d mut Map<String, Value>,
     src: Value,
-) -> Result<Assigned<'p, 'd>, AssignError> {
-    let mut returned_src = None;
-
-    match dest.entry(token.to_string()) {
-        Entry::Occupied(entry) => {
-            let entry = entry.into_mut();
-            let replaced = if remaining.is_root() {
-                Some(replace(entry, src))
-            } else {
-                returned_src = Some(src);
-                None
-            };
-            Ok(Assigned {
-                remaining,
-                dest: entry,
-                replaced,
-                src: returned_src,
-            })
-        }
-        Entry::Vacant(entry) => {
-            let src = create_value_path(remaining, src)?;
-            Ok(Assigned {
-                remaining: Pointer::root(),
-                dest: entry.insert(src),
-                replaced: None,
-                src: None,
-            })
+    offset: usize,
+}
+impl<'p, 'd> AssignObject<'p, 'd> {
+    fn assign(self) -> Result<Assigned<'p, 'd>, AssignError> {
+        let entry = self.dest.entry(self.token.to_string());
+        match entry {
+            Entry::Occupied(entry) => {
+                let entry = entry.into_mut();
+                // if this is the last element, we return the full pointer up to this point
+                if self.remaining.is_root() {
+                    let replaced = Some(replace(entry, self.src));
+                    Ok(Assigned::Done {
+                        assigned_to: self.current,
+                        replaced,
+                        assigned: entry,
+                    })
+                } else {
+                    Ok(Assigned::Continue {
+                        remaining: self.remaining,
+                        dest: entry,
+                        src: self.src,
+                    })
+                }
+            }
+            Entry::Vacant(entry) => {
+                let src = expand_src_path(self.remaining, self.src)?;
+                let assigned = entry.insert(src);
+                Ok(Assigned::Done {
+                    assigned_to: self.current,
+                    assigned,
+                    replaced: None,
+                })
+            }
         }
     }
 }
 
-fn assign_to_scalar<'p, 'd>(
+struct AssignToScalar<'p, 'd> {
     remaining: &'p Pointer,
+    current: &'p Pointer,
     dest: &'d mut Value,
     src: Value,
-) -> Result<Assigned<'p, 'd>, AssignError> {
-    println!("assign_to_scalar \"{remaining}\" -> {src}");
-    let src = create_value_path(remaining, src)?;
-    println!("created {src}");
-    let replaced = Some(replace(dest, src));
-
-    Ok(Assigned {
-        remaining: &Pointer::root(),
-        dest,
-        replaced,
-        src: None,
-    })
+    offset: usize,
+}
+impl<'p, 'd> AssignToScalar<'p, 'd> {
+    fn assign(self) -> Result<Assigned<'p, 'd>, AssignError> {
+        let src = expand_src_path(self.remaining, self.src)?;
+        let replaced = Some(replace(self.dest, src));
+        Ok(Assigned::Done {
+            assigned_to: self.current,
+            replaced,
+            assigned: self.dest,
+        })
+    }
 }
