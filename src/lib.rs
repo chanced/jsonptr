@@ -141,6 +141,7 @@ pub struct ParseIndexError {
     /// The source `ParseIntError`
     pub source: ParseIntError,
 }
+
 impl From<ParseIntError> for ParseIndexError {
     fn from(source: ParseIntError) -> Self {
         Self { source }
