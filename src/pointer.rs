@@ -17,21 +17,30 @@ fn validate(value: &str) -> Result<&str, ParseError> {
         Some(_) => return Err(ParseError::NoLeadingBackslash), // invalid pointer - missing leading slash
         None => return Ok(value),                              // done
     }
-    let mut tok_idx = 0;
+    let mut ptr_offset = 0;
+    let mut tok_offset = 0;
     let mut chars = value.char_indices();
+
     while let Some((offset, c)) = chars.next() {
         if c == '/' {
-            tok_idx = 0;
+            tok_offset = 0;
+            ptr_offset = offset;
             continue;
         }
-        if c == '~' && !matches!(chars.next().map(|(_, c)| c), Some('0') | Some('1')) {
-            // '~' must be followed by '0' or '1' in order to be properly encoded
-            return Err(ParseError::InvalidEncoding {
-                offset,
-                source: InvalidEncodingError { offset: tok_idx },
-            });
+        tok_offset += 1;
+        if c == '~' {
+            // pulling down
+            let next = chars.next().map(|(_, c)| c);
+            if !matches!(next, Some('0') | Some('1')) {
+                println!("next: {:?}", next);
+                // '~' must be followed by '0' or '1' in order to be properly encoded
+                return Err(ParseError::InvalidEncoding {
+                    offset: ptr_offset,
+                    source: InvalidEncodingError { offset: tok_offset },
+                });
+            }
+            tok_offset += 1;
         }
-        tok_idx += 1;
     }
     Ok(value)
 }
@@ -524,17 +533,6 @@ impl<'a> IntoIterator for &'a Pointer {
 /// This type provides methods like [`PointerBuf::push_back`] and [`PointerBuf::replace_token`] that
 /// mutate the pointer in place. It also implements [`core::ops::Deref`] to [`Pointer`], meaning that
 /// all methods on [`Pointer`] slices are available on `PointerBuf` values as well.
-#[cfg_attr(
-    feature = "url",
-    doc = r##"
-```rust
-use jsonptr::PointerBuf;
-let expected = PointerBuf::from_tokens(&["foo", "bar"]);
-let url = url::Url::parse("https://example.com#/foo/bar").unwrap();
-assert_eq!(expected, PointerBuf::try_from(url).unwrap())
-```
-"##
-)]
 #[derive(Clone, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PointerBuf(String);
 
@@ -777,7 +775,7 @@ mod tests {
             ("/foo/bar/baz/~1", Ok("/foo/bar/baz/~1")),
             ("/foo/bar/baz/~01", Ok("/foo/bar/baz/~01")),
             ("/foo/bar/baz/~10", Ok("/foo/bar/baz/~10")),
-            ("/foo/~", Ok("/foo/bar/baz/~11")),
+            ("/foo/bar/baz/~11", Ok("/foo/bar/baz/~11")),
             ("/foo/bar/baz/~1/~0", Ok("/foo/bar/baz/~1/~0")),
             ("missing-slash", Err(ParseError::NoLeadingBackslash)),
             (

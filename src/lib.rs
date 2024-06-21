@@ -102,9 +102,9 @@ impl ParseError {
     /// assert_eq!(err.source_offset(), 8)
     /// ```
     pub fn source_offset(&self) -> usize {
-        match *self {
+        match self {
             Self::NoLeadingBackslash { .. } => 0,
-            Self::InvalidEncoding { offset, .. } => offset,
+            Self::InvalidEncoding { source, .. } => source.offset,
         }
     }
 
