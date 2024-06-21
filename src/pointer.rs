@@ -417,11 +417,7 @@ impl Pointer {
     /// let assignment = data.assign(&ptr, src).unwrap();
     /// assert_eq!(data, json!([{ "foo": "bar" } ]));
     /// ```
-    pub fn assign<'p, 'd, V>(
-        &'p self,
-        dest: &'d mut Value,
-        src: V,
-    ) -> Result<Assignment<'p, 'd>, AssignError>
+    pub fn assign<'d, V>(&self, dest: &'d mut Value, src: V) -> Result<Assignment<'d>, AssignError>
     where
         V: Into<Value>,
     {
@@ -563,6 +559,10 @@ impl PointerBuf {
         Self(String::new())
     }
 
+    /// Creates a new `PointerBuf` with the given capacity.
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self(String::with_capacity(capacity))
+    }
     /// Creates a new `PointerBuf` from a slice of non-encoded strings.
     pub fn from_tokens<'a, T>(tokens: impl IntoIterator<Item = T>) -> Self
     where
