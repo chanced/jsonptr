@@ -256,7 +256,8 @@ fn assign_object<'v>(
         }
         Entry::Vacant(entry) => {
             // if the entry does not exist, we create a value based on the
-            // remaining path with the src value as a leaf
+            // remaining path with the src value as a leaf and assign it to the
+            // entry
             let src = expand_src_path(remaining, src)?;
             let assigned = entry.insert(src);
             Ok(Assigned::Done(Assignment {
