@@ -3,7 +3,7 @@ use core::{fmt, mem::replace};
 use serde_json::{map::Entry, Map, Value};
 
 /// Assign is implemented by types which can internally assign a
-/// `serde_json::Value` by a JSON Pointer.
+/// [`serde_json::Value`] by a JSON Pointer.
 pub trait Assign {
     /// Error associated with `Assign`
     type Error;
@@ -118,12 +118,19 @@ pub(crate) fn assign_value<'v>(
 /// Indicates error occurred during an assignment
 #[derive(Debug)]
 pub enum AssignError {
+    /// A `Token` within the `Pointer` failed to be parsed as an array index.
     FailedToParseIndex {
+        /// Offset of the partial pointer starting with the invalid index.
         offset: usize,
+        /// The source [`ParseIndexError`]
         source: ParseIndexError,
     },
+    /// An `Index` `Token` within the `Pointer` was out of bounds of the
+    /// target array.
     OutOfBounds {
+        /// Offset of the partial pointer starting with the invalid index.
         offset: usize,
+        /// The source [`OutOfBoundsError`]
         source: OutOfBoundsError,
     },
 }

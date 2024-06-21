@@ -44,6 +44,7 @@ impl Resolve for Value {
 /// ResolveMut is implemented by types which can resolve a mutable reference to
 /// a `serde_json::Value` from the path in a JSON Pointer.
 pub trait ResolveMut {
+    /// Error associated with `ResolveMut`
     type Error;
     /// Resolve a mutable reference to a `serde_json::Value` based on the path
     /// in a JSON Pointer.
@@ -79,6 +80,7 @@ impl ResolveMut for Value {
     }
 }
 
+/// Indicates that the `Pointer` could not be resolved.
 #[derive(Debug)]
 pub enum ResolveError {
     /// `Pointer` could not be resolved because a `Token` for an array index is
@@ -93,7 +95,9 @@ pub enum ResolveError {
     /// assert!(ptr.resolve(&data).unwrap_err().is_failed_to_parse_index());
     /// ```
     FailedToParseIndex {
+        /// Offset of the partial pointer starting with the invalid index.
         offset: usize,
+        /// The source `ParseIndexError`
         source: ParseIndexError,
     },
     /// `Pointer` could not be resolved due to an index being out of bounds
@@ -107,8 +111,9 @@ pub enum ResolveError {
     /// let ptr = Pointer::from_static("/foo/1");
     /// assert!(ptr.resolve(&data).unwrap_err().is_out_of_bounds());
     OutOfBounds {
-        /// Offset of the pointer starting with the out of bounds index.
+        /// Offset of the partial pointer starting with the invalid index.
         offset: usize,
+        /// The source `OutOfBoundsError`
         source: OutOfBoundsError,
     },
 
@@ -144,6 +149,8 @@ pub enum ResolveError {
     },
 }
 impl ResolveError {
+    /// Offset of the partial pointer starting with the token which caused the
+    /// error.
     pub fn offset(&self) -> usize {
         match self {
             Self::FailedToParseIndex { offset, .. }
@@ -152,15 +159,23 @@ impl ResolveError {
             | Self::Unreachable { offset, .. } => *offset,
         }
     }
+    /// Returns `true` if this error is `FailedToParseIndex`; otherwise returns
+    /// `false`.
     pub fn is_unreachable(&self) -> bool {
         matches!(self, Self::Unreachable { .. })
     }
+    /// Returns `true` if this error is `FailedToParseIndex`; otherwise returns
+    /// `false`.
     pub fn is_not_found(&self) -> bool {
         matches!(self, Self::NotFound { .. })
     }
+    /// Returns `true` if this error is `FailedToParseIndex`; otherwise returns
+    /// `false`.
     pub fn is_out_of_bounds(&self) -> bool {
         matches!(self, Self::OutOfBounds { .. })
     }
+    /// Returns `true` if this error is `FailedToParseIndex`; otherwise returns
+    /// `false`.
     pub fn is_failed_to_parse_index(&self) -> bool {
         matches!(self, Self::FailedToParseIndex { .. })
     }

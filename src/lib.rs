@@ -37,7 +37,10 @@ pub enum ParseError {
     /// `Pointer` contained invalid encoding (e.g. `~` not followed by `0` or
     /// `1`).
     InvalidEncoding {
+        /// Offset of the partial pointer starting with the token that contained
+        /// the invalid encoding
         offset: usize,
+        /// The source `InvalidEncodingError`
         source: InvalidEncodingError,
     },
 }
@@ -56,12 +59,19 @@ impl fmt::Display for ParseError {
     }
 }
 impl ParseError {
+    /// Returns `true` if this error is `NoLeadingBackslash`; otherwise returns
+    /// `false`.
     pub fn is_no_leading_backslash(&self) -> bool {
         matches!(self, Self::NoLeadingBackslash { .. })
     }
+    /// Returns `true` if this error is `InvalidEncoding`; otherwise returns
+    /// `false`.
     pub fn is_invalid_encoding(&self) -> bool {
         matches!(self, Self::InvalidEncoding { .. })
     }
+
+    /// Offset of the partial pointer starting with the token which caused the
+    /// error.
     pub fn offset(&self) -> usize {
         match *self {
             Self::NoLeadingBackslash { .. } => 0,
@@ -83,6 +93,7 @@ impl std::error::Error for ParseError {
 /// Indicates that the `Token` could not be parsed as valid RFC 6901 index.
 #[derive(Debug)]
 pub struct ParseIndexError {
+    /// The source `ParseIntError`
     pub source: ParseIntError,
 }
 impl From<ParseIntError> for ParseIndexError {

@@ -20,6 +20,7 @@ impl Delete for Value {
     }
 }
 
+/// Indicates that a `Value` could not be deleted at the specified `Pointer`.
 #[derive(Debug)]
 pub enum DeleteError {
     /// `Value` at `Pointer` could not be because a `Token` for an array index
@@ -34,7 +35,10 @@ pub enum DeleteError {
     /// assert!(ptr.resolve(&data).unwrap_err().is_failed_to_parse_index());
     /// ```
     FailedToParseIndex {
+        /// offset of the partial pointer starting with the token that failed to
+        /// parse as an index
         offset: usize,
+        /// the source `ParseIndexError`
         source: ParseIndexError,
     },
 }
