@@ -325,10 +325,6 @@ impl Pointer {
         value.resolve_mut(self)
     }
 
-    fn partial_path(&self, suffix: &Self) -> &Self {
-        self.strip_suffix(suffix).expect("suffix came from self")
-    }
-
     /// Finds the commonality between this and another `Pointer`.
     pub fn intersection<'a>(&'a self, other: &Self) -> &'a Self {
         let mut last_slash = 0;
