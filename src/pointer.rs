@@ -789,8 +789,14 @@ mod tests {
             ),
         ];
         for (input, expected) in tests {
-            let res = Pointer::parse(input).map(Pointer::as_str);
-            assert_eq!(res, expected);
+            let actual = Pointer::parse(input).map(Pointer::as_str);
+            assert_eq!(
+                actual, expected,
+                "pointer parsing failed to meet expectations
+                \ninput: {input}
+                \nexpected:\n{expected:#?}
+                \nactual:\n{actual:#?}",
+            );
         }
     }
 
