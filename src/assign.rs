@@ -203,13 +203,13 @@ fn assign_array<'v>(
     } else {
         // element does not exist in the array.
         // we create the path and assign the value
-        let (assigned_to, src) = expand_src_path(buf, remaining, src)?;
+        let src = expand_src_path(remaining, src)?;
         array.push(src);
         // SAFETY: just pushed.
         let assigned = array.last_mut().unwrap();
         Ok(Assigned::Done(Assignment {
             assigned,
-            assigned_to,
+            assigned_to: buf,
             replaced: None,
         }))
     }
@@ -245,11 +245,11 @@ fn assign_object<'v>(
             }
         }
         Entry::Vacant(entry) => {
-            let (assigned_to, src) = expand_src_path(buf, remaining, src)?;
+            let src = expand_src_path(remaining, src)?;
             let assigned = entry.insert(src);
             Ok(Assigned::Done(Assignment {
                 assigned,
-                assigned_to,
+                assigned_to: buf,
                 replaced: None,
             }))
         }
@@ -264,39 +264,31 @@ fn assign_scalar<'v>(
     src: Value,
 ) -> Result<Assigned<'v>, AssignError> {
     buf.push_back(token);
-    let (assigned_to, src) = expand_src_path(buf, remaining, src)?;
+    let src = expand_src_path(remaining, src)?;
     let replaced = Some(mem::replace(value, src));
 
     Ok(Assigned::Done(Assignment {
         assigned: value,
-        assigned_to,
+        assigned_to: buf,
         replaced,
     }))
 }
 
-fn expand_src_path(
-    mut buf: PointerBuf,
-    mut path: &Pointer,
-    mut src: Value,
-) -> Result<(PointerBuf, Value), AssignError> {
-    let mut assigned_buf = PointerBuf::with_capacity(path.to_string().len());
+fn expand_src_path(mut path: &Pointer, mut src: Value) -> Result<Value, AssignError> {
     while let Some((ptr, tok)) = path.split_back() {
         path = ptr;
         match tok.decoded().as_ref() {
             "0" | "-" => {
                 src = Value::Array(vec![src]);
-                assigned_buf.push_front("0".into())
             }
             _ => {
                 let mut obj = Map::new();
                 obj.insert(tok.to_string(), src);
                 src = Value::Object(obj);
-                assigned_buf.push_front(tok)
             }
         }
     }
-    buf.append(&assigned_buf);
-    Ok((buf, src))
+    Ok(src)
 }
 
 #[cfg(test)]
@@ -332,7 +324,7 @@ mod tests {
 
         let assignment = ptr.assign(&mut data, val).unwrap();
         assert_eq!(assignment.replaced, None);
-        assert_eq!(assignment.assigned_to, "/foo/0/bar");
+        assert_eq!(assignment.assigned_to, "/foo");
         assert_eq!(assignment.replaced, None);
         assert_eq!(
             json!({
@@ -353,7 +345,7 @@ mod tests {
         let tests = [
             (
                 "/foo/-/bar",
-                "/foo/0/bar",
+                "/foo",
                 json!("baz"),
                 json!({
                     "foo": [
@@ -366,7 +358,7 @@ mod tests {
             ),
             (
                 "/foo/-/bar",
-                "/foo/1/bar",
+                "/foo/1",
                 json!("qux"),
                 json!({
                     "foo": [
@@ -382,7 +374,7 @@ mod tests {
             ),
             (
                 "/foo/-/bar",
-                "/foo/2/bar",
+                "/foo/2",
                 json!("quux"),
                 json!({
                     "foo": [
@@ -421,6 +413,7 @@ mod tests {
         ];
 
         for (path, assigned_to, val, expected, replaced) in tests {
+            println!("{}", serde_json::to_string_pretty(&data).unwrap());
             let ptr = PointerBuf::parse(path).expect(&format!("failed to parse \"{path}\""));
             let assignment = ptr
                 .assign(&mut data, val.clone())
@@ -441,15 +434,15 @@ mod tests {
         let val = json!("baz");
 
         let assignment = ptr.assign(&mut data, val).unwrap();
-        assert_eq!(assignment.assigned_to, "/foo/bar");
+        assert_eq!(assignment.assigned_to, "/foo");
         assert_eq!(assignment.replaced, None);
         assert_eq!(
-            json!({
+            &json!({
                 "foo": {
                     "bar": "baz"
                 }
             }),
-            data.clone()
+            &data
         );
     }
 
