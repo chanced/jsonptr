@@ -9,7 +9,7 @@ use core::{fmt, num::ParseIntError};
 mod assign;
 pub use assign::{Assign, AssignError, Assignment};
 mod delete;
-pub use delete::{Delete, DeleteError};
+pub use delete::Delete;
 mod resolve;
 pub use resolve::{Resolve, ResolveError, ResolveMut};
 

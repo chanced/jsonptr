@@ -1,13 +1,13 @@
 use crate::{
-    Assign, Assignment, InvalidEncodingError, ParseError, ReplaceTokenError, Resolve, ResolveMut,
-    Token, Tokens,
+    Assign, Assignment, Delete, InvalidEncodingError, ParseError, ReplaceTokenError, Resolve,
+    ResolveMut, Token, Tokens,
 };
 use alloc::{
     borrow::ToOwned,
     string::{String, ToString},
     vec::Vec,
 };
-use core::{borrow::Borrow, cmp::Ordering, mem, ops::Deref, slice, str::FromStr};
+use core::{borrow::Borrow, cmp::Ordering, ops::Deref, slice, str::FromStr};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -380,23 +380,8 @@ impl Pointer {
     /// assert_eq!(data.delete(&ptr), Some(json!({ "foo": { "bar": "baz" } })));
     /// assert!(data.is_null());
     /// ```
-    pub fn delete(&self, value: &mut Value) -> Option<Value> {
-        let Some((parent_ptr, last)) = self.split_back() else {
-            // deleting at root
-            return Some(mem::replace(value, Value::Null));
-        };
-
-        parent_ptr
-            .resolve_mut(value)
-            .ok()
-            .and_then(|parent| match parent {
-                Value::Array(children) => {
-                    let idx = last.to_index().ok()?.for_len_incl(children.len()).ok()?;
-                    children.remove(idx).into()
-                }
-                Value::Object(children) => children.remove(last.decoded().as_ref()),
-                _ => None,
-            })
+    pub fn delete<D: Delete>(&self, value: &mut D) -> Option<Value> {
+        value.delete(self)
     }
 
     /// Attempts to assign `src` to `dest` based on the path in this `Pointer`.

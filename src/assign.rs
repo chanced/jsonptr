@@ -1,5 +1,5 @@
 use crate::{OutOfBoundsError, ParseIndexError, Pointer, PointerBuf, Token};
-use core::{fmt, mem::replace};
+use core::{fmt, mem};
 use serde_json::{map::Entry, Map, Value};
 
 /// Assign is implemented by types which can internally assign a
@@ -186,7 +186,7 @@ fn assign_array<'v>(
         // element exists in the array, we either need to replace it or continue
         // depending on whether this is the last elem or not
         if remaining.is_root() {
-            let replaced = Some(replace(&mut array[idx], src));
+            let replaced = Some(mem::replace(&mut array[idx], src));
             let assigned = &mut array[idx];
             Ok(Assigned::Done(Assignment {
                 assigned,
@@ -230,7 +230,7 @@ fn assign_object<'v>(
             let entry = entry.into_mut();
             // if this is the last element, we return the full pointer up to this point
             if remaining.is_root() {
-                let replaced = Some(replace(entry, src));
+                let replaced = Some(mem::replace(entry, src));
                 Ok(Assigned::Done(Assignment {
                     assigned: entry,
                     assigned_to: buf,
@@ -265,7 +265,7 @@ fn assign_scalar<'v>(
 ) -> Result<Assigned<'v>, AssignError> {
     buf.push_back(token);
     let (assigned_to, src) = expand_src_path(buf, remaining, src)?;
-    let replaced = Some(replace(value, src));
+    let replaced = Some(mem::replace(value, src));
 
     Ok(Assigned::Done(Assignment {
         assigned: value,

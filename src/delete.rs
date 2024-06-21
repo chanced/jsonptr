@@ -1,4 +1,4 @@
-use core::fmt;
+use core::{fmt, mem};
 
 use serde_json::Value;
 
@@ -7,58 +7,27 @@ use crate::{ParseIndexError, Pointer};
 /// Delete is implemented by types which can internally remove a value based on
 /// a JSON Pointer
 pub trait Delete {
-    /// Error associated with `Delete`
-    type Error;
     /// Attempts to internally delete a value based upon a [Pointer].
     fn delete(&mut self, ptr: &Pointer) -> Option<Value>;
 }
 
 impl Delete for Value {
-    type Error = DeleteError;
     fn delete(&mut self, ptr: &Pointer) -> Option<Value> {
-        ptr.delete(self)
-    }
-}
-
-/// Indicates that a `Value` could not be deleted at the specified `Pointer`.
-#[derive(Debug)]
-pub enum DeleteError {
-    /// `Value` at `Pointer` could not be because a `Token` for an array index
-    /// is not a valid integer or dash (`"-"`).
-    ///
-    /// ## Example
-    /// ```rust
-    /// # use serde_json::json;
-    /// # use jsonptr::Pointer;
-    /// let data = json!({ "foo": ["bar"] });
-    /// let ptr = Pointer::from_static("/foo/invalid");
-    /// assert!(ptr.resolve(&data).unwrap_err().is_failed_to_parse_index());
-    /// ```
-    FailedToParseIndex {
-        /// offset of the partial pointer starting with the token that failed to
-        /// parse as an index
-        offset: usize,
-        /// the source `ParseIndexError`
-        source: ParseIndexError,
-    },
-}
-
-impl fmt::Display for DeleteError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::FailedToParseIndex { offset, .. } => {
-                write!(f, "failed to parse index at offset {}", offset)
-            }
-        }
-    }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for DeleteError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::FailedToParseIndex { source, .. } => Some(source),
-        }
+        let Some((parent_ptr, last)) = ptr.split_back() else {
+            // deleting at root
+            return Some(mem::replace(self, Value::Null));
+        };
+        parent_ptr
+            .resolve_mut(self)
+            .ok()
+            .and_then(|parent| match parent {
+                Value::Array(children) => {
+                    let idx = last.to_index().ok()?.for_len_incl(children.len()).ok()?;
+                    children.remove(idx).into()
+                }
+                Value::Object(children) => children.remove(last.decoded().as_ref()),
+                _ => None,
+            })
     }
 }
 
@@ -66,6 +35,67 @@ impl std::error::Error for DeleteError {
 mod tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn test_delete_value() {
+        let tests = [
+            (json!({"foo": "bar"}), "/foo", json!({}), Some(json!("bar"))),
+            (
+                json!({"foo": "bar"}), // data
+                "/foo/bar",            // ptr
+                json!({"foo": "bar"}), // expected_data
+                None,                  // expected_deleted
+            ),
+            (
+                json!({"foo": {"bar": "baz"}}), // data
+                "/foo/bar",                     // ptr
+                json!({"foo": {}}),             // expected_data
+                Some(json!("baz")),             // expected_deleted
+            ),
+            (
+                json!({"foo": {"bar": ["baz", "qux"]}}), // data
+                "/foo/bar/0",                            // ptr
+                json!({"foo": {"bar": ["qux"]}}),        // expected_data
+                Some(json!("baz")),                      // expected_deleted
+            ),
+            (json!({"foo": "bar"}), "/foo/0", json!({"foo": "bar"}), None),
+            (
+                json!({"foo": { "bar": [{"baz": "qux", "remaining": "field"}]}}),
+                "/foo/bar/0/baz",
+                json!({"foo": { "bar": [{"remaining": "field"}]}}),
+                Some(json!("qux")),
+            ),
+        ];
+        for (mut data, ptr, expected_data, expected_deleted) in tests {
+            let ptr = Pointer::from_static(ptr);
+            let deleted = ptr.delete(&mut data);
+            assert_eq!(
+                expected_data,
+                data,
+                "\ndata not as expected
+                \nptr: \"{ptr}\"
+                \ndata:\n{}
+                \nexpected:\n{}
+                \nactual:\n{}\n\n",
+                to_string_pretty(&data),
+                to_string_pretty(&expected_data),
+                to_string_pretty(&data)
+            );
+            assert_eq!(
+                expected_deleted,
+                deleted,
+                "\ndeleted value not as expected
+                \nexpected:{}\n\nactual:{}\n\n",
+                expected_deleted
+                    .as_ref()
+                    .map(to_string_pretty)
+                    .unwrap_or_else(|| "None".to_string()),
+                deleted
+                    .as_ref()
+                    .map(to_string_pretty)
+                    .unwrap_or_else(|| "None".to_string())
+            );
+        }
+    }
 
     #[test]
     fn test_issue_18() {
@@ -76,5 +106,9 @@ mod tests {
         let pointer = Pointer::from_static("/Example");
         pointer.delete(&mut data);
         assert_eq!(json!({"test": "test"}), data);
+    }
+
+    fn to_string_pretty(value: &Value) -> String {
+        serde_json::to_string_pretty(value).unwrap()
     }
 }
