@@ -75,7 +75,7 @@ pub struct Assignment<'v> {
 }
 
 pub(crate) fn assign_value<'v>(
-    mut remaining: &Pointer,
+    remaining: &Pointer,
     mut value: &'v mut Value,
     mut src: Value,
 ) -> Result<Assignment<'v>, AssignError> {
@@ -88,8 +88,8 @@ pub(crate) fn assign_value<'v>(
 
         let assigned = match value {
             Value::Array(array) => assign_array(token, tail, buf, array, src, offset)?,
-            Value::Object(obj) => assign_object(token, tail, buf, obj, src, offset)?,
-            _ => assign_scalar(remaining, buf, value, src)?,
+            Value::Object(obj) => assign_object(token, tail, buf, obj, src)?,
+            _ => assign_scalar(token, remaining, buf, value, src)?,
         };
         match assigned {
             Assigned::Done(assignment) => {
@@ -130,119 +130,102 @@ enum Assigned<'v> {
 fn assign_array<'v>(
     token: Token<'_>,
     remaining: &Pointer,
-    buf: PointerBuf,
-    dest: &'v mut Vec<Value>,
+    mut buf: PointerBuf,
+    array: &'v mut Vec<Value>,
     src: Value,
     offset: usize,
 ) -> Result<Assigned<'v>, AssignError> {
     let idx = token
         .to_index()
         .map_err(|source| AssignError::FailedToParseIndex { offset, source })?
-        .for_len_incl(dest.len())
+        .for_len_incl(array.len())
         .map_err(|source| AssignError::OutOfBounds { offset, source })?;
-    debug_assert!(idx <= dest.len());
+    buf.push_back(idx.into());
 
-    // if idx < dest.len() {
-    //     // element exists in the array, we either need to replace it or continue
-    //     // depending on whether this is the last elem or not
-    //     if remaining.is_root() {
-    //         let replaced = Some(replace(&mut dest[idx], src));
-    //         let assigned = &mut dest[idx];
-    //         Ok(Assigned::Done {
-    //             assigned_to: current,
-    //             replaced,
-    //             assigned,
-    //         })
-    //     } else {
-    //         Ok(Assigned::Continue {
-    //             remaining,
-    //             dest: &mut dest[idx],
-    //             same_src: src,
-    //         })
-    //     }
-    // } else {
-    //     // element does not exist in the array.
-    //     // we create the path and assign the value
-    //     dest.push(src);
-    //     // SAFETY: just pushed.
-    //     let assigned_to = dest.last_mut().unwrap();
-    //     Ok(Assigned::Done {
-    //         assigned_to: current,
-    //         replaced: None,
-    //         assigned: assigned_to,
-    //     })
-    // }
+    debug_assert!(idx <= array.len());
 
-    todo!()
-
-    // if idx < dest.len() {
-    //     let replaced;
-    //     if remaining.is_root() {
-    //         replaced = Some(replace(&mut dest[idx], src));
-    //         returned_src = Some(dest[idx].clone());
-    //     } else {
-    //         replaced = None;
-    //         returned_src = Some(src);
-    //     }
-    // } else {
-    //     let src = create_value_path(remaining, src)?;
-    //     dest.push(src);
-    //     Ok(Assigned {
-    //         remaining: Pointer::root(),
-    //         dest: &mut dest[idx],
-    //         replaced: None,
-    //         src: None,
-    //     })
-    // }
+    if idx < array.len() {
+        // element exists in the array, we either need to replace it or continue
+        // depending on whether this is the last elem or not
+        if remaining.is_root() {
+            let replaced = Some(replace(&mut array[idx], src));
+            let assigned = &mut array[idx];
+            Ok(Assigned::Done(Assignment {
+                assigned,
+                assigned_to: buf,
+                replaced,
+            }))
+        } else {
+            Ok(Assigned::Continue {
+                next_value: &mut array[idx],
+                same_src: src,
+                next_buf: buf,
+            })
+        }
+    } else {
+        // element does not exist in the array.
+        // we create the path and assign the value
+        let (assigned_to, src) = expand_src_path(buf, remaining, src)?;
+        array.push(src);
+        // SAFETY: just pushed.
+        let assigned = array.last_mut().unwrap();
+        Ok(Assigned::Done(Assignment {
+            assigned,
+            assigned_to,
+            replaced: None,
+        }))
+    }
 }
 
 fn assign_object<'v>(
     token: Token<'_>,
     remaining: &Pointer,
-    buf: PointerBuf,
+    mut buf: PointerBuf,
     obj: &'v mut Map<String, Value>,
     src: Value,
-    offset: usize,
 ) -> Result<Assigned<'v>, AssignError> {
-    // let entry = obj.entry(token.to_string());
-    // match entry {
-    //     Entry::Occupied(entry) => {
-    //         let entry = entry.into_mut();
-    //         // if this is the last element, we return the full pointer up to this point
-    //         if remaining.is_root() {
-    //             let replaced = Some(replace(entry, src));
-    //             Ok(Assigned::Done {
-    //                 assigned_to: current,
-    //                 replaced,
-    //                 assigned: entry,
-    //             })
-    //         } else {
-    //             Ok(Assigned::Continue {
-    //                 remaining: remaining,
-    //                 dest: entry,
-    //                 same_src: src,
-    //             })
-    //         }
-    //     }
-    //     Entry::Vacant(entry) => {
-    //         let src = expand_src_path(remaining, src)?;
-    //         let assigned = entry.insert(src);
-    //         Ok(Assigned::Done {
-    //             assigned_to: current,
-    //             assigned,
-    //             replaced: None,
-    //         })
-    //     }
-    // }
-    todo!()
+    let entry = obj.entry(token.to_string());
+    buf.push_back(token);
+
+    match entry {
+        Entry::Occupied(entry) => {
+            let entry = entry.into_mut();
+            // if this is the last element, we return the full pointer up to this point
+            if remaining.is_root() {
+                let replaced = Some(replace(entry, src));
+                Ok(Assigned::Done(Assignment {
+                    assigned: entry,
+                    assigned_to: buf,
+                    replaced,
+                }))
+            } else {
+                Ok(Assigned::Continue {
+                    same_src: src,
+                    next_buf: buf,
+                    next_value: entry,
+                })
+            }
+        }
+        Entry::Vacant(entry) => {
+            let (assigned_to, src) = expand_src_path(buf, remaining, src)?;
+            let assigned = entry.insert(src);
+            Ok(Assigned::Done(Assignment {
+                assigned,
+                assigned_to,
+                replaced: None,
+            }))
+        }
+    }
 }
 
 fn assign_scalar<'v>(
+    token: Token<'_>,
     remaining: &'_ Pointer,
-    buf: PointerBuf,
+    mut buf: PointerBuf,
     value: &'v mut Value,
     src: Value,
 ) -> Result<Assigned<'v>, AssignError> {
+    buf.push_back(token);
     let (assigned_to, src) = expand_src_path(buf, remaining, src)?;
     let replaced = Some(replace(value, src));
 
