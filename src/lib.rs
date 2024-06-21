@@ -174,6 +174,7 @@ impl InvalidEncodingError {
         self.offset
     }
 }
+
 impl fmt::Display for InvalidEncodingError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
