@@ -787,6 +787,20 @@ mod tests {
                     source: InvalidEncodingError { offset: 1 },
                 }),
             ),
+            (
+                "/~2",
+                Err(ParseError::InvalidEncoding {
+                    offset: 0,
+                    source: InvalidEncodingError { offset: 1 },
+                }),
+            ),
+            (
+                "/~a",
+                Err(ParseError::InvalidEncoding {
+                    offset: 0,
+                    source: InvalidEncodingError { offset: 1 },
+                }),
+            ),
         ];
         for (input, expected) in tests {
             let actual = Pointer::parse(input).map(Pointer::as_str);
