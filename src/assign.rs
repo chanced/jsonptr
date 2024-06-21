@@ -75,21 +75,23 @@ pub struct Assignment<'v> {
 }
 
 pub(crate) fn assign_value<'v>(
-    remaining: &Pointer,
+    mut ptr: &Pointer,
     mut value: &'v mut Value,
     mut src: Value,
 ) -> Result<Assignment<'v>, AssignError> {
-    println!("dest: {}", value.to_string());
+    // debugging purposes
+    let value_string = value.to_string();
+    println!("value: {}", value_string);
     let mut offset = 0;
-    let mut buf = PointerBuf::with_capacity(remaining.as_str().len());
+    let mut buf = PointerBuf::with_capacity(ptr.as_str().len());
 
-    while let Some((token, tail)) = remaining.split_front() {
+    while let Some((token, tail)) = ptr.split_front() {
         let tok_len = token.encoded().len();
 
         let assigned = match value {
             Value::Array(array) => assign_array(token, tail, buf, array, src, offset)?,
             Value::Object(obj) => assign_object(token, tail, buf, obj, src)?,
-            _ => assign_scalar(token, remaining, buf, value, src)?,
+            _ => assign_scalar(token, ptr, buf, value, src)?,
         };
         match assigned {
             Assigned::Done(assignment) => {
@@ -103,6 +105,7 @@ pub(crate) fn assign_value<'v>(
                 buf = next_buf;
                 src = same_src;
                 value = next_value;
+                ptr = tail;
             }
         }
         offset += 1 + tok_len;
@@ -241,9 +244,14 @@ fn expand_src_path(
     mut path: &Pointer,
     mut src: Value,
 ) -> Result<(PointerBuf, Value), AssignError> {
+    println!("src: {}", src.to_string());
+    println!("path: {path}");
+    println!("buf: {buf}");
     let mut assigned_buf = PointerBuf::with_capacity(path.to_string().len());
     while let Some((ptr, tok)) = path.split_back() {
         path = ptr;
+        println!("path: {path}");
+        println!("buf: {buf}");
         match tok.decoded().as_ref() {
             "0" | "-" => {
                 src = Value::Array(vec![src]);
@@ -311,60 +319,94 @@ mod tests {
     #[test]
     fn test_assign_array_with_next_token() {
         let mut data = json!({});
-        let ptr = PointerBuf::try_from("/foo/-/bar").unwrap();
-        let val = json!("baz");
-        let assignment = ptr
-            .assign(&mut data, val)
-            .expect("failed to assign with dash");
-        assert_eq!(assignment.replaced, None);
-        assert_eq!(assignment.assigned_to, "/foo/0/bar",);
-        assert_eq!(assignment.replaced, None);
-        assert_eq!(
-            &json!({
-                "foo": [
-                    {
-                        "bar": "baz"
-                    }
-                ]
-            }),
-            &data
-        );
-        let val = json!("baz2");
-        let assignment = ptr.assign(&mut data, val).unwrap();
-        assert_eq!(assignment.replaced, None);
-        assert_eq!(assignment.assigned_to, "/foo/1/bar",);
-        assert_eq!(assignment.replaced, None);
-        assert_eq!(
-            json!({
-                "foo": [
-                    {
-                        "bar": "baz"
-                    },
-                    {
-                        "bar": "baz2"
-                    }
-                ]
-            }),
-            data.clone()
-        );
-        let ptr = PointerBuf::try_from("/foo/0/bar").unwrap();
-        let val = json!("qux");
-        let assignment = ptr.assign(&mut data, val).unwrap();
-        // assert_eq!(assignment.assigned_to, "/foo/0/bar");
-        assert_eq!(assignment.replaced, Some(Value::String("baz".to_string())));
-        assert_eq!(
-            json!({
-                "foo": [
-                    {
-                        "bar": "qux"
-                    },
-                    {
-                        "bar": "baz2"
-                    }
-                ]
-            }),
-            data.clone()
-        );
+
+        let tests = [
+            (
+                "/foo/-/bar",
+                "/foo/0/bar",
+                json!("baz"),
+                json!({
+                    "foo": [
+                        {
+                            "bar": "baz"
+                        }
+                    ]
+                }),
+                None,
+            ),
+            (
+                "/foo/-/bar",
+                "/foo/1/bar",
+                json!("qux"),
+                json!({
+                    "foo": [
+                        {
+                            "bar": "baz"
+                        },
+                        {
+                            "bar": "qux"
+                        }
+                    ]
+                }),
+                None,
+            ),
+            (
+                "/foo/-/bar",
+                "/foo/2/bar",
+                json!("quux"),
+                json!({
+                    "foo": [
+                        {
+                            "bar": "baz"
+                        },
+                        {
+                            "bar": "qux"
+                        },
+                        {
+                            "bar": "quux"
+                        }
+                    ]
+                }),
+                None,
+            ),
+            (
+                "/foo/0/bar",
+                "/foo/0/bar",
+                json!("grault"),
+                json!({
+                    "foo": [
+                        {
+                            "bar": "grault"
+                        },
+                        {
+                            "bar": "qux"
+                        },
+                        {
+                            "bar": "quux"
+                        }
+                    ]
+                }),
+                Some(json!("baz")),
+            ),
+        ];
+
+        for (path, assigned_to, val, expected, replaced) in tests {
+            println!("path: {path}");
+            println!("expected assigned_to: {assigned_to}");
+            println!("val: {val}");
+            println!("expected: {}", expected.to_string());
+            let ptr = PointerBuf::parse(path).expect(&format!("failed to parse \"{path}\""));
+            let assignment = ptr
+                .assign(&mut data, val.clone())
+                .expect(&format!("failed to assign \"{path}\""));
+            assert_eq!(
+                assignment.assigned_to, *assigned_to,
+                "assigned_to not equal"
+            );
+            assert_eq!(assignment.replaced, replaced, "replaced not equal");
+            assert_eq!(&expected, &data);
+            println!("--------------");
+        }
     }
 
     #[test]

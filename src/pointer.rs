@@ -559,6 +559,11 @@ impl PointerBuf {
         Self(String::new())
     }
 
+    /// Attempts to parse a string into a `PointerBuf`.
+    pub fn parse(s: &str) -> Result<Self, ParseError> {
+        Pointer::parse(s).map(Pointer::to_buf)
+    }
+
     /// Creates a new `PointerBuf` with the given capacity.
     pub(crate) fn with_capacity(capacity: usize) -> Self {
         Self(String::with_capacity(capacity))
