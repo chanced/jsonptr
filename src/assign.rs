@@ -5,32 +5,51 @@ use serde_json::{map::Entry, Map, Value};
 /// Assign is implemented by types which can internally assign a
 /// [`serde_json::Value`] by a JSON Pointer.
 pub trait Assign {
+    /// The type of value that is being assigned.
+    ///
+    /// Provided implementations include:
+    ///
+    /// | Lang  |     value type      | feature flag |
+    /// | ----- | ------------------- |: ---------- :|
+    /// | JSON  | `serde_json::Value` |   `"json"`   |
+    /// | YAML  | `serde_json::Value` |   `"yaml"`   |
+    /// | TOML  | `serde_json::Value` |   `"toml"`   |
+    type Value;
     /// Error associated with `Assign`
     type Error;
     /// Assign a value of based on the path provided by a JSON Pointer.
-    fn assign<'v, V>(&'v mut self, ptr: &Pointer, value: V) -> Result<Assignment<'v>, Self::Error>
+    fn assign<'v, V>(
+        &'v mut self,
+        ptr: &Pointer,
+        value: V,
+    ) -> Result<Assignment<'v, Self::Value>, Self::Error>
     where
-        V: Into<Value>;
+        V: Into<Self::Value>;
 }
 
 impl Assign for Value {
+    type Value = Value;
     type Error = AssignError;
-    fn assign<'v, V>(&'v mut self, ptr: &Pointer, value: V) -> Result<Assignment<'v>, Self::Error>
+    fn assign<'v, V>(
+        &'v mut self,
+        ptr: &Pointer,
+        value: V,
+    ) -> Result<Assignment<'v, Self::Value>, Self::Error>
     where
         V: Into<Value>,
     {
-        assign_value(ptr, self, value.into())
+        assign_json_value(ptr, self, value.into())
     }
 }
 
 #[derive(Debug)]
 /// The data structure returned from a successful call to `assign`.
-pub struct Assignment<'v> {
+pub struct Assignment<'v, V> {
     /// The value that was assigned.
     ///
     /// In the event a path is created, this will be a mutable reference to the
     /// `serde_json::Value` encompassing the new branch.
-    pub assigned: &'v mut Value,
+    pub assigned: &'v mut V,
 
     /// The path which was assigned to.
     ///
@@ -72,11 +91,11 @@ pub struct Assignment<'v> {
     pub replaced: Option<Value>,
 }
 
-pub(crate) fn assign_value<'v>(
+pub(crate) fn assign_json_value<'v>(
     mut ptr: &Pointer,
     mut value: &'v mut Value,
     mut src: Value,
-) -> Result<Assignment<'v>, AssignError> {
+) -> Result<Assignment<'v, Value>, AssignError> {
     let mut offset = 0;
     let mut buf = PointerBuf::with_capacity(ptr.as_str().len());
 
@@ -89,10 +108,10 @@ pub(crate) fn assign_value<'v>(
             _ => assign_scalar(token, ptr, buf, value, src)?,
         };
         match assigned {
-            Assigned::Done(assignment) => {
+            AssignedJson::Done(assignment) => {
                 return Ok(assignment);
             }
-            Assigned::Continue {
+            AssignedJson::Continue {
                 next_buf,
                 next_value,
                 same_src,
@@ -158,8 +177,8 @@ impl std::error::Error for AssignError {
     }
 }
 
-enum Assigned<'v> {
-    Done(Assignment<'v>),
+enum AssignedJson<'v> {
+    Done(Assignment<'v, Value>),
     Continue {
         next_buf: PointerBuf,
         next_value: &'v mut Value,
@@ -174,7 +193,7 @@ fn assign_array<'v>(
     array: &'v mut Vec<Value>,
     src: Value,
     offset: usize,
-) -> Result<Assigned<'v>, AssignError> {
+) -> Result<AssignedJson<'v>, AssignError> {
     // parsing the index
     let idx = token
         .to_index()
@@ -192,7 +211,7 @@ fn assign_array<'v>(
             // last token, we replace the value and call it a day
             let replaced = Some(mem::replace(&mut array[idx], src));
             let assigned = &mut array[idx];
-            Ok(Assigned::Done(Assignment {
+            Ok(AssignedJson::Done(Assignment {
                 assigned,
                 assigned_to: buf,
                 replaced,
@@ -200,7 +219,7 @@ fn assign_array<'v>(
         } else {
             // not the last token, we continue with a mut ref to the element as
             // the next value
-            Ok(Assigned::Continue {
+            Ok(AssignedJson::Continue {
                 next_value: &mut array[idx],
                 same_src: src,
                 next_buf: buf,
@@ -213,7 +232,7 @@ fn assign_array<'v>(
         array.push(src);
         // SAFETY: just pushed.
         let assigned = array.last_mut().unwrap();
-        Ok(Assigned::Done(Assignment {
+        Ok(AssignedJson::Done(Assignment {
             assigned,
             assigned_to: buf,
             replaced: None,
@@ -227,7 +246,7 @@ fn assign_object<'v>(
     mut buf: PointerBuf,
     obj: &'v mut Map<String, Value>,
     src: Value,
-) -> Result<Assigned<'v>, AssignError> {
+) -> Result<AssignedJson<'v>, AssignError> {
     // grabbing the entry of the token
     let entry = obj.entry(token.to_string());
     // adding token to the pointer buf
@@ -241,7 +260,7 @@ fn assign_object<'v>(
                 // if this is the last token, we are done
                 // grab the old value and replace it with the new one
                 let replaced = Some(mem::replace(entry, src));
-                Ok(Assigned::Done(Assignment {
+                Ok(AssignedJson::Done(Assignment {
                     assigned: entry,
                     assigned_to: buf,
                     replaced,
@@ -249,7 +268,7 @@ fn assign_object<'v>(
             } else {
                 // if this is not the last token, we continue with a mutable
                 // reference to the entry as the next value
-                Ok(Assigned::Continue {
+                Ok(AssignedJson::Continue {
                     same_src: src,
                     next_buf: buf,
                     next_value: entry,
@@ -262,7 +281,7 @@ fn assign_object<'v>(
             // entry
             let src = expand_src_path(remaining, src)?;
             let assigned = entry.insert(src);
-            Ok(Assigned::Done(Assignment {
+            Ok(AssignedJson::Done(Assignment {
                 assigned,
                 assigned_to: buf,
                 replaced: None,
@@ -277,7 +296,7 @@ fn assign_scalar<'v>(
     mut buf: PointerBuf,
     value: &'v mut Value,
     src: Value,
-) -> Result<Assigned<'v>, AssignError> {
+) -> Result<AssignedJson<'v>, AssignError> {
     // scalar values are always replaced at the current buf (with its token)
     // build the new src and we replace the value with it.
 
@@ -285,7 +304,7 @@ fn assign_scalar<'v>(
     let src = expand_src_path(remaining, src)?;
     let replaced = Some(mem::replace(value, src));
 
-    Ok(Assigned::Done(Assignment {
+    Ok(AssignedJson::Done(Assignment {
         assigned: value,
         assigned_to: buf,
         replaced,

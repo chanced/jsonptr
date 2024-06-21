@@ -406,10 +406,14 @@ impl Pointer {
     /// let assignment = data.assign(&ptr, src).unwrap();
     /// assert_eq!(data, json!([{ "foo": "bar" } ]));
     /// ```
-    pub fn assign<'d, D, V>(&self, dest: &'d mut D, src: V) -> Result<Assignment<'d>, D::Error>
+    pub fn assign<'d, D, V>(
+        &self,
+        dest: &'d mut D,
+        src: V,
+    ) -> Result<Assignment<'d, D::Value>, D::Error>
     where
         D: Assign,
-        V: Into<Value>,
+        V: Into<D::Value>,
     {
         dest.assign(self, src)
     }
