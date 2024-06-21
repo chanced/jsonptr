@@ -766,27 +766,32 @@ mod tests {
     }
 
     #[test]
-    fn test_try_from_validation() {
-        assert!(PointerBuf::try_from("").is_ok());
-        assert!(PointerBuf::try_from("/").is_ok());
-        assert!(PointerBuf::try_from("/foo").is_ok());
-
-        let res = PointerBuf::try_from("/foo~");
-        assert!(res.is_err());
-        let err = res.unwrap_err();
-        assert!(err.is_invalid_encoding());
-        assert_eq!(err.offset(), 4);
-        let res = PointerBuf::try_from("foo");
-        assert!(res.is_err());
-        let err = res.unwrap_err();
-
-        assert!(err.is_no_leading_backslash());
-        assert_eq!(err.offset(), 0);
-        assert!(PointerBuf::try_from("/foo/bar/baz/~1/~0").is_ok());
-        assert_eq!(
-            &PointerBuf::try_from("/foo/bar/baz/~1/~0").unwrap(),
-            "/foo/bar/baz/~1/~0"
-        );
+    fn test_parse() {
+        let tests = [
+            ("", Ok("")),
+            ("/", Ok("/")),
+            ("/foo", Ok("/foo")),
+            ("/foo/bar", Ok("/foo/bar")),
+            ("/foo/bar/baz", Ok("/foo/bar/baz")),
+            ("/foo/bar/baz/~0", Ok("/foo/bar/baz/~0")),
+            ("/foo/bar/baz/~1", Ok("/foo/bar/baz/~1")),
+            ("/foo/bar/baz/~01", Ok("/foo/bar/baz/~01")),
+            ("/foo/bar/baz/~10", Ok("/foo/bar/baz/~10")),
+            ("/foo/~", Ok("/foo/bar/baz/~11")),
+            ("/foo/bar/baz/~1/~0", Ok("/foo/bar/baz/~1/~0")),
+            ("missing-slash", Err(ParseError::NoLeadingBackslash)),
+            (
+                "/~",
+                Err(ParseError::InvalidEncoding {
+                    offset: 0,
+                    source: InvalidEncodingError { offset: 1 },
+                }),
+            ),
+        ];
+        for (input, expected) in tests {
+            let res = Pointer::parse(input).map(Pointer::as_str);
+            assert_eq!(res, expected);
+        }
     }
 
     #[test]

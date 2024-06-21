@@ -72,11 +72,55 @@ impl ParseError {
 
     /// Offset of the partial pointer starting with the token which caused the
     /// error.
-    pub fn offset(&self) -> usize {
+    /// ```text
+    /// "/foo/invalid~tilde/invalid"
+    ///      ↑
+    ///      4
+    /// ```
+    /// ```
+    /// # use jsonptr::PointerBuf;
+    /// let err = PointerBuf::parse("/foo/invalid~tilde/invalid").unwrap_err();
+    /// assert_eq!(err.pointer_offset(), 4)
+    /// ```
+    pub fn pointer_offset(&self) -> usize {
         match *self {
             Self::NoLeadingBackslash { .. } => 0,
             Self::InvalidEncoding { offset, .. } => offset,
         }
+    }
+
+    /// Offset of the character index from within the first token of
+    /// [Self::pointer_offset])
+    /// ```text
+    /// "/foo/invalid~tilde/invalid"
+    ///              ↑
+    ///              8
+    /// ```
+    /// ```
+    /// # use jsonptr::PointerBuf;
+    /// let err = PointerBuf::parse("/foo/invalid~tilde/invalid").unwrap_err();
+    /// assert_eq!(err.source_offset(), 8)
+    /// ```
+    pub fn source_offset(&self) -> usize {
+        match *self {
+            Self::NoLeadingBackslash { .. } => 0,
+            Self::InvalidEncoding { offset, .. } => offset,
+        }
+    }
+
+    /// Offset of the first invalid encoding from within the pointer.
+    /// ```text
+    /// "/foo/invalid~tilde/invalid"
+    ///              ↑
+    ///             12
+    /// ```
+    /// ```
+    /// # use jsonptr::PointerBuf;
+    /// let err = PointerBuf::parse("/foo/invalid~tilde/invalid").unwrap_err();
+    /// assert_eq!(err.pointer_offset(), 4)
+    /// ```
+    pub fn complete_offset(&self) -> usize {
+        self.source_offset() + self.pointer_offset()
     }
 }
 
