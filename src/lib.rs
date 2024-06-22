@@ -7,7 +7,7 @@ use core::{fmt, num::ParseIntError};
 
 // TODO(chanced): make these pub?
 mod assign;
-pub use assign::{Assign, AssignError, Assignment, Expand, Strategy};
+pub use assign::{Assign, AssignError, Assignment, AutoExpand, Expand};
 mod delete;
 pub use delete::Delete;
 mod resolve;

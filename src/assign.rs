@@ -36,11 +36,11 @@ pub trait Expand<V> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Strategy {
+pub enum AutoExpand {
     /// This strategy will automatically expand the path of the [`Pointer`] if a
     /// scalar or a non-existent key or [`Index`](crate::Index) is encountered.
     ///
-    /// The rules of this [`Strategy`] are as follows:
+    /// The rules of this strategy are as follows:
     /// - If a scalar or non-existent path is encountered before the [`Pointer`]
     ///   is exhausted, the path will automatically be expanded into
     ///   [`Assign::Value`] based upon a best-guess effort on the meaning of
@@ -59,16 +59,16 @@ pub enum Strategy {
     ///  Note: This strategy will not return [`AssignError::NotFound`] or
     ///  [`AssignError::Unreachable`].
     ///
-    Auto,
+    Enabled,
 
     /// This strategy will error if the [`Pointer`] is not fully exhausted before
     /// a scalar or non-existent key or [`Index`](crate::Index) is encountered.
-    Strict,
+    Disabled,
 }
 
-impl Default for Strategy {
+impl Default for AutoExpand {
     fn default() -> Self {
-        Self::Auto
+        Self::Enabled
     }
 }
 
@@ -109,10 +109,10 @@ pub struct Assignment<'v, V> {
     /// ## Example
     /// ```rust
     /// # use serde_json::json;
-    /// # use jsonptr::{Pointer, Assign, Strategy};
+    /// # use jsonptr::{Pointer, Assign, AutoExpand};
     /// let mut data = json!({ "foo": ["zero"] });
     /// let mut ptr = Pointer::from_static("/foo/-");
-    /// let assignment = data.assign(&mut ptr, "one", Strategy::Auto).unwrap();
+    /// let assignment = data.assign(&mut ptr, "one", AutoExpand::Enabled).unwrap();
     /// assert_eq!(assignment.assigned_to, Pointer::from_static("/foo/1"));
     /// ```
     pub assigned_to: PointerBuf,
@@ -179,11 +179,11 @@ mod json {
     use core::mem;
     use serde_json::{map::Entry, Map, Value};
 
-    impl Expand<Value> for Strategy {
+    impl Expand<Value> for AutoExpand {
         fn expand(&self, mut path: &Pointer, mut src: Value) -> Result<Value, AssignError> {
             match self {
-                Strategy::Auto => expand_auto(path, src),
-                Strategy::Strict => expand_error(path, src),
+                AutoExpand::Enabled => expand_auto(path, src),
+                AutoExpand::Disabled => expand_error(path, src),
             }
         }
     }
@@ -402,7 +402,7 @@ mod json {
     mod tests {
         use serde_json::{json, Value};
 
-        use crate::{assign::Strategy, Pointer, PointerBuf};
+        use crate::{assign::AutoExpand, Pointer, PointerBuf};
 
         #[test]
         fn test_assign() {
@@ -410,14 +410,18 @@ mod json {
             let ptr = Pointer::from_static("/foo");
             let val = json!("bar");
 
-            let assignment = ptr.assign(&mut data, val.clone(), Strategy::Auto).unwrap();
+            let assignment = ptr
+                .assign(&mut data, val.clone(), AutoExpand::Enabled)
+                .unwrap();
             assert_eq!(assignment.replaced, None);
             assert_eq!(assignment.assigned, &val);
             assert_eq!(assignment.assigned_to, "/foo");
 
             // now testing replacement
             let val2 = json!("baz");
-            let assignment = ptr.assign(&mut data, val2.clone(), Strategy::Auto).unwrap();
+            let assignment = ptr
+                .assign(&mut data, val2.clone(), AutoExpand::Enabled)
+                .unwrap();
             assert_eq!(assignment.replaced, Some(Value::String("bar".to_string())));
             assert_eq!(assignment.assigned, &val2);
             assert_eq!(assignment.assigned_to, "/foo");
@@ -429,7 +433,7 @@ mod json {
             let ptr = Pointer::from_static("/foo/0/bar");
             let val = json!("baz");
 
-            let assignment = ptr.assign(&mut data, val, Strategy::Auto).unwrap();
+            let assignment = ptr.assign(&mut data, val, AutoExpand::Enabled).unwrap();
             assert_eq!(assignment.replaced, None);
             assert_eq!(assignment.assigned_to, "/foo");
             assert_eq!(assignment.replaced, None);
@@ -497,7 +501,7 @@ mod json {
                 println!("{}", serde_json::to_string_pretty(&data).unwrap());
                 let ptr = PointerBuf::parse(path).expect(&format!("failed to parse \"{path}\""));
                 let assignment = ptr
-                    .assign(&mut data, val.clone(), Strategy::Auto)
+                    .assign(&mut data, val.clone(), AutoExpand::Enabled)
                     .expect(&format!("failed to assign \"{path}\""));
                 assert_eq!(
                     assignment.assigned_to, *assigned_to,
@@ -514,7 +518,7 @@ mod json {
             let ptr = PointerBuf::try_from("/foo/bar").unwrap();
             let val = json!("baz");
 
-            let assignment = ptr.assign(&mut data, val, Strategy::Auto).unwrap();
+            let assignment = ptr.assign(&mut data, val, AutoExpand::Enabled).unwrap();
             assert_eq!(assignment.assigned_to, "/foo");
             assert_eq!(assignment.replaced, None);
             assert_eq!(
@@ -536,7 +540,7 @@ mod json {
             let ptr = Pointer::from_static("/foo/bar/baz");
             let val = json!("qux");
 
-            ptr.assign(&mut data, val, Strategy::Auto).unwrap();
+            ptr.assign(&mut data, val, AutoExpand::Enabled).unwrap();
             assert_eq!(
                 &json!({
                     "foo": {

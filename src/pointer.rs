@@ -400,14 +400,14 @@ impl Pointer {
     ///
     /// ## Example
     /// ```rust
-    /// use jsonptr::{ Pointer, Strategy };
+    /// use jsonptr::{ Pointer, AutoExpand };
     /// use jsonptr::prelude::*; // <-- for Assign trait
     /// use serde_json::{json, Value};
     /// let mut data = json!([]);
     ///
     /// let mut ptr = Pointer::from_static("/0/foo");
     /// let src = json!("bar");
-    /// let assignment = data.assign(&ptr, src, Strategy::Auto).unwrap();
+    /// let assignment = data.assign(&ptr, src, AutoExpand::Enabled).unwrap();
     /// assert_eq!(data, json!([{ "foo": "bar" } ]));
     /// ```
     pub fn assign<'d, D, V, E>(
