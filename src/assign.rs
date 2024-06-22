@@ -1,6 +1,6 @@
 use core::fmt;
 
-use crate::{OutOfBoundsError, ParseIndexError, Pointer, PointerBuf};
+use crate::{OutOfBoundsError, ParseIndexError, Pointer, PointerBuf, Token};
 
 /// Assign is implemented by types which can internally assign a
 /// [`serde_json::Value`] by a JSON Pointer.
@@ -16,7 +16,7 @@ pub trait Assign {
     /// | TOML  | `serde_json::Value` |   `"toml"`   |
     type Value;
     /// Error associated with `Assign`
-    type Error;
+    type Error: From<AssignError>;
     /// Assign a value of based on the path provided by a JSON Pointer.
     fn assign<'v, V>(
         &'v mut self,
@@ -25,6 +25,84 @@ pub trait Assign {
     ) -> Result<Assignment<'v, Self::Value>, Self::Error>
     where
         V: Into<Self::Value>;
+}
+
+pub trait Expand: Clone {
+    type Value;
+
+    /// - `token`: The current token
+    /// - `ptr`: The pointer prior to `tok`
+    fn expand(
+        &self,
+        token: Token<'_>,
+        pointer: &Pointer,
+        remaining: &Pointer,
+    ) -> Result<Self::Value, AssignError>;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Strategy {
+    /// This strategy will automatically expand the path of the [`Pointer`] if a
+    /// scalar or a non-existent key or [`Index`](crate::Index) is encountered.
+    ///
+    /// The rules of this [`Strategy`] are as follows:
+    /// - If a scalar or non-existent path is encountered before the [`Pointer`]
+    ///   is exhausted, the path will automatically be expanded into
+    ///   [`Assign::Value`] based upon a best-guess effort on the meaning of
+    ///   each [`Token`].
+    ///   - If the [`Token`] is equal to `"0"` or `"-"`, the token will be
+    ///    considered an index of an array.
+    ///   - All tokens not equal to `"0"` or `"-"` will be considered keys of an
+    ///     object.
+    /// - If an entry needs to be inserted into an object, use the decoded
+    ///   `Token` as the key.
+    /// - If an entry needs to be inserted into an array, attempt to parse the
+    ///  `Token` as an [`Index`](crate::Index) with an upper bound (inclusive)
+    ///   of the array length. If the `Token` is equal to `"-"`, use the array
+    ///   length, pushing onto the array.
+    ///  
+    ///  Note: This strategy will not return [`AssignError::NotFound`] or
+    ///  [`AssignError::Unreachable`].
+    ///
+    Auto,
+
+    /// This strategy will error if the [`Pointer`] is not fully exhausted before
+    /// a scalar or non-existent key or [`Index`](crate::Index) is encountered.
+    Error,
+}
+
+impl Default for Strategy {
+    fn default() -> Self {
+        Self::Auto
+    }
+}
+impl Expand for Strategy {
+    type Value = serde_json::Value;
+    fn expand(
+        &self,
+        token: Token<'_>,
+        pointer: &Pointer,
+        remaining: &Pointer,
+    ) -> Result<Self::Value, AssignError> {
+        match self {
+            Strategy::Auto => todo!(),
+            Strategy::Error => todo!(),
+        }
+    }
+}
+impl Strategy {
+    fn auto_expand(
+        &self,
+        token: Token<'_>,
+        pointer: &Pointer,
+        remaining: &Pointer,
+        offset: usize,
+    ) -> PointerBuf {
+        match self {
+            Strategy::Auto => todo!(),
+            Strategy::Error => todo!(),
+        }
+    }
 }
 
 #[derive(Debug)]

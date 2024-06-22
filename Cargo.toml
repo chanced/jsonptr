@@ -19,8 +19,11 @@ serde_yaml = { version = "0.9.34", optional = true }
 toml = { version = "0.8", optional = true }
 
 [features]
-default = ["std", "json"]
+assign  = []
+default = ["std", "json", "resolve", "assign", "delete"]
+delete  = []
 json    = ["serde_json"]
+resolve = []
 std     = ["serde/std", "serde_json/std"]
 yaml    = ["serde_yaml"]
 
