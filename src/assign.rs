@@ -368,7 +368,9 @@ mod json {
             // depending on whether this is the last token or not
             if remaining.is_root() {
                 // last token, we replace the value and call it a day
-                let assigned = array.last_mut().expect("just pushed");
+                let assigned = array
+                    .last_mut()
+                    .expect("non-empty array should have last_mut");
                 Ok(Assigned::Done(Assignment {
                     assigned,
                     assigned_to: buf,
