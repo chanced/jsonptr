@@ -392,17 +392,18 @@ impl Pointer {
     ///
     /// let mut ptr = Pointer::from_static("/0/foo");
     /// let src = json!("bar");
-    /// let assignment = data.assign(&ptr, src, Expansion::Enabled).unwrap();
+    /// let assignment = data.assign(&ptr, src, Expansion::BestGuess).unwrap();
     /// assert_eq!(data, json!([{ "foo": "bar" } ]));
     /// ```
-    pub fn assign<'d, D>(
+    pub fn assign<'d, D, V>(
         &self,
         dest: &'d mut D,
-        src: D::Value,
+        src: V,
         expansion: Expansion<'_, D::Value>,
     ) -> Result<Assignment<'d, D::Value>, D::Error>
     where
         D: Assign,
+        V: Into<D::Value>,
     {
         dest.assign(self, src, expansion)
     }

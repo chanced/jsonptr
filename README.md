@@ -61,7 +61,7 @@ use serde_json::json;
 
 let ptr = Pointer::from_static("/foo/bar");
 let mut data = json!({});
-let _previous = ptr.assign(&mut data, "qux", Expansion::Enabled).unwrap();
+let _previous = ptr.assign(&mut data, "qux", Expansion::BestGuess).unwrap();
 assert_eq!(data, json!({ "foo": { "bar": "qux" }}))
 ```
 
@@ -73,7 +73,7 @@ use serde_json::json;
 
 let ptr = Pointer::from_static("/foo/bar");
 let mut data = json!({});
-let _previous = data.assign(&ptr, "qux", Expansion::Enabled).unwrap();
+let _previous = data.assign(&ptr, "qux", Expansion::BestGuess).unwrap();
 assert_eq!(data, json!({ "foo": { "bar": "qux" }}))
 ```
 

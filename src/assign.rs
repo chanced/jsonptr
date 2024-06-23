@@ -35,12 +35,14 @@ pub trait Assign {
 
     /// Assigns a value of based on the path provided by a JSON Pointer using
     /// the provided [`Expansion`] strategy.
-    fn assign<'v>(
+    fn assign<'v, V>(
         &'v mut self,
         ptr: &Pointer,
-        value: Self::Value,
+        value: V,
         expansion: Expansion<'_, Self::Value>,
-    ) -> Result<Assignment<'v, Self::Value>, Self::Error>;
+    ) -> Result<Assignment<'v, Self::Value>, Self::Error>
+    where
+        V: Into<Self::Value>;
 }
 
 /// Source value to be expanded (see [`Expand`]).
@@ -152,7 +154,7 @@ pub struct Assignment<'v, V> {
     /// # use jsonptr::{Pointer, Assign, Expansion};
     /// let mut data = json!({ "foo": ["zero"] });
     /// let mut ptr = Pointer::from_static("/foo/-");
-    /// let assignment = data.assign(&mut ptr, "one", Expansion::Enabled).unwrap();
+    /// let assignment = data.assign(&mut ptr, "one", Expansion::BestGuess).unwrap();
     /// assert_eq!(assignment.assigned_to, Pointer::from_static("/foo/1"));
     /// ```
     pub assigned_to: PointerBuf,
@@ -322,13 +324,16 @@ mod json {
     impl Assign for Value {
         type Value = Value;
         type Error = AssignError;
-        fn assign<'v>(
+        fn assign<'v, V>(
             &'v mut self,
             ptr: &Pointer,
-            value: Self::Value,
+            value: V,
             expansion: Expansion<'_, Self::Value>,
-        ) -> Result<Assignment<'v, Self::Value>, Self::Error> {
-            assign_value(ptr, self, value, expansion)
+        ) -> Result<Assignment<'v, Self::Value>, Self::Error>
+        where
+            V: Into<Self::Value>,
+        {
+            assign_value(ptr, self, value.into(), expansion)
         }
     }
 
