@@ -2,8 +2,26 @@ use crate::Pointer;
 
 /// Delete is implemented by types which can internally remove a value based on
 /// a JSON Pointer
+///
+/// Provided implementations include:
+///
+/// | Language  | Feature Flag |
+/// | --------- | ------------ |
+/// |   JSON    |   `"json"`   |
+/// |   YAML    |   `"yaml"`   |
+/// |   TOML    |   `"toml"`   |
 pub trait Delete {
+    /// The type of value that this implementation can operate on.
+    ///
+    /// Provided implementations include:
+    ///
+    /// | Lang  |     value type      | feature flag |
+    /// | ----- |: ----------------- :|: ---------- :|
+    /// | JSON  | `serde_json::Value` |   `"json"`   |
+    /// | YAML  | `serde_yaml::Value` |   `"yaml"`   |
+    /// | TOML  |    `toml::Value`    |   `"toml"`   |
     type Value;
+
     /// Attempts to internally delete a value based upon a [Pointer].
     fn delete(&mut self, ptr: &Pointer) -> Option<Self::Value>;
 }

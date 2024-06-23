@@ -1,6 +1,6 @@
 use crate::{
-    assign::Expand, Assign, Assignment, Delete, Expansion, InvalidEncodingError, ParseError,
-    ReplaceTokenError, Resolve, ResolveMut, Token, Tokens,
+    Assign, Assignment, Delete, Expansion, InvalidEncodingError, ParseError, ReplaceTokenError,
+    Resolve, ResolveMut, Token, Tokens,
 };
 use alloc::{
     borrow::ToOwned,
@@ -32,7 +32,6 @@ fn validate(value: &str) -> Result<&str, ParseError> {
             // pulling down
             let next = chars.next().map(|(_, c)| c);
             if !matches!(next, Some('0') | Some('1')) {
-                println!("next: {:?}", next);
                 // '~' must be followed by '0' or '1' in order to be properly encoded
                 return Err(ParseError::InvalidEncoding {
                     offset: ptr_offset,
@@ -61,15 +60,6 @@ const fn is_valid_ptr(value: &str) -> bool {
     }
 
     match bytes[0] {
-        b'#' => {
-            if bytes.len() == 1 {
-                // also root pointer
-                return true;
-            }
-            if bytes[1] != b'/' {
-                return false;
-            }
-        }
         b'/' => {}
         _ => return false,
     }
@@ -133,10 +123,6 @@ impl Pointer {
     /// If successful, this does not allocate.
     pub fn parse<S: AsRef<str> + ?Sized>(s: &S) -> Result<&Self, ParseError> {
         validate(s.as_ref()).map(Self::new)
-    }
-
-    pub fn len(&self) -> usize {
-        self.0.len()
     }
 
     /// Creates a static `Pointer` from a string.
@@ -268,7 +254,6 @@ impl Pointer {
     /// let (head, tail) = ptr.split_at(4).unwrap();
     /// assert_eq!(head, Pointer::from_static("/foo"));
     /// assert_eq!(tail, Pointer::from_static("/bar/baz"));
-    ///
     /// assert_eq!(ptr.split_at(3), None);
     /// ```
     pub fn split_at(&self, idx: usize) -> Option<(&Self, &Self)> {
@@ -555,6 +540,7 @@ impl PointerBuf {
     pub(crate) fn with_capacity(capacity: usize) -> Self {
         Self(String::with_capacity(capacity))
     }
+
     /// Creates a new `PointerBuf` from a slice of non-encoded strings.
     pub fn from_tokens<'a, T>(tokens: impl IntoIterator<Item = T>) -> Self
     where

@@ -1,17 +1,25 @@
 use crate::{OutOfBoundsError, ParseIndexError, Pointer};
 
 /// Resolve is implemented by types which can resolve a reference to a
-/// `serde_json::Value` from the path in a JSON Pointer.
+/// value type from a path represented by a JSON Pointer.
+///
+/// Provided implementations include:
+///
+/// | Language  | Feature Flag |
+/// | --------- | ------------ |
+/// |   JSON    |   `"json"`   |
+/// |   YAML    |   `"yaml"`   |
+/// |   TOML    |   `"toml"`   |
 pub trait Resolve {
-    /// The type of value that is being resolved.
+    /// The type of value that this implementation can operate on.
     ///
     /// Provided implementations include:
     ///
     /// | Lang  |     value type      | feature flag |
     /// | ----- | ------------------- |: ---------- :|
     /// | JSON  | `serde_json::Value` |   `"json"`   |
-    /// | YAML  | `serde_json::Value` |   `"yaml"`   |
-    /// | TOML  | `serde_json::Value` |   `"toml"`   |
+    /// | YAML  | `serde_yaml::Value` |   `"yaml"`   |
+    /// | TOML  |    `toml::Value`    |   `"toml"`   |
     type Value;
 
     /// Error associated with `Resolve`
@@ -32,8 +40,8 @@ pub trait ResolveMut {
     /// | Lang  |     value type      | feature flag |
     /// | ----- | ------------------- |: ---------- :|
     /// | JSON  | `serde_json::Value` |   `"json"`   |
-    /// | YAML  | `serde_json::Value` |   `"yaml"`   |
-    /// | TOML  | `serde_json::Value` |   `"toml"`   |
+    /// | YAML  | `serde_yaml::Value` |   `"yaml"`   |
+    /// | TOML  |    `toml::Value`    |   `"toml"`   |
     type Value;
 
     /// Error associated with `ResolveMut`
@@ -114,6 +122,7 @@ pub enum ResolveError {
         offset: usize,
     },
 }
+
 impl ResolveError {
     /// Offset of the partial pointer starting with the token which caused the
     /// error.
@@ -125,27 +134,32 @@ impl ResolveError {
             | Self::Unreachable { offset, .. } => *offset,
         }
     }
+
     /// Returns `true` if this error is `FailedToParseIndex`; otherwise returns
     /// `false`.
     pub fn is_unreachable(&self) -> bool {
         matches!(self, Self::Unreachable { .. })
     }
+
     /// Returns `true` if this error is `FailedToParseIndex`; otherwise returns
     /// `false`.
     pub fn is_not_found(&self) -> bool {
         matches!(self, Self::NotFound { .. })
     }
+
     /// Returns `true` if this error is `FailedToParseIndex`; otherwise returns
     /// `false`.
     pub fn is_out_of_bounds(&self) -> bool {
         matches!(self, Self::OutOfBounds { .. })
     }
+
     /// Returns `true` if this error is `FailedToParseIndex`; otherwise returns
     /// `false`.
     pub fn is_failed_to_parse_index(&self) -> bool {
         matches!(self, Self::FailedToParseIndex { .. })
     }
 }
+
 impl core::fmt::Display for ResolveError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {

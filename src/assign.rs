@@ -8,22 +8,33 @@ type BoxedError = Box<dyn 'static + std::error::Error>;
 #[cfg(not(feature = "std"))]
 type BoxedError = Box<dyn 'static + core::fmt::Debug + core::fmt::Display>;
 
-/// Assign is implemented by types which can internally assign a
-/// [`serde_json::Value`] by a JSON Pointer.
+/// Assign is implemented by types which can internally assign a a value type by
+/// a JSON Pointer.
+///
+/// Provided implementations include:
+///
+/// | Language  | Feature Flag |
+/// | --------- | ------------ |
+/// |   JSON    |   `"json"`   |
+/// |   YAML    |   `"yaml"`   |
+/// |   TOML    |   `"toml"`   |
 pub trait Assign {
-    /// The type of value that is being assigned.
+    /// The type of value that this implementation can operate on.
     ///
     /// Provided implementations include:
     ///
     /// | Lang  |     value type      | feature flag |
-    /// | ----- | ------------------- |: ---------- :|
+    /// | ----- |: ----------------- :|: ---------- :|
     /// | JSON  | `serde_json::Value` |   `"json"`   |
-    /// | YAML  | `serde_json::Value` |   `"yaml"`   |
-    /// | TOML  | `serde_json::Value` |   `"toml"`   |
+    /// | YAML  | `serde_yaml::Value` |   `"yaml"`   |
+    /// | TOML  |    `toml::Value`    |   `"toml"`   |
     type Value;
+
     /// Error associated with `Assign`
     type Error: From<AssignError>;
-    /// Assign a value of based on the path provided by a JSON Pointer.
+
+    /// Assigns a value of based on the path provided by a JSON Pointer using
+    /// the provided [`Expansion`] strategy.
     fn assign<'v>(
         &'v mut self,
         ptr: &Pointer,
@@ -32,30 +43,41 @@ pub trait Assign {
     ) -> Result<Assignment<'v, Self::Value>, Self::Error>;
 }
 
-pub trait Expand<V> {
-    /// - `token`: The current token
-    /// - `ptr`: The pointer prior to `tok`
-    fn expand(&self, path: &Pointer, src: V) -> Result<V, AssignError>;
+/// Source value to be expanded (see [`Expand`]).
+pub struct Source<'p, V> {
+    /// Source value to be assigned.
+    pub value: V,
+    /// The pointer encompassing the path up to and including the current token.
+    pub resolved: &'p Pointer,
+    /// The remaining, unresolved path.
+    pub remaining: &'p Pointer,
+    /// The offset of `remaining`.
+    pub offset: usize,
 }
 
-impl<V> Expand<V> for () {
-    fn expand(&self, path: &Pointer, src: V) -> Result<V, AssignError> {
-        if path.is_root() {
-            Ok(src)
-        } else {
-            Err(AssignError::FailedToExpand {
-                offset: 0,
-                source: "Expansion strategy not provided".into(),
-            })
-        }
+/// Expand is implemented by types which can expand the remaining, unresolved portion of a JSON
+/// Pointer during a call to [`Assign::assign`].
+pub trait Expand<V> {
+    /// Expands the remaining, unresolved portion of a JSON Pointer.
+    fn expand(&self, src: Source<'_, V>) -> Result<V, AssignError>;
+}
+
+impl<V, F> Expand<V> for F
+where
+    F: Fn(Source<'_, V>) -> Result<V, AssignError>,
+{
+    fn expand(&self, src: Source<'_, V>) -> Result<V, AssignError> {
+        self(src)
     }
 }
 
+/// Expansion strategy for [`Assign`].
 #[derive(Default)]
 pub enum Expansion<'e, V> {
-    /// This strategy will automatically expand the path of the [`Pointer`] if a
-    /// the `Pointer` is not fully exhausted before reaching a non-existent key
-    /// in the case of objects, or scalar value.
+    /// This strategy will automatically expand the path of the [`Pointer`] if
+    /// it is not fully exhausted before reaching a non-existent key in the case
+    /// of objects, index in the case of arrays, or a scalar value (including
+    /// `null`).
     ///
     /// If a scalar or non-existent path is encountered before the [`Pointer`]
     /// is exhausted, the path will automatically be expanded into
@@ -66,13 +88,12 @@ pub enum Expansion<'e, V> {
     /// - All tokens not equal to `"0"` or `"-"` will be considered keys of an
     ///   object.
     ///  
-    ///  Note: This strategy will not return [`AssignError::NotFound`] or
-    ///  [`AssignError::Unreachable`].
-    ///
+    ///  Note: This strategy will not return [`AssignError::FailedToExpand`]
     BestGuess,
 
-    /// This strategy will error if the [`Pointer`] is not fully exhausted before
-    /// a scalar or non-existent key or [`Index`](crate::Index) is encountered.
+    /// This strategy will return [`AssignError::FailedToExpand`] if the
+    /// [`Pointer`] is not fully exhausted before a scalar or non-existent key
+    /// or [`Index`](crate::Index) is encountered.
     #[default]
     Never,
 
@@ -215,13 +236,13 @@ impl fmt::Display for AssignError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::FailedToParseIndex { offset, .. } => {
-                write!(f, "failed to parse index at offset {}", offset)
+                write!(f, "failed to parse index at offset {offset}")
             }
             Self::OutOfBounds { offset, .. } => {
-                write!(f, "index at offset {} out of bounds", offset)
+                write!(f, "index at offset {offset} out of bounds")
             }
-            Self::FailedToExpand { source, .. } => {
-                write!(f, "{source}")
+            Self::FailedToExpand { offset, .. } => {
+                write!(f, "failed to expand pointer at offset {offset}")
             }
         }
     }
@@ -243,7 +264,7 @@ enum Assigned<'v, V> {
     Continue {
         next_buf: PointerBuf,
         next_value: &'v mut V,
-        same_src: V,
+        same_value: V,
     },
 }
 
@@ -255,34 +276,47 @@ mod json {
     use serde_json::{map::Entry, Map, Value};
 
     impl Expand<Value> for Expansion<'_, Value> {
-        fn expand(&self, path: &Pointer, src: Value) -> Result<Value, AssignError> {
+        fn expand(&self, src: Source<Value>) -> Result<Value, AssignError> {
             match self {
-                Expansion::BestGuess => expand_auto(path, src),
-                Expansion::Never => expand_error(path, src),
-                Expansion::Custom(e) => e.expand(path, src),
+                Expansion::BestGuess => best_guess(src),
+                Expansion::Never => never_expand(src),
+                Expansion::Custom(e) => e.expand(src),
             }
         }
     }
 
-    fn expand_auto(mut path: &Pointer, mut src: Value) -> Result<Value, AssignError> {
-        while let Some((ptr, tok)) = path.split_back() {
-            path = ptr;
+    /// Expansion::Never strategy - never expands the path, erroring if the path
+    /// is not fully exhausted.
+    fn never_expand(src: Source<Value>) -> Result<Value, AssignError> {
+        if src.remaining.is_root() {
+            Ok(src.value)
+        } else {
+            Err(AssignError::FailedToExpand {
+                offset: src.offset,
+                source: "path is not fully exhausted".into(),
+            })
+        }
+    }
+    fn best_guess(src: Source<Value>) -> Result<Value, AssignError> {
+        let Source {
+            mut remaining,
+            mut value,
+            ..
+        } = src;
+        while let Some((ptr, tok)) = remaining.split_back() {
+            remaining = ptr;
             match tok.decoded().as_ref() {
                 "0" | "-" => {
-                    src = Value::Array(vec![src]);
+                    value = Value::Array(vec![value]);
                 }
                 _ => {
                     let mut obj = Map::new();
-                    obj.insert(tok.to_string(), src);
-                    src = Value::Object(obj);
+                    obj.insert(tok.to_string(), value);
+                    value = Value::Object(obj);
                 }
             }
         }
-        Ok(src)
-    }
-
-    fn expand_error(path: &Pointer, src: Value) -> Result<Value, AssignError> {
-        todo!()
+        Ok(value)
     }
 
     impl Assign for Value {
@@ -300,8 +334,8 @@ mod json {
 
     pub(crate) fn assign_value<'v>(
         mut ptr: &Pointer,
-        mut value: &'v mut Value,
-        mut src: Value,
+        mut dest: &'v mut Value,
+        mut value: Value,
         expansion: Expansion<'_, Value>,
     ) -> Result<Assignment<'v, Value>, AssignError> {
         let mut offset = 0;
@@ -310,12 +344,14 @@ mod json {
         while let Some((token, tail)) = ptr.split_front() {
             let tok_len = token.encoded().chars().count();
 
-            let assigned = match value {
+            let assigned = match dest {
                 Value::Array(array) => {
-                    assign_array(token, tail, buf, array, src, offset, &expansion)?
+                    assign_array(token, tail, buf, array, value, offset, &expansion)?
                 }
-                Value::Object(obj) => assign_object(token, tail, buf, obj, src, &expansion)?,
-                _ => assign_scalar(token, ptr, buf, value, src, &expansion)?,
+                Value::Object(obj) => {
+                    assign_object(token, tail, buf, obj, value, offset, &expansion)?
+                }
+                _ => assign_scalar(token, ptr, buf, dest, value, offset, &expansion)?,
             };
             match assigned {
                 Assigned::Done(assignment) => {
@@ -324,11 +360,11 @@ mod json {
                 Assigned::Continue {
                     next_buf,
                     next_value,
-                    same_src,
+                    same_value: same_src,
                 } => {
                     buf = next_buf;
-                    src = same_src;
-                    value = next_value;
+                    value = same_src;
+                    dest = next_value;
                     ptr = tail;
                 }
             }
@@ -336,9 +372,9 @@ mod json {
         }
 
         // Pointer is root, we can replace `dest` directly
-        let replaced = Some(core::mem::replace(value, src.into()));
+        let replaced = Some(core::mem::replace(dest, value.into()));
         Ok(Assignment {
-            assigned: value,
+            assigned: dest,
             replaced,
             assigned_to: buf,
         })
@@ -381,14 +417,19 @@ mod json {
                 // the next value
                 Ok(Assigned::Continue {
                     next_value: &mut array[idx],
-                    same_src: src,
+                    same_value: src,
                     next_buf: buf,
                 })
             }
         } else {
             // element does not exist in the array.
             // we create the path and assign the value
-            let src = expansion.expand(remaining, src)?;
+            let src = expansion.expand(Source {
+                offset,
+                value: src,
+                resolved: &buf,
+                remaining,
+            })?;
             array.push(src);
             let assigned = array.last_mut().expect("just pushed");
             Ok(Assigned::Done(Assignment {
@@ -405,6 +446,7 @@ mod json {
         mut buf: PointerBuf,
         obj: &'v mut Map<String, Value>,
         src: Value,
+        offset: usize,
         expansion: &Expansion<'_, Value>,
     ) -> Result<Assigned<'v, Value>, AssignError> {
         // grabbing the entry of the token
@@ -429,7 +471,7 @@ mod json {
                     // if this is not the last token, we continue with a mutable
                     // reference to the entry as the next value
                     Ok(Assigned::Continue {
-                        same_src: src,
+                        same_value: src,
                         next_buf: buf,
                         next_value: entry,
                     })
@@ -439,7 +481,12 @@ mod json {
                 // if the entry does not exist, we create a value based on the
                 // remaining path with the src value as a leaf and assign it to the
                 // entry
-                let src = expansion.expand(remaining, src)?;
+                let src = expansion.expand(Source {
+                    value: src,
+                    resolved: &buf,
+                    remaining,
+                    offset,
+                })?;
                 let assigned = entry.insert(src);
                 Ok(Assigned::Done(Assignment {
                     assigned,
@@ -454,19 +501,24 @@ mod json {
         token: Token<'_>,
         remaining: &'_ Pointer,
         mut buf: PointerBuf,
-        value: &'v mut Value,
-        src: Value,
+        scalar: &'v mut Value,
+        value: Value,
+        offset: usize,
         expansion: &Expansion<'_, Value>,
     ) -> Result<Assigned<'v, Value>, AssignError> {
         // scalar values are always replaced at the current buf (with its token)
         // build the new src and we replace the value with it.
 
         buf.push_back(token);
-        let src = expansion.expand(remaining, src)?;
-        let replaced = Some(mem::replace(value, src));
-
+        let src = expansion.expand(Source {
+            remaining,
+            resolved: &buf,
+            offset,
+            value,
+        })?;
+        let replaced = Some(mem::replace(scalar, src));
         Ok(Assigned::Done(Assignment {
-            assigned: value,
+            assigned: scalar,
             assigned_to: buf,
             replaced,
         }))
@@ -686,7 +738,6 @@ mod json {
             ];
 
             for (path, assigned_to, val, expected, replaced) in tests {
-                println!("{}", serde_json::to_string_pretty(&data).unwrap());
                 let ptr = PointerBuf::parse(path).expect(&format!("failed to parse \"{path}\""));
                 let assignment = ptr
                     .assign(&mut data, val.clone(), Expansion::BestGuess)
