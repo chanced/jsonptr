@@ -1,5 +1,5 @@
 use crate::{
-    assign::Expand, Assign, Assignment, Delete, InvalidEncodingError, ParseError,
+    assign::Expand, Assign, Assignment, Delete, Expansion, InvalidEncodingError, ParseError,
     ReplaceTokenError, Resolve, ResolveMut, Token, Tokens,
 };
 use alloc::{
@@ -400,28 +400,26 @@ impl Pointer {
     ///
     /// ## Example
     /// ```rust
-    /// use jsonptr::{ Pointer, AutoExpand };
+    /// use jsonptr::{ Pointer, Expansion };
     /// use jsonptr::prelude::*; // <-- for Assign trait
     /// use serde_json::{json, Value};
     /// let mut data = json!([]);
     ///
     /// let mut ptr = Pointer::from_static("/0/foo");
     /// let src = json!("bar");
-    /// let assignment = data.assign(&ptr, src, AutoExpand::Enabled).unwrap();
+    /// let assignment = data.assign(&ptr, src, Expansion::Enabled).unwrap();
     /// assert_eq!(data, json!([{ "foo": "bar" } ]));
     /// ```
-    pub fn assign<'d, D, V, E>(
+    pub fn assign<'d, D>(
         &self,
         dest: &'d mut D,
-        src: V,
-        expand_strategy: E,
+        src: D::Value,
+        expansion: Expansion<'_, D::Value>,
     ) -> Result<Assignment<'d, D::Value>, D::Error>
     where
         D: Assign,
-        V: Into<D::Value>,
-        E: Expand<D::Value>,
     {
-        dest.assign(self, src, expand_strategy)
+        dest.assign(self, src, expansion)
     }
 }
 

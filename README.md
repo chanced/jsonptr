@@ -56,24 +56,24 @@ assert_eq!(bar, "baz");
 #### `Pointer::assign`
 
 ```rust
-use jsonptr::{Pointer, AutoExpand};
+use jsonptr::{Pointer, Expansion};
 use serde_json::json;
 
 let ptr = Pointer::from_static("/foo/bar");
 let mut data = json!({});
-let _previous = ptr.assign(&mut data, "qux", AutoExpand::Enabled).unwrap();
+let _previous = ptr.assign(&mut data, "qux", Expansion::Enabled).unwrap();
 assert_eq!(data, json!({ "foo": { "bar": "qux" }}))
 ```
 
 #### `Assign::asign`
 
 ```rust
-use jsonptr::{Assign, Pointer, AutoExpand};
+use jsonptr::{Assign, Pointer, Expansion};
 use serde_json::json;
 
 let ptr = Pointer::from_static("/foo/bar");
 let mut data = json!({});
-let _previous = data.assign(&ptr, "qux", AutoExpand::Enabled).unwrap();
+let _previous = data.assign(&ptr, "qux", Expansion::Enabled).unwrap();
 assert_eq!(data, json!({ "foo": { "bar": "qux" }}))
 ```
 
