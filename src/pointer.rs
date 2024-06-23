@@ -1,6 +1,8 @@
 use crate::{
-    Assign, Assignment, Delete, Expansion, InvalidEncodingError, ParseError, ReplaceTokenError,
-    Resolve, ResolveMut, Token, Tokens,
+    assign::{Assign, Assignment, Expansion},
+    delete::Delete,
+    resolve::{Resolve, ResolveMut},
+    InvalidEncodingError, ParseError, ReplaceTokenError, Token, Tokens,
 };
 use alloc::{
     borrow::ToOwned,
@@ -88,7 +90,7 @@ const fn is_valid_ptr(value: &str) -> bool {
 ///
 /// ## Example
 /// ```rust
-/// use jsonptr::{Pointer, Resolve};
+/// use jsonptr::{Pointer, resolve::Resolve};
 /// use serde_json::{json, Value};
 ///
 /// let data = json!({ "foo": { "bar": "baz" } });
@@ -134,7 +136,7 @@ impl Pointer {
     /// # Examples
     ///
     /// ```
-    /// use jsonptr::{Pointer, Resolve};
+    /// use jsonptr::{Pointer, resolve::Resolve};
     /// use serde_json::{json, Value};
     ///
     /// const POINTER: &Pointer = Pointer::from_static("/foo/bar");
@@ -345,7 +347,7 @@ impl Pointer {
     /// ## Examples
     /// ### Deleting a resolved pointer:
     /// ```rust
-    /// use jsonptr::{Pointer, Delete};
+    /// use jsonptr::{Pointer, delete::Delete};
     /// use serde_json::json;
     ///
     /// let mut data = json!({ "foo": { "bar": { "baz": "qux" } } });
@@ -355,7 +357,7 @@ impl Pointer {
     /// ```
     /// ### Deleting a non-existent Pointer returns `None`:
     /// ```rust
-    /// use jsonptr::Pointer;
+    /// use jsonptr::{ Pointer, delete::Delete };
     /// use serde_json::json;
     ///
     /// let mut data = json!({});
@@ -365,7 +367,7 @@ impl Pointer {
     /// ```
     /// ### Deleting a root pointer replaces the value with `Value::Null`:
     /// ```rust
-    /// use jsonptr::{Pointer, Delete};
+    /// use jsonptr::{Pointer, delete::Delete};
     /// use serde_json::json;
     ///
     /// let mut data = json!({ "foo": { "bar": "baz" } });
@@ -385,7 +387,7 @@ impl Pointer {
     ///
     /// ## Example
     /// ```rust
-    /// use jsonptr::{ Pointer, Expansion };
+    /// use jsonptr::{ Pointer, assign::Expansion };
     /// use jsonptr::prelude::*; // <-- for Assign trait
     /// use serde_json::{json, Value};
     /// let mut data = json!([]);

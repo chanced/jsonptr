@@ -84,9 +84,9 @@ pub enum Expansion<'e, V> {
     /// If a scalar or non-existent path is encountered before the [`Pointer`]
     /// is exhausted, the path will automatically be expanded into
     /// [`Assign::Value`] based upon a best-guess effort on the meaning of each
-    /// [`Token`]:
-    /// - If the [`Token`] is equal to `"0"` or `"-"`, the token will be
-    ///  considered an index of an array.
+    /// [`Token`](crate::Token):
+    /// - If the [`Token`](crate::Token) is equal to `"0"` or `"-"`, the token
+    ///  will be considered an index of an array.
     /// - All tokens not equal to `"0"` or `"-"` will be considered keys of an
     ///   object.
     ///  
@@ -151,7 +151,7 @@ pub struct Assignment<'v, V> {
     /// ## Example
     /// ```rust
     /// # use serde_json::json;
-    /// # use jsonptr::{Pointer, Assign, Expansion};
+    /// # use jsonptr::{ Pointer, assign::{ Assign, Expansion }};
     /// let mut data = json!({ "foo": ["zero"] });
     /// let mut ptr = Pointer::from_static("/foo/-");
     /// let assignment = data.assign(&mut ptr, "one", Expansion::BestGuess).unwrap();
@@ -535,7 +535,9 @@ mod json {
 
         use serde_json::{json, Value};
 
-        use crate::{assign::Expansion, AssignError, ParseIndexError, Pointer, PointerBuf};
+        use crate::{ParseIndexError, Pointer, PointerBuf};
+
+        use super::*;
 
         #[test]
         fn test_assign_error_partial_eq() {
@@ -617,6 +619,26 @@ mod json {
             assert_eq!(assignment.replaced, Some(Value::String("bar".to_string())));
             assert_eq!(assignment.assigned, &val2);
             assert_eq!(assignment.assigned_to, "/foo");
+
+            struct Test<'e> {
+                data: Value,
+                ptr: &'static str,
+                expansion: Expansion<'e, Value>,
+                expected_data: Value,
+                expected_error: Option<AssignError>,
+                expected_assigned: Option<Value>,
+                expected_assigned_to: &'static str,
+            }
+
+            let _tests = [Test {
+                data: json!({}),
+                ptr: "/foo",
+                expansion: Expansion::BestGuess,
+                expected_data: json!({ "foo": "bar" }),
+                expected_error: None,
+                expected_assigned: Some(json!("bar")),
+                expected_assigned_to: "/foo",
+            }];
 
             // let tests = [
             //     (

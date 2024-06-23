@@ -25,7 +25,7 @@ pub trait Resolve {
     /// Error associated with `Resolve`
     type Error;
 
-    /// Resolve a reference to a `serde_json::Value` based on the path in a
+    /// Resolve a reference to `Self::Value` based on the path in a
     /// [Pointer].
     fn resolve(&self, ptr: &Pointer) -> Result<&Self::Value, Self::Error>;
 }

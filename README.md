@@ -20,7 +20,7 @@ JSON Pointers can be created either with a slice of strings or directly from a p
 use jsonptr::Pointer;
 use serde_json::json;
 
-let mut data = json!({"foo": { "bar": "baz" }});
+let mut data = json!({ "foo": { "bar": "baz" } });
 let ptr = Pointer::from_static("/foo/bar");
 let bar = ptr.resolve(&data).unwrap();
 assert_eq!(bar, "baz");
@@ -29,10 +29,10 @@ assert_eq!(bar, "baz");
 #### `Resolve::resolve`
 
 ```rust
-use jsonptr::{Pointer, Resolve};
+use jsonptr::{ Pointer, resolve::Resolve };
 use serde_json::json;
 
-let mut data = json!({ "foo": { "bar": "baz" }});
+let mut data = json!({ "foo": { "bar": "baz" } });
 let ptr = Pointer::from_static("/foo/bar");
 let bar = data.resolve(&ptr).unwrap();
 assert_eq!(bar, "baz");
@@ -42,7 +42,7 @@ assert_eq!(bar, "baz");
 #### `ResolveMut::resolve_mut`
 
 ```rust
-use jsonptr::{Pointer, ResolveMut};
+use jsonptr::{Pointer, resolve::ResolveMut};
 use serde_json::json;
 
 let ptr = Pointer::from_static("/foo/bar");
@@ -56,7 +56,7 @@ assert_eq!(bar, "baz");
 #### `Pointer::assign`
 
 ```rust
-use jsonptr::{Pointer, Expansion};
+use jsonptr::{Pointer, assign::Expansion};
 use serde_json::json;
 
 let ptr = Pointer::from_static("/foo/bar");
@@ -68,7 +68,7 @@ assert_eq!(data, json!({ "foo": { "bar": "qux" }}))
 #### `Assign::asign`
 
 ```rust
-use jsonptr::{Assign, Pointer, Expansion};
+use jsonptr::{ assign::{ Assign, Expansion }, Pointer };
 use serde_json::json;
 
 let ptr = Pointer::from_static("/foo/bar");
@@ -98,7 +98,7 @@ assert_eq!(ptr.delete(&mut data), None);
 #### `Delete::delete`
 
 ```rust
-use jsonptr::{Pointer, Delete};
+use jsonptr::{ Pointer, delete::Delete };
 use serde_json::json;
 
 let mut data = json!({ "foo": { "bar": { "baz": "qux" } } });
@@ -115,12 +115,9 @@ assert!(data.is_null());
 
 ## Feature Flags
 
-|      Flag      | Enables                                                                                                                                         |
-| :------------: | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-|    `"std"`     | implements `std::error::Error` for errors                                                                                                       |
-|    `"url"`     | `TryFrom<url::Url>` for [`Pointer`](`crate::Pointer`)                                                                                           |
-|  `"uniresid"`  | `TryFrom<uniresid::Uri>` + `TryFrom<uniresid::AbsoluteUri>` for [`Pointer`](`crate::Pointer`)                                                   |
-| `"fluent-uri"` | `TryFrom<fluent_uri::Uri<&str>>` + `TryFrom<fluent_uri::Uri<String>>` + `TryFrom<fluent_uri::Uri<&mut [u8]>>` for [`Pointer`](`crate::Pointer`) |
+|  Flag   | Enables                                   |
+| :-----: | ----------------------------------------- |
+| `"std"` | implements `std::error::Error` for errors |
 
 ## Contributions / Issues
 
@@ -131,7 +128,3 @@ If you find an issue, please open a ticket or a pull request.
 ## License
 
 MIT or Apache 2.0.
-
-```
-
-```

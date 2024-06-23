@@ -6,17 +6,11 @@ extern crate alloc;
 
 use core::{fmt, num::ParseIntError};
 
-// TODO(chanced): make these pub?
-mod assign;
-pub use assign::{Assign, AssignError, Assignment, Expand, Expansion};
-mod delete;
-pub use delete::Delete;
-mod resolve;
-pub use resolve::{Resolve, ResolveError, ResolveMut};
-
+pub mod assign;
+pub mod delete;
 pub mod prelude;
+pub mod resolve;
 
-// TODO(chanced): move these into lib.rs
 mod tokens;
 pub use tokens::*;
 mod pointer;
