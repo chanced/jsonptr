@@ -16,7 +16,6 @@ type BoxedError = Box<dyn 'static + core::fmt::Debug + core::fmt::Display>;
 /// | Language  | Feature Flag |
 /// | --------- | ------------ |
 /// |   JSON    |   `"json"`   |
-/// |   YAML    |   `"yaml"`   |
 /// |   TOML    |   `"toml"`   |
 pub trait Assign {
     /// The type of value that this implementation can operate on.
@@ -26,7 +25,6 @@ pub trait Assign {
     /// | Lang  |     value type      | feature flag |
     /// | ----- |: ----------------- :|: ---------- :|
     /// | JSON  | `serde_json::Value` |   `"json"`   |
-    /// | YAML  | `serde_yaml::Value` |   `"yaml"`   |
     /// | TOML  |    `toml::Value`    |   `"toml"`   |
     type Value;
 

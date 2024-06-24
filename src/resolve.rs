@@ -8,7 +8,6 @@ use crate::{OutOfBoundsError, ParseIndexError, Pointer};
 /// | Language  | Feature Flag |
 /// | --------- | ------------ |
 /// |   JSON    |   `"json"`   |
-/// |   YAML    |   `"yaml"`   |
 /// |   TOML    |   `"toml"`   |
 pub trait Resolve {
     /// The type of value that this implementation can operate on.
@@ -18,7 +17,6 @@ pub trait Resolve {
     /// | Lang  |     value type      | feature flag |
     /// | ----- | ------------------- |: ---------- :|
     /// | JSON  | `serde_json::Value` |   `"json"`   |
-    /// | YAML  | `serde_yaml::Value` |   `"yaml"`   |
     /// | TOML  |    `toml::Value`    |   `"toml"`   |
     type Value;
 
@@ -40,7 +38,6 @@ pub trait ResolveMut {
     /// | Lang  |     value type      | feature flag |
     /// | ----- | ------------------- |: ---------- :|
     /// | JSON  | `serde_json::Value` |   `"json"`   |
-    /// | YAML  | `serde_yaml::Value` |   `"yaml"`   |
     /// | TOML  |    `toml::Value`    |   `"toml"`   |
     type Value;
 

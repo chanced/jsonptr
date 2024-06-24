@@ -21,10 +21,6 @@
 	optional         = true
 	version          = "1.0"
 
-[dependencies.serde_yaml]
-	optional = true
-	version  = "0.9.34"
-
 [dependencies.toml]
 	optional = true
 	version  = "0.8"
@@ -42,4 +38,3 @@
 	ops     = ["resolve", "assign", "delete"]
 	resolve = []
 	std     = ["serde/std", "serde_json?/std"]
-	yaml    = ["dep:serde_yaml"]

@@ -8,7 +8,6 @@ use crate::Pointer;
 /// | Language  | Feature Flag |
 /// | --------- | ------------ |
 /// |   JSON    |   `"json"`   |
-/// |   YAML    |   `"yaml"`   |
 /// |   TOML    |   `"toml"`   |
 pub trait Delete {
     /// The type of value that this implementation can operate on.
@@ -18,7 +17,6 @@ pub trait Delete {
     /// | Lang  |     value type      | feature flag |
     /// | ----- |: ----------------- :|: ---------- :|
     /// | JSON  | `serde_json::Value` |   `"json"`   |
-    /// | YAML  | `serde_yaml::Value` |   `"yaml"`   |
     /// | TOML  |    `toml::Value`    |   `"toml"`   |
     type Value;
 
