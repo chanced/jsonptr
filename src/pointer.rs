@@ -1,14 +1,18 @@
-use crate::{
-    assign::Assign,
-    delete::Delete,
-    resolve::{Resolve, ResolveMut},
-    InvalidEncodingError, ParseError, ReplaceTokenError, Token, Tokens,
-};
+#[cfg(feature = "assign")]
+use crate::assign::Assign;
+use crate::{InvalidEncodingError, ParseError, ReplaceTokenError, Token, Tokens};
 use alloc::{
     borrow::ToOwned,
     string::{String, ToString},
     vec::Vec,
 };
+
+#[cfg(feature = "delete")]
+use crate::delete::Delete;
+
+#[cfg(feature = "resolve")]
+use resolve::{Resolve, ResolveMut};
+
 use core::{borrow::Borrow, cmp::Ordering, ops::Deref, slice, str::FromStr};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -302,11 +306,13 @@ impl Pointer {
         self.tokens().nth(index).to_owned()
     }
 
+    #[cfg(feature = "resolve")]
     /// Attempts to resolve a `Value` based on the path in this `Pointer`.
     pub fn resolve<'v, R: Resolve>(&self, value: &'v R) -> Result<&'v R::Value, R::Error> {
         value.resolve(self)
     }
 
+    #[cfg(feature = "resolve")]
     /// Attempts to resolve a mutable `Value` based on the path in this `Pointer`.
     ///
     pub fn resolve_mut<'v, R: ResolveMut>(
@@ -375,6 +381,7 @@ impl Pointer {
     /// assert_eq!(data.delete(&ptr), Some(json!({ "foo": { "bar": "baz" } })));
     /// assert!(data.is_null());
     /// ```
+    #[cfg(feature = "delete")]
     pub fn delete<D: Delete>(&self, value: &mut D) -> Option<D::Value> {
         value.delete(self)
     }
@@ -397,6 +404,7 @@ impl Pointer {
     /// let assignment = data.assign(&ptr, src).unwrap();
     /// assert_eq!(data, json!([{ "foo": "bar" } ]));
     /// ```
+    #[cfg(feature = "assign")]
     pub fn assign<'d, D, V>(&self, dest: &'d mut D, src: V) -> Result<Option<D::Value>, D::Error>
     where
         D: Assign,
