@@ -316,6 +316,13 @@ impl Pointer {
 
     /// Finds the commonality between this and another `Pointer`.
     pub fn intersection<'a>(&'a self, other: &Self) -> &'a Self {
+        if &self.0 == "/" || &other.0 == "/" {
+            if self.0 != other.0 {
+                return Self::root();
+            } else {
+                return self;
+            }
+        }
         let mut last_slash = 0;
         let mut idx = 0;
         for (a, b) in self.0.bytes().zip(other.0.bytes()) {
