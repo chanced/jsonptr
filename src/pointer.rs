@@ -1,19 +1,16 @@
 #[cfg(feature = "assign")]
 use crate::assign::Assign;
+#[cfg(feature = "delete")]
+use crate::delete::Delete;
 use crate::{InvalidEncodingError, ParseError, ReplaceTokenError, Token, Tokens};
 use alloc::{
     borrow::ToOwned,
     string::{String, ToString},
     vec::Vec,
 };
-
-#[cfg(feature = "delete")]
-use crate::delete::Delete;
-
+use core::{borrow::Borrow, cmp::Ordering, ops::Deref, slice, str::FromStr};
 #[cfg(feature = "resolve")]
 use resolve::{Resolve, ResolveMut};
-
-use core::{borrow::Borrow, cmp::Ordering, ops::Deref, slice, str::FromStr};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
