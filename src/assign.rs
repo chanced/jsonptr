@@ -85,7 +85,7 @@ pub trait Assign {
     type Value;
 
     /// Error associated with `Assign`
-    type Error: From<AssignError>;
+    type Error;
 
     /// Assigns a value of based on the path provided by a JSON Pointer,
     /// returning the replaced value, if any.
@@ -99,7 +99,7 @@ pub trait Assign {
 }
 
 ///
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum AssignError {
     /// A `Token` within the `Pointer` failed to be parsed as an array index.
     FailedToParseIndex {
@@ -116,70 +116,22 @@ pub enum AssignError {
         /// The source [`OutOfBoundsError`]
         source: OutOfBoundsError,
     },
-
-    /// An error occurred while expanding the path.
-    FailedToExpand {
-        /// Offset of the partial pointer which triggered the expansion error.
-        offset: usize,
-        /// Underlying
-        source: BoxedError,
-    },
-}
-
-impl PartialEq for AssignError {
-    fn eq(&self, other: &Self) -> bool {
-        match self {
-            Self::FailedToParseIndex { offset, source } => {
-                let Self::FailedToParseIndex {
-                    offset: o,
-                    source: s,
-                } = other
-                else {
-                    return false;
-                };
-                offset == o && source == s
-            }
-            Self::OutOfBounds { offset, source } => {
-                let Self::OutOfBounds {
-                    offset: o,
-                    source: s,
-                } = other
-                else {
-                    return false;
-                };
-                offset == o && source == s
-            }
-            Self::FailedToExpand { offset, source } => {
-                let Self::FailedToExpand {
-                    offset: o,
-                    source: s,
-                } = other
-                else {
-                    return false;
-                };
-                // not ideal to allocate here but its the only way I can think
-                // of to get `PartialEq` on `Box<dyn Error>`
-                //
-                // I'm guessing this will only be used in tests but it may be
-                // worth an error enum specifically for expansion or dumping
-                // `PartialEq`
-                offset == o && source.to_string() == s.to_string()
-            }
-        }
-    }
 }
 
 impl fmt::Display for AssignError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::FailedToParseIndex { offset, .. } => {
-                write!(f, "failed to parse index at offset {offset}")
+                write!(
+                    f,
+                    "assignment failed due to an invalid index at offset {offset}"
+                )
             }
             Self::OutOfBounds { offset, .. } => {
-                write!(f, "index at offset {offset} out of bounds")
-            }
-            Self::FailedToExpand { offset, .. } => {
-                write!(f, "failed to expand pointer at offset {offset}")
+                write!(
+                    f,
+                    "assignment failed due to index at offset {offset} being out of bounds"
+                )
             }
         }
     }
@@ -191,7 +143,6 @@ impl std::error::Error for AssignError {
         match self {
             Self::FailedToParseIndex { source, .. } => Some(source),
             Self::OutOfBounds { source, .. } => Some(source),
-            Self::FailedToExpand { source, .. } => Some(source.as_ref()),
         }
     }
 }
@@ -369,67 +320,9 @@ mod json {
 
         use serde_json::{json, Value};
 
-        use crate::{ParseIndexError, Pointer, PointerBuf};
+        use crate::{Pointer, PointerBuf};
 
         use super::*;
-
-        #[test]
-        fn test_assign_error_partial_eq() {
-            assert_eq!(
-                AssignError::FailedToParseIndex {
-                    offset: 0,
-                    source: ParseIndexError {
-                        source: usize::from_str("invalid").unwrap_err()
-                    }
-                },
-                AssignError::FailedToParseIndex {
-                    offset: 0,
-                    source: ParseIndexError {
-                        source: usize::from_str("invalid").unwrap_err()
-                    }
-                }
-            );
-            assert_eq!(
-                AssignError::FailedToParseIndex {
-                    offset: 0,
-                    source: ParseIndexError {
-                        source: usize::from_str("invalid").unwrap_err()
-                    }
-                },
-                AssignError::FailedToParseIndex {
-                    offset: 0,
-                    source: ParseIndexError {
-                        source: usize::from_str("different-invalid").unwrap_err()
-                    }
-                },
-            );
-            assert_eq!(
-                AssignError::OutOfBounds {
-                    offset: 0,
-                    source: crate::OutOfBoundsError {
-                        length: 3,
-                        index: 5
-                    }
-                },
-                AssignError::OutOfBounds {
-                    offset: 0,
-                    source: crate::OutOfBoundsError {
-                        length: 3,
-                        index: 5
-                    }
-                },
-            );
-            assert_eq!(
-                AssignError::FailedToExpand {
-                    offset: 0,
-                    source: "error".into()
-                },
-                AssignError::FailedToExpand {
-                    offset: 0,
-                    source: "error".into()
-                },
-            );
-        }
 
         #[test]
         fn test_assign() {
