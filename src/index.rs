@@ -153,11 +153,7 @@ impl TryFrom<&Token<'_>> for Index {
         if value.encoded() == "-" {
             Ok(Index::Next)
         } else {
-            value
-                .decoded()
-                .parse::<usize>()
-                .map(Index::Num)
-                .map_err(ParseIndexError::new)
+            Ok(value.decoded().parse::<usize>().map(Index::Num)?)
         }
     }
 }
@@ -169,10 +165,7 @@ impl TryFrom<&str> for Index {
         if value == "-" {
             Ok(Index::Next)
         } else {
-            value
-                .parse::<usize>()
-                .map(Index::Num)
-                .map_err(ParseIndexError::new)
+            Ok(value.parse::<usize>().map(Index::Num)?)
         }
     }
 }

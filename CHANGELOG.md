@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-This is a breaking release including [#30](https://github.com/chanced/jsonptr/pull/30) and [#37](https://github.com/chanced/jsonptr/pull/37) by [@asmello](https://github.com/asmello)
+This is a breaking release including:
+
+-   [#30](https://github.com/chanced/jsonptr/pull/30) and [#37](https://github.com/chanced/jsonptr/pull/37) by [@asmello](https://github.com/asmello)
+-   [#41](https://github.com/chanced/jsonptr/pull/41) by [@chanced](https://github.com/chanced)
 
 ### Added
 
@@ -17,15 +20,20 @@ This is a breaking release including [#30](https://github.com/chanced/jsonptr/pu
 -   [Quickcheck](https://docs.rs/quickcheck/latest/quickcheck/index.html)-based testing
 -   New methods: `Pointer::split_front`, `Pointer::split_back`, `Pointer::parent`, `Pointer::strip_suffix`
 -   Implemented `Display` and `Debug` for `ParseError`
+-   Adds `Pointer::split_at` which utilizes character offsets to split a pointer at a seperator
+-   Adds specific error types `ParseError`, `ResolveError`, `AssignError`
 
 ### Changed
 
+-   `Assign`, `Resolve`, `ResolveMut`, `Delete` all now use associated types `Value` and `Error`, allowing for more impls other than JSON
 -   Debug implementation now preserves type information (e.g. prints `PathBuf("/foo/bar")` instead of `"/foo/bar"`) - `Display` remains the same
 -   Original `Pointer` type renamed to `PointerBuf`
+-   Error types now use character `offset` indexing instead of owned copies of `Pointer` and `Token`.
 -   `Pointer::root` is now `PointerBuf::new`
 -   `Pointer::new` is now `PointerBuf::from_tokens` (and takes an `IntoIterator` argument - arrays still work)
 -   `Pointer::union` is now `PointerBuf::intersection`
 -   `Token` type has been simplified and is now by default a borrowed type (use `Token::to_owned` or `Token::into_owned` to make it owned)
+-   `Assign::assign` now returns `Result<Option<Assign::Value>, AssignError>`, where `Option<Assign::Value>` is the replaced value
 
 ### Fixed
 
@@ -33,10 +41,11 @@ This is a breaking release including [#30](https://github.com/chanced/jsonptr/pu
 
 ### Removed
 
--   Removes `impl Deref<Target=&str>`
--   Removes optional dependencies of `url`, `fluent-uri` and `uniresid` as well
-    as the `TryFrom` implementations for `fluent_uri::Uri<String>`, `url::Url`,
-    `uniresid::AbsoluteUri`, and `uniresid::Uri`
+-   Removes `Assignment`
+-   Removes `MaybePointer`
+-   Removes `Error`
+-   Removes `impl Deref<Target=&str>` from `Pointer`
+-   Removes optional dependencies of `url`, `fluent-uri` and `uniresid` as well as the `TryFrom` implementations for their respective types
 -   Removed `Token::as_key` and `Token::as_str` - use `Token::decoded().as_ref()` to achieve the same effect
 -   Several redundant or error-prone trait implementations were removed from `Token`
 

@@ -49,11 +49,10 @@ impl<'a> Token<'a> {
     /// assert_eq!(err.offset(), 3);
     /// ```
     pub fn from_encoded(s: &'a str) -> Result<Self, InvalidEncodingError> {
-        let err_at = |i| Err(InvalidEncodingError::new(i));
         let mut escaped = false;
-        for (i, b) in s.bytes().enumerate() {
+        for (offset, b) in s.bytes().enumerate() {
             match b {
-                b'/' => return err_at(i),
+                b'/' => return Err(InvalidEncodingError { offset }),
                 ENC_PREFIX => {
                     escaped = true;
                 }
@@ -62,16 +61,15 @@ impl<'a> Token<'a> {
                 }
                 _ => {
                     if escaped {
-                        return err_at(i);
+                        return Err(InvalidEncodingError { offset });
                     }
                 }
             }
         }
         if escaped {
-            err_at(s.len())
-        } else {
-            Ok(Self { inner: s.into() })
+            return Err(InvalidEncodingError { offset: s.len() });
         }
+        Ok(Self { inner: s.into() })
     }
 
     /// Constructs a `Token` from an arbitrary string.

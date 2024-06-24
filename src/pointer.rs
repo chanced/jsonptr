@@ -1,91 +1,46 @@
-use crate::{
-    Assignment, Error, MalformedPointerError, NotFoundError, ReplaceTokenError, Token, Tokens,
-    UnresolvableError,
-};
+use crate::assign::Assign;
+use crate::delete::Delete;
+use crate::resolve::{Resolve, ResolveMut};
+use crate::{InvalidEncodingError, ParseError, ReplaceTokenError, Token, Tokens};
 use alloc::{
-    borrow::{Cow, ToOwned},
+    borrow::ToOwned,
     string::{String, ToString},
     vec::Vec,
 };
-use core::{borrow::Borrow, cmp::Ordering, mem, ops::Deref, slice, str::FromStr};
+use core::{borrow::Borrow, cmp::Ordering, ops::Deref, slice, str::FromStr};
 use serde::{Deserialize, Serialize};
-use serde_json::{map::Entry, Map, Value};
+use serde_json::Value;
 
-/// Helper type for deserialization. Either a valid [`Pointer`] or a string and
-/// the parsing error
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MaybePointer {
-    /// A valid [`Pointer`].
-    Pointer(PointerBuf),
-    /// An invalid [`Pointer`] and the error that caused it.
-    Malformed(String, MalformedPointerError),
-}
-impl Deref for MaybePointer {
-    type Target = str;
-
-    fn deref(&self) -> &Self::Target {
-        match self {
-            MaybePointer::Pointer(p) => p.as_str(),
-            MaybePointer::Malformed(s, _) => s,
-        }
+fn validate(value: &str) -> Result<&str, ParseError> {
+    match value.chars().next() {
+        Some('/') => {}                                        // expected
+        Some(_) => return Err(ParseError::NoLeadingBackslash), // invalid pointer - missing leading slash
+        None => return Ok(value),                              // done
     }
-}
-impl<'de> Deserialize<'de> for MaybePointer {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        String::deserialize(deserializer).map(|s| match PointerBuf::from_str(&s) {
-            Ok(ptr) => MaybePointer::Pointer(ptr),
-            Err(e) => MaybePointer::Malformed(s, e),
-        })
-    }
-}
-impl Serialize for MaybePointer {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        match self {
-            MaybePointer::Pointer(ptr) => serializer.serialize_str(ptr.as_str()),
-            MaybePointer::Malformed(s, _) => serializer.serialize_str(s),
-        }
-    }
-}
+    let mut ptr_offset = 0;
+    let mut tok_offset = 0;
+    let mut chars = value.char_indices();
 
-fn validate(value: &str) -> Result<&str, MalformedPointerError> {
-    let mut chars = value.chars();
-
-    match chars.next() {
-        Some('#') => {
-            let next = chars.next();
-            if next.is_none() {
-                return Ok(value);
-            }
-            if next != Some('/') {
-                return Err(MalformedPointerError::NoLeadingSlash(value.into()));
-            }
+    while let Some((offset, c)) = chars.next() {
+        if c == '/' {
+            tok_offset = 0;
+            ptr_offset = offset;
+            continue;
         }
-        Some('/') => {}
-        Some(_) => {
-            return Err(MalformedPointerError::NoLeadingSlash(value.into()));
-        }
-        None => {
-            return Ok(value);
-        }
-    }
-
-    while let Some(c) = chars.next() {
+        tok_offset += 1;
         if c == '~' {
-            match chars.next() {
-                Some('0') | Some('1') => {}
-                _ => {
-                    return Err(MalformedPointerError::InvalidEncoding(value.into()));
-                }
+            // pulling down
+            let next = chars.next().map(|(_, c)| c);
+            if !matches!(next, Some('0') | Some('1')) {
+                // '~' must be followed by '0' or '1' in order to be properly encoded
+                return Err(ParseError::InvalidEncoding {
+                    offset: ptr_offset,
+                    source: InvalidEncodingError { offset: tok_offset },
+                });
             }
+            tok_offset += 1;
         }
     }
-
     Ok(value)
 }
 
@@ -105,15 +60,6 @@ const fn is_valid_ptr(value: &str) -> bool {
     }
 
     match bytes[0] {
-        b'#' => {
-            if bytes.len() == 1 {
-                // also root pointer
-                return true;
-            }
-            if bytes[1] != b'/' {
-                return false;
-            }
-        }
         b'/' => {}
         _ => return false,
     }
@@ -142,7 +88,7 @@ const fn is_valid_ptr(value: &str) -> bool {
 ///
 /// ## Example
 /// ```rust
-/// use jsonptr::{Pointer, Resolve};
+/// use jsonptr::{Pointer, resolve::Resolve};
 /// use serde_json::{json, Value};
 ///
 /// let data = json!({ "foo": { "bar": "baz" } });
@@ -175,7 +121,7 @@ impl Pointer {
     /// Attempts to parse a string into a `Pointer`.
     ///
     /// If successful, this does not allocate.
-    pub fn parse<S: AsRef<str> + ?Sized>(s: &S) -> Result<&Self, MalformedPointerError> {
+    pub fn parse<S: AsRef<str> + ?Sized>(s: &S) -> Result<&Self, ParseError> {
         validate(s.as_ref()).map(Self::new)
     }
 
@@ -188,7 +134,7 @@ impl Pointer {
     /// # Examples
     ///
     /// ```
-    /// use jsonptr::{Pointer, Resolve};
+    /// use jsonptr::{Pointer, resolve::Resolve};
     /// use serde_json::{json, Value};
     ///
     /// const POINTER: &Pointer = Pointer::from_static("/foo/bar");
@@ -269,7 +215,7 @@ impl Pointer {
         self.front()
     }
 
-    /// Splits the `Pointer` into the first `Token` and a remainder.
+    /// Splits the `Pointer` into the first `Token` and a remainder `Pointer`.
     pub fn split_front(&self) -> Option<(Token, &Self)> {
         if self.is_root() {
             return None;
@@ -287,6 +233,35 @@ impl Pointer {
                 },
             )
             .into()
+    }
+    /// Splits the `Pointer` at the given index if the character at the index is
+    /// a seperator backslash (`'/'`), returning `Some((head, tail))`. Otherwise,
+    /// returns `None`.
+    ///
+    /// For the following JSON Pointer, the following splits are possible (0, 4, 8):
+    /// ```text
+    /// /foo/bar/baz
+    /// ↑   ↑   ↑
+    /// 0   4   8
+    /// ```
+    /// All other indices will return `None`.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// # use jsonptr::Pointer;
+    /// let ptr = Pointer::from_static("/foo/bar/baz");
+    /// let (head, tail) = ptr.split_at(4).unwrap();
+    /// assert_eq!(head, Pointer::from_static("/foo"));
+    /// assert_eq!(tail, Pointer::from_static("/bar/baz"));
+    /// assert_eq!(ptr.split_at(3), None);
+    /// ```
+    pub fn split_at(&self, idx: usize) -> Option<(&Self, &Self)> {
+        if self.0.get(idx..idx + 1) != Some("/") {
+            return None;
+        }
+        let (head, tail) = self.0.split_at(idx);
+        Some((Self::new(head), Self::new(tail)))
     }
 
     /// Splits the `Pointer` into the parent path and the last `Token`.
@@ -326,61 +301,17 @@ impl Pointer {
     }
 
     /// Attempts to resolve a `Value` based on the path in this `Pointer`.
-    pub fn resolve<'v>(&self, mut value: &'v Value) -> Result<&'v Value, Error> {
-        let partial_path = |suffix| {
-            self.strip_suffix(suffix)
-                .expect("suffix came from self")
-                .to_buf()
-        };
-        let mut pointer = self;
-        while let Some((token, rem)) = pointer.split_front() {
-            pointer = rem;
-            match value {
-                // found a leaf node but the pointer hasn't been exhausted
-                Value::Null | Value::Number(_) | Value::String(_) | Value::Bool(_) => {
-                    return Err(UnresolvableError::new(partial_path(rem)).into());
-                }
-                Value::Array(v) => {
-                    let idx = token.to_index()?.for_len_incl(v.len())?;
-                    value = &v[idx];
-                }
-                Value::Object(v) => {
-                    value = v
-                        .get(token.decoded().as_ref())
-                        .ok_or_else(|| Error::from(NotFoundError::new(partial_path(rem))))?;
-                }
-            }
-        }
-        Ok(value)
+    pub fn resolve<'v, R: Resolve>(&self, value: &'v R) -> Result<&'v R::Value, R::Error> {
+        value.resolve(self)
     }
 
     /// Attempts to resolve a mutable `Value` based on the path in this `Pointer`.
-    pub fn resolve_mut<'v>(&self, mut value: &'v mut Value) -> Result<&'v mut Value, Error> {
-        let partial_path = |suffix| {
-            self.strip_suffix(suffix)
-                .expect("suffix came from self")
-                .to_buf()
-        };
-        let mut pointer = self;
-        while let Some((token, rem)) = pointer.split_front() {
-            pointer = rem;
-            match value {
-                // found a leaf node but the pointer hasn't been exhausted
-                Value::Null | Value::Number(_) | Value::String(_) | Value::Bool(_) => {
-                    return Err(UnresolvableError::new(partial_path(rem)).into());
-                }
-                Value::Array(v) => {
-                    let idx = token.to_index()?.for_len_incl(v.len())?;
-                    value = &mut v[idx];
-                }
-                Value::Object(v) => {
-                    value = v
-                        .get_mut(token.decoded().as_ref())
-                        .ok_or_else(|| Error::from(NotFoundError::new(partial_path(rem))))?;
-                }
-            }
-        }
-        Ok(value)
+    ///
+    pub fn resolve_mut<'v, R: ResolveMut>(
+        &self,
+        value: &'v mut R,
+    ) -> Result<&'v mut R::Value, R::Error> {
+        value.resolve_mut(self)
     }
 
     /// Finds the commonality between this and another `Pointer`.
@@ -414,7 +345,7 @@ impl Pointer {
     /// ## Examples
     /// ### Deleting a resolved pointer:
     /// ```rust
-    /// use jsonptr::{Pointer, Delete};
+    /// use jsonptr::{Pointer, delete::Delete};
     /// use serde_json::json;
     ///
     /// let mut data = json!({ "foo": { "bar": { "baz": "qux" } } });
@@ -424,7 +355,7 @@ impl Pointer {
     /// ```
     /// ### Deleting a non-existent Pointer returns `None`:
     /// ```rust
-    /// use jsonptr::Pointer;
+    /// use jsonptr::{ Pointer, delete::Delete };
     /// use serde_json::json;
     ///
     /// let mut data = json!({});
@@ -434,7 +365,7 @@ impl Pointer {
     /// ```
     /// ### Deleting a root pointer replaces the value with `Value::Null`:
     /// ```rust
-    /// use jsonptr::{Pointer, Delete};
+    /// use jsonptr::{Pointer, delete::Delete};
     /// use serde_json::json;
     ///
     /// let mut data = json!({ "foo": { "bar": "baz" } });
@@ -442,23 +373,8 @@ impl Pointer {
     /// assert_eq!(data.delete(&ptr), Some(json!({ "foo": { "bar": "baz" } })));
     /// assert!(data.is_null());
     /// ```
-    pub fn delete(&self, value: &mut Value) -> Option<Value> {
-        let Some((parent_ptr, last)) = self.split_back() else {
-            // deleting at root
-            return Some(mem::replace(value, Value::Null));
-        };
-
-        parent_ptr
-            .resolve_mut(value)
-            .ok()
-            .and_then(|parent| match parent {
-                Value::Array(children) => {
-                    let idx = last.to_index().ok()?.for_len_incl(children.len()).ok()?;
-                    children.remove(idx).into()
-                }
-                Value::Object(children) => children.remove(last.decoded().as_ref()),
-                _ => None,
-            })
+    pub fn delete<D: Delete>(&self, value: &mut D) -> Option<D::Value> {
+        value.delete(self)
     }
 
     /// Attempts to assign `src` to `dest` based on the path in this `Pointer`.
@@ -470,109 +386,20 @@ impl Pointer {
     /// ## Example
     /// ```rust
     /// use jsonptr::Pointer;
-    /// use jsonptr::prelude::*; // <-- for Assign trait
     /// use serde_json::{json, Value};
-    /// let mut data = json!([]);
     ///
+    /// let mut data = json!([]);
     /// let mut ptr = Pointer::from_static("/0/foo");
-    /// let src = json!("bar");
-    /// let assignment = data.assign(&ptr, src).unwrap();
-    /// assert_eq!(data, json!([{ "foo": "bar" } ]));
+    /// let replaced = ptr.assign(&mut data, json!("bar")).unwrap();
+    /// assert_eq!(data, json!([{"foo": "bar"}]));
+    /// assert_eq!(replaced, None);
     /// ```
-    pub fn assign<'d, V>(&self, dest: &'d mut Value, src: V) -> Result<Assignment<'d>, Error>
+    pub fn assign<'d, D, V>(&self, dest: &'d mut D, src: V) -> Result<Option<D::Value>, D::Error>
     where
-        V: Into<Value>,
+        D: Assign,
+        V: Into<D::Value>,
     {
-        self._assign(dest, src, None, PointerBuf::new())
-    }
-
-    fn _assign<'d, V>(
-        &self,
-        dest: &'d mut Value,
-        src: V,
-        created_or_mutated: Option<PointerBuf>,
-        mut assigned_to: PointerBuf,
-    ) -> Result<Assignment<'d>, Error>
-    where
-        V: Into<Value>,
-    {
-        if let Some((token, tail)) = self.split_front() {
-            match dest {
-                Value::Null | Value::Number(_) | Value::String(_) | Value::Bool(_) => {
-                    match token.decoded().as_ref() {
-                        "0" => {
-                            // first element will be traversed when we recurse
-                            *dest = alloc::vec![Value::Null].into();
-                        }
-                        "-" => {
-                            // new element will be appended when we recurse
-                            *dest = Value::Array(Vec::new());
-                        }
-                        _ => {
-                            // any other values must be interpreted as map keys
-                            *dest = Map::new().into();
-                        }
-                    }
-                    // Now that the node is a container type, we can recurse into the other cases
-                    self._assign(
-                        dest,
-                        src,
-                        // if this is the first node we created while descending, we record that here
-                        created_or_mutated.or_else(|| assigned_to.clone().into()),
-                        assigned_to,
-                    )
-                }
-                Value::Array(v) => {
-                    let idx = token.to_index()?.for_len_incl(v.len())?;
-                    debug_assert!(idx <= v.len());
-                    if idx == v.len() {
-                        assigned_to.push_back(idx.into());
-                        v.push(Value::Null);
-                        tail._assign(
-                            v.last_mut().expect("just pushed"),
-                            src,
-                            // NOTE: this MUST be the first node we're creating, because we can't
-                            // append to arrays that do not yet exist! So `created_or_mutated` must
-                            // be `None` at this point, and we always set it to the current path.
-                            assigned_to.clone().into(),
-                            assigned_to,
-                        )
-                    } else {
-                        assigned_to.push_back(token);
-                        tail._assign(&mut v[idx], src, created_or_mutated, assigned_to)
-                    }
-                }
-                Value::Object(v) => {
-                    assigned_to.push_back(token.clone());
-                    match v.entry(token.to_string()) {
-                        Entry::Occupied(entry) => {
-                            tail._assign(entry.into_mut(), src, created_or_mutated, assigned_to)
-                        }
-                        Entry::Vacant(entry) => {
-                            let dest = entry.insert(Value::Null);
-                            tail._assign(
-                                dest,
-                                src,
-                                // if this is the first node we created while descending, we record that here
-                                created_or_mutated.or_else(|| assigned_to.clone().into()),
-                                assigned_to,
-                            )
-                        }
-                    }
-                }
-            }
-        } else {
-            // Pointer is root, we can replace `dest` directly
-            let replaced = core::mem::replace(dest, src.into());
-            Ok(Assignment {
-                assigned: Cow::Borrowed(dest),
-                replaced,
-                created_or_mutated: created_or_mutated.unwrap_or_else(|| assigned_to.clone()),
-                // NOTE: in practice, `assigned_to` is always equivalent to the original pointer,
-                // with `-` replaced by the actual index (if it occurs)
-                assigned_to,
-            })
-        }
+        dest.assign(self, src)
     }
 }
 
@@ -690,17 +517,6 @@ impl<'a> IntoIterator for &'a Pointer {
 /// This type provides methods like [`PointerBuf::push_back`] and [`PointerBuf::replace_token`] that
 /// mutate the pointer in place. It also implements [`core::ops::Deref`] to [`Pointer`], meaning that
 /// all methods on [`Pointer`] slices are available on `PointerBuf` values as well.
-#[cfg_attr(
-    feature = "url",
-    doc = r##"
-```rust
-use jsonptr::PointerBuf;
-let expected = PointerBuf::from_tokens(&["foo", "bar"]);
-let url = url::Url::parse("https://example.com#/foo/bar").unwrap();
-assert_eq!(expected, PointerBuf::try_from(url).unwrap())
-```
-"##
-)]
 #[derive(Clone, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PointerBuf(String);
 
@@ -708,6 +524,11 @@ impl PointerBuf {
     /// Creates a new `PointerBuf` pointing to a document root.
     pub fn new() -> Self {
         Self(String::new())
+    }
+
+    /// Attempts to parse a string into a `PointerBuf`.
+    pub fn parse(s: &str) -> Result<Self, ParseError> {
+        Pointer::parse(s).map(Pointer::to_buf)
     }
 
     /// Creates a new `PointerBuf` from a slice of non-encoded strings.
@@ -789,7 +610,6 @@ impl PointerBuf {
             return Err(ReplaceTokenError {
                 count: self.count(),
                 index,
-                pointer: self.clone(),
             });
         }
         let mut tokens = self.tokens().collect::<Vec<_>>();
@@ -797,7 +617,6 @@ impl PointerBuf {
             return Err(ReplaceTokenError {
                 count: tokens.len(),
                 index,
-                pointer: self.clone(),
             });
         }
         let old = tokens.get(index).map(|t| t.to_owned());
@@ -820,7 +639,7 @@ impl PointerBuf {
 }
 
 impl FromStr for PointerBuf {
-    type Err = MalformedPointerError;
+    type Err = ParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::try_from(s)
     }
@@ -866,7 +685,7 @@ impl From<Token<'_>> for PointerBuf {
 }
 
 impl TryFrom<String> for PointerBuf {
-    type Error = MalformedPointerError;
+    type Error = ParseError;
     fn try_from(value: String) -> Result<Self, Self::Error> {
         let _ = validate(&value)?;
         Ok(Self(value))
@@ -888,7 +707,7 @@ impl<'a> IntoIterator for &'a PointerBuf {
 }
 
 impl TryFrom<&str> for PointerBuf {
-    type Error = MalformedPointerError;
+    type Error = ParseError;
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         Pointer::parse(value).map(Pointer::to_buf)
     }
@@ -915,11 +734,8 @@ impl core::fmt::Display for PointerBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Resolve, ResolveMut};
-    use alloc::vec;
     use quickcheck::TestResult;
     use quickcheck_macros::quickcheck;
-    use serde_json::json;
 
     #[test]
     #[should_panic]
@@ -928,103 +744,52 @@ mod tests {
     }
 
     #[test]
-    fn test_rfc_examples() {
-        let data = json!({
-            "foo": ["bar", "baz"],
-            "": 0,
-            "a/b": 1,
-            "c%d": 2,
-            "e^f": 3,
-            "g|h": 4,
-            "i\\j": 5,
-            "k\"l": 6,
-            " ": 7,
-            "m~n": 8
-        });
-
-        let val = data.get("").unwrap();
-        assert_eq!(val, 0);
-
-        // ""           // the whole document
-        let ptr = Pointer::root();
-        assert_eq!(data.resolve(ptr).unwrap(), &data);
-
-        // "/foo"       ["bar", "baz"]
-        let ptr = Pointer::from_static("/foo");
-        assert_eq!(data.resolve(ptr).unwrap(), &json!(["bar", "baz"]));
-
-        // "/foo/0"     "bar"
-        let ptr = Pointer::from_static("/foo/0");
-        assert_eq!(data.resolve(ptr).unwrap(), &json!("bar"));
-
-        // // "/"          0
-        let ptr = Pointer::from_static("/");
-        assert_eq!(data.resolve(ptr).unwrap(), &json!(0));
-
-        // "/a~1b"      1
-        assert_eq!(data.get("a/b").unwrap(), 1);
-        let ptr = Pointer::from_static("/a~1b");
-        assert_eq!(ptr.as_str(), "/a~1b");
-        assert_eq!(data.get("a/b").unwrap(), 1);
-        assert_eq!(&ptr.first().unwrap().decoded(), "a/b");
-        assert_eq!(data.resolve(ptr).unwrap(), &json!(1));
-
-        // "/c%d"       2
-        let ptr = Pointer::from_static("/c%d");
-        assert_eq!(data.resolve(ptr).unwrap(), &json!(2));
-
-        // // "/e^f"       3
-        let ptr = Pointer::from_static("/e^f");
-        assert_eq!(data.resolve(ptr).unwrap(), &json!(3));
-
-        // // "/g|h"       4
-        let ptr = Pointer::from_static("/g|h");
-        assert_eq!(data.resolve(ptr).unwrap(), &json!(4));
-
-        // "/i\\j"      5
-        let ptr = Pointer::from_static("/i\\j");
-        assert_eq!(data.resolve(ptr).unwrap(), &json!(5));
-
-        // // "/k\"l"      6
-        let ptr = Pointer::from_static("/k\"l");
-        assert_eq!(data.resolve(ptr).unwrap(), &json!(6));
-
-        // // "/ "         7
-        let ptr = Pointer::from_static("/ ");
-        assert_eq!(data.resolve(ptr).unwrap(), &json!(7));
-        // // "/m~0n"      8
-        let ptr = Pointer::from_static("/m~0n");
-        assert_eq!(data.resolve(ptr).unwrap(), &json!(8));
-    }
-
-    #[test]
-    fn test_try_from_validation() {
-        assert!(PointerBuf::try_from("").is_ok());
-        assert!(PointerBuf::try_from("/").is_ok());
-        assert!(PointerBuf::try_from("/foo").is_ok());
-
-        let res = PointerBuf::try_from("/foo~");
-        assert!(res.is_err());
-        let err = res.unwrap_err();
-        assert_eq!(
-            err,
-            MalformedPointerError::InvalidEncoding("/foo~".to_string())
-        );
-
-        let res = PointerBuf::try_from("foo");
-        assert!(res.is_err());
-        let err = res.unwrap_err();
-        assert_eq!(
-            err,
-            MalformedPointerError::NoLeadingSlash("foo".to_string())
-        );
-
-        assert!(PointerBuf::try_from("/foo/bar/baz/~1/~0").is_ok());
-
-        assert_eq!(
-            &PointerBuf::try_from("/foo/bar/baz/~1/~0").unwrap(),
-            "/foo/bar/baz/~1/~0"
-        );
+    fn test_parse() {
+        let tests = [
+            ("", Ok("")),
+            ("/", Ok("/")),
+            ("/foo", Ok("/foo")),
+            ("/foo/bar", Ok("/foo/bar")),
+            ("/foo/bar/baz", Ok("/foo/bar/baz")),
+            ("/foo/bar/baz/~0", Ok("/foo/bar/baz/~0")),
+            ("/foo/bar/baz/~1", Ok("/foo/bar/baz/~1")),
+            ("/foo/bar/baz/~01", Ok("/foo/bar/baz/~01")),
+            ("/foo/bar/baz/~10", Ok("/foo/bar/baz/~10")),
+            ("/foo/bar/baz/~11", Ok("/foo/bar/baz/~11")),
+            ("/foo/bar/baz/~1/~0", Ok("/foo/bar/baz/~1/~0")),
+            ("missing-slash", Err(ParseError::NoLeadingBackslash)),
+            (
+                "/~",
+                Err(ParseError::InvalidEncoding {
+                    offset: 0,
+                    source: InvalidEncodingError { offset: 1 },
+                }),
+            ),
+            (
+                "/~2",
+                Err(ParseError::InvalidEncoding {
+                    offset: 0,
+                    source: InvalidEncodingError { offset: 1 },
+                }),
+            ),
+            (
+                "/~a",
+                Err(ParseError::InvalidEncoding {
+                    offset: 0,
+                    source: InvalidEncodingError { offset: 1 },
+                }),
+            ),
+        ];
+        for (input, expected) in tests {
+            let actual = Pointer::parse(input).map(Pointer::as_str);
+            assert_eq!(
+                actual, expected,
+                "pointer parsing failed to meet expectations
+                \ninput: {input}
+                \nexpected:\n{expected:#?}
+                \nactual:\n{actual:#?}",
+            );
+        }
     }
 
     #[test]
@@ -1188,263 +953,6 @@ mod tests {
         assert_eq!(ptr.first(), None);
     }
 
-    fn test_data() -> serde_json::Value {
-        json!({
-            "foo": {
-                "bar": {
-                    "baz": {
-                        "qux": "quux"
-                    }
-                },
-                "strings": ["zero", "one", "two"],
-                "nothing": null,
-                "bool": true,
-                "objects": [{
-                    "field": "zero"
-                }, {
-                    "field": "one"
-                }, {
-                    "field": "two"
-                }]
-            }
-        })
-    }
-
-    #[test]
-    fn test_resolve_unresolvable() {
-        let mut data = test_data();
-        let ptr = Pointer::from_static("/foo/bool/unresolvable");
-        let res = ptr.resolve_mut(&mut data);
-
-        assert!(res.is_err());
-        let err = res.unwrap_err();
-        assert!(err.is_unresolvable());
-    }
-
-    #[test]
-    fn test_resolve_not_found() {
-        let mut data = test_data();
-        let ptr = PointerBuf::from_tokens(["foo", "not_found", "nope"]);
-        let res = ptr.resolve_mut(&mut data);
-        assert!(res.is_err());
-        let err = res.unwrap_err();
-        assert!(err.is_not_found());
-        match err {
-            Error::NotFound(err) => {
-                assert_eq!(err.pointer, "/foo/not_found");
-            }
-            _ => panic!("expected NotFound"),
-        }
-    }
-
-    #[test]
-    fn test_try_from() {
-        let ptr = PointerBuf::from_tokens(["foo", "bar", "~/"]);
-
-        assert_eq!(PointerBuf::try_from("/foo/bar/~0~1").unwrap(), ptr);
-        let into: PointerBuf = "/foo/bar/~0~1".try_into().unwrap();
-        assert_eq!(ptr, into);
-    }
-
-    #[test]
-    fn test_resolve_mut_unresolvable_error() {
-        let mut data = test_data();
-        let ptr = Pointer::from_static("/foo/bool/unresolvable/not-in-token");
-        let res = ptr.resolve_mut(&mut data);
-        assert!(res.is_err());
-        let unresolvable = "/foo/bool/unresolvable".try_into().unwrap();
-        assert_eq!(
-            res.err().unwrap(),
-            UnresolvableError::new(unresolvable).into()
-        );
-
-        let mut data = json!({"foo": "bar"});
-        let ptr = PointerBuf::try_from("/foo/unresolvable").unwrap();
-        let err = data.resolve_mut(&ptr).unwrap_err();
-        assert_eq!(err, UnresolvableError::new(ptr).into());
-    }
-
-    #[test]
-    fn test_resolve_unresolvable_error() {
-        let data = test_data();
-        let ptr = Pointer::from_static("/foo/bool/unresolvable/not-in-token");
-        let res = ptr.resolve(&data);
-
-        assert!(res.is_err());
-        let unresolvable = "/foo/bool/unresolvable".try_into().unwrap();
-        assert_eq!(
-            res.err().unwrap(),
-            UnresolvableError::new(unresolvable).into()
-        )
-    }
-
-    #[test]
-    fn test_assign() {
-        let mut data = json!({});
-        let ptr = Pointer::from_static("/foo");
-        let val = json!("bar");
-        let assignment = ptr.assign(&mut data, val.clone()).unwrap();
-        assert_eq!(assignment.replaced, Value::Null);
-        assert_eq!(assignment.assigned.clone().into_owned(), val);
-        assert_eq!(assignment.assigned_to, "/foo");
-
-        // now testing replacement
-        let val2 = json!("baz");
-        let assignment = ptr.assign(&mut data, val2.clone()).unwrap();
-        assert_eq!(assignment.replaced, Value::String("bar".to_string()));
-        assert_eq!(assignment.assigned.clone().into_owned(), val2);
-        assert_eq!(assignment.assigned_to, "/foo");
-    }
-
-    #[test]
-    fn test_assign_with_explicit_array_path() {
-        let mut data = json!({});
-        let ptr = Pointer::from_static("/foo/0/bar");
-        let val = json!("baz");
-
-        let assignment = ptr.assign(&mut data, val).unwrap();
-        assert_eq!(assignment.replaced, Value::Null);
-        assert_eq!(assignment.assigned_to, "/foo/0/bar");
-        assert_eq!(assignment.replaced, Value::Null);
-        assert_eq!(
-            json!({
-                "foo": [
-                    {
-                        "bar": "baz"
-                    }
-                ]
-            }),
-            data.clone()
-        );
-    }
-
-    #[test]
-    fn test_assign_array_with_next_token() {
-        let mut data = json!({});
-        let ptr = PointerBuf::try_from("/foo/-/bar").unwrap();
-        let val = json!("baz");
-        let assignment = ptr.assign(&mut data, val).unwrap();
-        assert_eq!(assignment.replaced, Value::Null);
-        assert_eq!(
-            assignment.assigned_to, "/foo/0/bar",
-            "`assigned_to` should equal \"/foo/0/bar\""
-        );
-        assert_eq!(assignment.replaced, Value::Null);
-        assert_eq!(
-            json!({
-                "foo": [
-                    {
-                        "bar": "baz"
-                    }
-                ]
-            }),
-            data.clone()
-        );
-        let val = json!("baz2");
-        let assignment = ptr.assign(&mut data, val).unwrap();
-        assert_eq!(assignment.replaced, Value::Null);
-        assert_eq!(
-            assignment.assigned_to, "/foo/1/bar",
-            "`assigned_to` should equal \"/foo/1/bar\""
-        );
-        assert_eq!(assignment.replaced, Value::Null);
-        assert_eq!(
-            json!({
-                "foo": [
-                    {
-                        "bar": "baz"
-                    },
-                    {
-                        "bar": "baz2"
-                    }
-                ]
-            }),
-            data.clone()
-        );
-        let ptr = PointerBuf::try_from("/foo/0/bar").unwrap();
-        let val = json!("qux");
-        let assignment = ptr.assign(&mut data, val).unwrap();
-        // assert_eq!(assignment.assigned_to, "/foo/0/bar");
-        assert_eq!(assignment.replaced, Value::String("baz".to_string()));
-        assert_eq!(
-            json!({
-                "foo": [
-                    {
-                        "bar": "qux"
-                    },
-                    {
-                        "bar": "baz2"
-                    }
-                ]
-            }),
-            data.clone()
-        );
-    }
-
-    #[test]
-    fn test_assign_with_obj_path() {
-        let mut data = json!({});
-        let ptr = PointerBuf::try_from("/foo/bar").unwrap();
-        let val = json!("baz");
-
-        let assignment = ptr.assign(&mut data, val).unwrap();
-        assert_eq!(assignment.assigned_to, "/foo/bar");
-        assert_eq!(assignment.replaced, Value::Null);
-        assert_eq!(
-            json!({
-                "foo": {
-                    "bar": "baz"
-                }
-            }),
-            data.clone()
-        );
-    }
-
-    #[test]
-    fn test_assign_with_scalar_replace() {
-        let mut data = json!({
-            "foo": "bar"
-        });
-
-        let ptr = Pointer::from_static("/foo/bar/baz");
-        let val = json!("qux");
-
-        ptr.assign(&mut data, val).unwrap();
-        assert_eq!(
-            json!({
-                "foo": {
-                    "bar": {
-                        "baz": "qux"
-                    }
-                }
-            }),
-            data.clone()
-        );
-    }
-
-    #[test]
-    fn nested_maps_with_empty_keys() {
-        let data = json!({
-            "": {
-                "": {
-                    "bar": 42,
-                }
-            }
-        });
-
-        {
-            let ptr = Pointer::from_static("///bar");
-            assert_eq!(ptr.resolve(&data).unwrap(), 42);
-        }
-        {
-            let mut ptr = PointerBuf::new();
-            ptr.push_back("".into());
-            ptr.push_back("".into());
-            ptr.push_back("bar".into());
-            assert_eq!(ptr.resolve(&data).unwrap(), 42);
-        }
-    }
-
     #[test]
     fn pop_back_works_with_empty_strings() {
         {
@@ -1505,14 +1013,6 @@ mod tests {
         let a = Pointer::from_static("/fooqux");
         let b = Pointer::from_static("/foobar");
         assert_eq!(a.intersection(b), base);
-    }
-
-    #[test]
-    #[cfg(feature = "fluent-uri")]
-    fn test_try_from_fluent_uri() {
-        let uri = fluent_uri::Uri::parse("#/foo/bar").unwrap();
-        let ptr = PointerBuf::try_from(&uri).unwrap();
-        assert_eq!(ptr, "/foo/bar");
     }
 
     #[quickcheck]
@@ -1643,5 +1143,20 @@ mod tests {
         b.append(&suffix_1);
         let isect = a.intersection(&b);
         TestResult::from_bool(isect == base)
+    }
+
+    #[test]
+    fn test_intersection_issue_44() {
+        let base = PointerBuf::new();
+        let suffix_0 = Pointer::from_static("/").to_buf();
+        let suffix_1 = Pointer::from_static("/a/b/c").to_buf();
+        println!("suffix_1: {suffix_1:?}");
+        let mut a = base.clone();
+        a.append(&suffix_0);
+        let mut b = base.clone();
+        b.append(&suffix_1);
+        let isect = a.intersection(&b);
+        //
+        assert_eq!(isect, base);
     }
 }
