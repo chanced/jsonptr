@@ -152,7 +152,7 @@ enum Assigned<'v, V> {
     Continue { next_dest: &'v mut V, same_value: V },
 }
 
-#[cfg(feature = "json")]
+#[cfg(feature = "serde_json")]
 mod json {
     use super::*;
     use crate::{Pointer, Token};
@@ -321,8 +321,6 @@ mod json {
         use serde_json::{json, Value};
 
         use crate::{Pointer, PointerBuf};
-
-        use super::*;
 
         #[test]
         fn test_assign() {

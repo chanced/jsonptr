@@ -6,17 +6,26 @@ extern crate alloc;
 
 use core::{fmt, num::ParseIntError};
 
-pub mod assign;
-pub mod delete;
 pub mod prelude;
+
+#[cfg(feature = "assign")]
+pub mod assign;
+
+#[cfg(feature = "delete")]
+pub mod delete;
+
+#[cfg(feature = "resolve")]
 pub mod resolve;
 
 mod tokens;
 pub use tokens::*;
+
 mod pointer;
 pub use pointer::*;
+
 mod token;
 pub use token::*;
+
 pub mod index;
 pub use index::Index;
 
