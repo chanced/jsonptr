@@ -1,5 +1,6 @@
 use crate::assign::Assign;
 use crate::delete::Delete;
+use crate::resolve::{Resolve, ResolveMut};
 use crate::{InvalidEncodingError, ParseError, ReplaceTokenError, Token, Tokens};
 use alloc::{
     borrow::ToOwned,
@@ -7,7 +8,6 @@ use alloc::{
     vec::Vec,
 };
 use core::{borrow::Borrow, cmp::Ordering, ops::Deref, slice, str::FromStr};
-use resolve::{Resolve, ResolveMut};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -386,14 +386,13 @@ impl Pointer {
     /// ## Example
     /// ```rust
     /// use jsonptr::Pointer;
-    /// use jsonptr::prelude::*; // <-- for Assign trait
     /// use serde_json::{json, Value};
-    /// let mut data = json!([]);
     ///
+    /// let mut data = json!([]);
     /// let mut ptr = Pointer::from_static("/0/foo");
-    /// let src = json!("bar");
-    /// let assignment = data.assign(&ptr, src).unwrap();
-    /// assert_eq!(data, json!([{ "foo": "bar" } ]));
+    /// let replaced = ptr.assign(&mut data, json!("bar")).unwrap();
+    /// assert_eq!(data, json!([{"foo": "bar"}]));
+    /// assert_eq!(replaced, None);
     /// ```
     pub fn assign<'d, D, V>(&self, dest: &'d mut D, src: V) -> Result<Option<D::Value>, D::Error>
     where

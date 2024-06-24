@@ -1,12 +1,6 @@
 use crate::{OutOfBoundsError, ParseIndexError, Pointer};
 use core::fmt::{self, Debug};
 
-#[cfg(feature = "std")]
-type BoxedError = Box<dyn 'static + std::error::Error>;
-
-#[cfg(not(feature = "std"))]
-type BoxedError = Box<dyn 'static + core::fmt::Debug + core::fmt::Display>;
-
 /// Implemented by types which can internally assign a
 /// ([`Value`](`Assign::Value`)) at a path represented by a JSON [`Pointer`].
 ///
@@ -151,7 +145,7 @@ enum Assigned<'v, V> {
     Continue { next_dest: &'v mut V, same_value: V },
 }
 
-#[cfg(feature = "serde_json")]
+#[cfg(feature = "json")]
 mod json {
     use super::*;
     use crate::{Pointer, Token};
