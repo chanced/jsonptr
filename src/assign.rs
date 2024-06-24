@@ -624,74 +624,19 @@ mod json {
                 data: Value,
                 ptr: &'static str,
                 expansion: Expansion<'e, Value>,
-                expected_data: Value,
-                expected_error: Option<AssignError>,
-                expected_assigned: Option<Value>,
-                expected_assigned_to: &'static str,
             }
 
             let _tests = [Test {
                 data: json!({}),
                 ptr: "/foo",
                 expansion: Expansion::BestGuess,
-                expected_data: json!({ "foo": "bar" }),
-                expected_error: None,
-                expected_assigned: Some(json!("bar")),
-                expected_assigned_to: "/foo",
             }];
 
-            // let tests = [
-            //     (
-            //         // `pointer` of the assignment
-            //         "/foo",
-            //         // value to assign
-            //         json!("bar"),
-            //         // `Expand` strategy
-            //         Expansion::BestGuess,
-            //         // expected `Result`
-            //         Ok(Assignment {
-            //             assigned: &mut placeholder,
-            //             assigned_to: PointerBuf::from_str("/foo").unwrap(),
-            //             replaced: None,
-            //         }),
-            //         // expected assigned
-            //         Some(json!("bar")),
-            //         // expected replaced
-            //         None,
-            //         // expected data
-            //         json!({"foo": "bar"}),
-            //     ),
-            //     (
-            //         "/foo/list",
-            //         json!([]),
-            //         Expansion::BestGuess,
-            //         Ok(Assignment {
-            //             assigned: &mut placeholder,
-            //             assigned_to: PointerBuf::from_str("/foo").unwrap(),
-            //             replaced: Some(json!("bar")),
-            //         }),
-            //         // expected assigned
-            //         Some(json!({ "list": [] })),
-            //         // expected replaced
-            //         Some(json!("bar")),
-            //         json!({"foo": { "list": []}}),
-            //     ),
-            // ];
-            // for (
-            //     pointer,
-            //     value,
-            //     expand,
-            //     expected_result,
-            //     expected_assigned,
-            //     expected_replaced,
-            //     expected_data,
-            // ) in tests
-            // {
-            //     let ptr = PointerBuf::from_str(pointer).unwrap();
-            //     let assignment = ptr.assign(&mut data, value, expand);
-            //     assert_eq!(assignment, expected_result);
-            //     assert_eq!(data, expected_data);
-            // }
+            let tests = [("/foo", json!("bar"), json!({}), Expansion::BestGuess)];
+            for (pointer, value, mut data, expansion) in tests {
+                let ptr = PointerBuf::from_str(pointer).unwrap();
+                let assignment = ptr.assign(&mut data, value, expansion);
+            }
         }
 
         #[test]
