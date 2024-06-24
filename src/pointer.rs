@@ -1144,4 +1144,19 @@ mod tests {
         let isect = a.intersection(&b);
         TestResult::from_bool(isect == base)
     }
+
+    #[test]
+    fn test_intersection_issue_44() {
+        let base = PointerBuf::new();
+        let suffix_0 = Pointer::from_static("/").to_buf();
+        let suffix_1 = Pointer::from_static("/a/b/c").to_buf();
+        println!("suffix_1: {suffix_1:?}");
+        let mut a = base.clone();
+        a.append(&suffix_0);
+        let mut b = base.clone();
+        b.append(&suffix_1);
+        let isect = a.intersection(&b);
+        //
+        assert_eq!(isect, base);
+    }
 }
