@@ -1,6 +1,5 @@
-use core::fmt::{self, Debug};
-
 use crate::{OutOfBoundsError, ParseIndexError, Pointer};
+use core::fmt::{self, Debug};
 
 #[cfg(feature = "std")]
 type BoxedError = Box<dyn 'static + std::error::Error>;
