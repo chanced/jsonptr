@@ -3,11 +3,10 @@ include = ["**/*.toml", "**/Cargo.toml", "Cargo.toml"]
   align_comments      = true
   align_entries       = true
   allowed_blank_lines = 1
-  # indent_entries      = true
-  # indent_tables       = true
-  reorder_arrays   = false
-  reorder_keys     = true
-  trailing_newline = true
+  indent_entries      = false
+  reorder_arrays      = false
+  reorder_keys        = true
+  trailing_newline    = true
 
 [[rule]]
   formatting.align_entries = true

@@ -8,13 +8,10 @@ use core::{fmt, num::ParseIntError};
 
 pub mod prelude;
 
-#[cfg(feature = "assign")]
 pub mod assign;
 
-#[cfg(feature = "delete")]
 pub mod delete;
 
-#[cfg(feature = "resolve")]
 pub mod resolve;
 
 mod tokens;
