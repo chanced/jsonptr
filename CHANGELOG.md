@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 This is a breaking release including:
 
 -   [#30](https://github.com/chanced/jsonptr/pull/30) and [#37](https://github.com/chanced/jsonptr/pull/37) by [@asmello](https://github.com/asmello)
--   [#41](https://github.com/chanced/jsonptr/pull/41) by [@chanced](https://github.com/chanced)
+-   [#41](https://github.com/chanced/jsonptr/pull/41) by [@chanced](https://github.com/chanced) & [@asmello](https://github.com/asmello)
 
 ### Added
 
