@@ -1,5 +1,5 @@
 use crate::{
-    assign::{Assign, Assignment, Expansion},
+    assign::Assign,
     delete::Delete,
     resolve::{Resolve, ResolveMut},
     InvalidEncodingError, ParseError, ReplaceTokenError, Token, Tokens,
@@ -387,27 +387,22 @@ impl Pointer {
     ///
     /// ## Example
     /// ```rust
-    /// use jsonptr::{ Pointer, assign::Expansion };
+    /// use jsonptr::Pointer;
     /// use jsonptr::prelude::*; // <-- for Assign trait
     /// use serde_json::{json, Value};
     /// let mut data = json!([]);
     ///
     /// let mut ptr = Pointer::from_static("/0/foo");
     /// let src = json!("bar");
-    /// let assignment = data.assign(&ptr, src, Expansion::BestGuess).unwrap();
+    /// let assignment = data.assign(&ptr, src).unwrap();
     /// assert_eq!(data, json!([{ "foo": "bar" } ]));
     /// ```
-    pub fn assign<'d, D, V>(
-        &self,
-        dest: &'d mut D,
-        src: V,
-        expansion: Expansion<'_, D::Value>,
-    ) -> Result<Assignment<'d, D::Value>, D::Error>
+    pub fn assign<'d, D, V>(&self, dest: &'d mut D, src: V) -> Result<Option<D::Value>, D::Error>
     where
         D: Assign,
         V: Into<D::Value>,
     {
-        dest.assign(self, src, expansion)
+        dest.assign(self, src)
     }
 }
 
@@ -537,11 +532,6 @@ impl PointerBuf {
     /// Attempts to parse a string into a `PointerBuf`.
     pub fn parse(s: &str) -> Result<Self, ParseError> {
         Pointer::parse(s).map(Pointer::to_buf)
-    }
-
-    /// Creates a new `PointerBuf` with the given capacity.
-    pub(crate) fn with_capacity(capacity: usize) -> Self {
-        Self(String::with_capacity(capacity))
     }
 
     /// Creates a new `PointerBuf` from a slice of non-encoded strings.

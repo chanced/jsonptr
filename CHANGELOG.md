@@ -34,7 +34,7 @@ This is a breaking release including [#30](https://github.com/chanced/jsonptr/pu
 
 ### Removed
 
--   Removes `created_or_mutated` from `Assignment`, condensing it into `assigned_to`
+-   Removes `assigned_to` & `created_or_mutated` from `Assignment`
 -   Removes `MaybePointer`
 -   Removes `impl Deref<Target=&str>`
 -   Removes optional dependencies of `url`, `fluent-uri` and `uniresid` as well

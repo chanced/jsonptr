@@ -1,6 +1,6 @@
 use core::fmt::{self, Debug};
 
-use crate::{OutOfBoundsError, ParseIndexError, Pointer, PointerBuf};
+use crate::{OutOfBoundsError, ParseIndexError, Pointer};
 
 #[cfg(feature = "std")]
 type BoxedError = Box<dyn 'static + std::error::Error>;
@@ -8,10 +8,66 @@ type BoxedError = Box<dyn 'static + std::error::Error>;
 #[cfg(not(feature = "std"))]
 type BoxedError = Box<dyn 'static + core::fmt::Debug + core::fmt::Display>;
 
-/// Assign is implemented by types which can internally assign a a value type by
-/// a JSON Pointer.
+/// Implemented by types which can internally assign a
+/// ([`Value`](`Assign::Value`)) at a path represented by a JSON [`Pointer`].
 ///
-/// Provided implementations include:
+/// ## Expansion
+/// The path will automatically be expanded the if the [`Pointer`] is not fully
+/// exhausted before reaching a non-existent key in the case of objects, index
+/// in the case of arrays, or a scalar value (including `null`) based upon
+/// a best-guess effort on the meaning of each [`Token`](crate::Token):
+///
+/// - If the [`Token`](crate::Token) is equal to `"0"` or `"-"`, the token will
+///  be considered an index of an array.
+/// - All tokens not equal to `"0"` or `"-"` will be considered keys of an
+///   object.
+///
+/// ## Examples
+///
+/// ### Successful assignment with replacement
+/// ```rust
+/// use jsonptr::{Pointer, assign::Assign};
+/// use serde_json::{json, Value};
+///
+/// let mut data = json!({"foo": "bar"});
+/// let ptr = Pointer::from_static("/foo");
+///
+/// let replaced = data.assign(&ptr, "baz").unwrap();
+/// assert_eq!(replaced, Some(json!("bar")));
+/// assert_eq!(data, json!({"foo": "baz"}));
+/// ```
+///
+/// ### Successful assignment with path expansion
+/// ```rust
+/// # use jsonptr::{Pointer, assign::Assign};
+/// # use serde_json::{json, Value};
+/// let ptr = Pointer::from_static("/foo/bar/0/baz");
+/// let mut data = serde_json::json!({"foo": "bar"});
+///
+/// let replaced = data.assign(ptr, json!("qux")).unwrap();
+///
+/// assert_eq!(&data, &json!({"foo": {"bar": [{"baz": "qux"}]}}));
+/// assert_eq!(replaced, Some(json!("bar")));
+/// ```
+///
+/// ### Successful assignment with `"-"` token
+
+/// This example uses the special `"-"` token (per RFC 6901) to represent the
+/// next element in an array.
+///
+/// ```rust
+/// # use jsonptr::{Pointer, assign::Assign};
+/// # use serde_json::{json, Value};
+/// let ptr = Pointer::from_static("/foo/bar/-/baz");
+/// let mut data = json!({"foo": "bar"});
+///
+/// let replaced = data.assign(ptr, json!("qux")).unwrap();
+/// assert_eq!(&data, &json!({"foo": {"bar": [{"baz": "qux"}]}}));
+/// assert_eq!(replaced, Some(json!("bar")));
+/// ```
+///
+///
+/// ## Provided implementations
 ///
 /// | Language  | Feature Flag |
 /// | --------- | ------------ |
@@ -31,134 +87,15 @@ pub trait Assign {
     /// Error associated with `Assign`
     type Error: From<AssignError>;
 
-    /// Assigns a value of based on the path provided by a JSON Pointer using
-    /// the provided [`Expansion`] strategy.
+    /// Assigns a value of based on the path provided by a JSON Pointer,
+    /// returning the replaced value, if any.
     fn assign<'v, V>(
         &'v mut self,
         ptr: &Pointer,
         value: V,
-        expansion: Expansion<'_, Self::Value>,
-    ) -> Result<Assignment<'v, Self::Value>, Self::Error>
+    ) -> Result<Option<Self::Value>, Self::Error>
     where
         V: Into<Self::Value>;
-}
-
-/// Source value to be expanded (see [`Expand`]).
-pub struct Source<'p, V> {
-    /// Source value to be assigned.
-    pub value: V,
-    /// The pointer encompassing the path up to and including the current token.
-    pub resolved: &'p Pointer,
-    /// The remaining, unresolved path.
-    pub remaining: &'p Pointer,
-    /// The offset of `remaining`.
-    pub offset: usize,
-}
-
-/// Expand is implemented by types which can expand the remaining, unresolved portion of a JSON
-/// Pointer during a call to [`Assign::assign`].
-pub trait Expand<V> {
-    /// Expands the remaining, unresolved portion of a JSON Pointer.
-    fn expand(&self, src: Source<'_, V>) -> Result<V, AssignError>;
-}
-
-impl<V, F> Expand<V> for F
-where
-    F: Fn(Source<'_, V>) -> Result<V, AssignError>,
-{
-    fn expand(&self, src: Source<'_, V>) -> Result<V, AssignError> {
-        self(src)
-    }
-}
-
-/// Expansion strategy for [`Assign`].
-#[derive(Default)]
-pub enum Expansion<'e, V> {
-    /// This strategy will automatically expand the path of the [`Pointer`] if
-    /// it is not fully exhausted before reaching a non-existent key in the case
-    /// of objects, index in the case of arrays, or a scalar value (including
-    /// `null`).
-    ///
-    /// If a scalar or non-existent path is encountered before the [`Pointer`]
-    /// is exhausted, the path will automatically be expanded into
-    /// [`Assign::Value`] based upon a best-guess effort on the meaning of each
-    /// [`Token`](crate::Token):
-    /// - If the [`Token`](crate::Token) is equal to `"0"` or `"-"`, the token
-    ///  will be considered an index of an array.
-    /// - All tokens not equal to `"0"` or `"-"` will be considered keys of an
-    ///   object.
-    ///  
-    ///  Note: This strategy will not return [`AssignError::FailedToExpand`]
-    BestGuess,
-
-    /// This strategy will return [`AssignError::FailedToExpand`] if the
-    /// [`Pointer`] is not fully exhausted before a scalar or non-existent key
-    /// or [`Index`](crate::Index) is encountered.
-    #[default]
-    Never,
-
-    /// This strategy allows for a custom implementation of [`Expand`] to be
-    /// provided.
-    Custom(&'e dyn Expand<V>),
-}
-
-impl<'e, V> Debug for Expansion<'e, V> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Expansion::BestGuess => write!(f, "Expansion::BestGuess"),
-            Expansion::Never => write!(f, "Expansion::Never"),
-            Expansion::Custom(_) => write!(f, "Expansion::Custom"),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq)]
-/// The data structure returned from a successful call to `assign`.
-pub struct Assignment<'v, V> {
-    /// The value that was assigned.
-    ///
-    /// In the event a path is created, this will be a mutable reference to the
-    /// `serde_json::Value` encompassing the new branch.
-    pub assigned: &'v mut V,
-
-    /// The path which was assigned to.
-    ///
-    /// If some or all of the path must be created, this will be the path to the
-    /// top-level value that was assigned. For example, given the json `{ "foo":
-    /// { "bar": "baz" } }`, if `"new_value"` is assigned to `"/foo/qux/quux"`,
-    /// then `assigned_to` would equal `"/foo/qux"` as `"qux"` is the top-level
-    /// value assigned.
-    ///
-    /// The resulting json would have the following structure:
-    /// ```json
-    /// {
-    ///     "foo": {
-    ///        "bar": "baz",
-    ///         "qux": {
-    ///             "quux": "new_value"
-    ///         }
-    ///     }
-    /// }
-    /// ```
-    ///
-    /// Note: if a portion of the path contains a leaf node that is to be
-    /// overridden by an object or an array, then the path will be leaf that is
-    /// replaced. For example, given the json `{ "foo:" "bar" }`, if `"new_value"` is
-    /// assigned to `"/foo/bar/baz"`, then `assigned_to` would be `/foo/bar"`
-    ///
-    /// ## Example
-    /// ```rust
-    /// # use serde_json::json;
-    /// # use jsonptr::{ Pointer, assign::{ Assign, Expansion }};
-    /// let mut data = json!({ "foo": ["zero"] });
-    /// let mut ptr = Pointer::from_static("/foo/-");
-    /// let assignment = data.assign(&mut ptr, "one", Expansion::BestGuess).unwrap();
-    /// assert_eq!(assignment.assigned_to, Pointer::from_static("/foo/1"));
-    /// ```
-    pub assigned_to: PointerBuf,
-
-    /// The value that was replaced, if any.
-    pub replaced: Option<V>,
 }
 
 ///
@@ -260,52 +197,21 @@ impl std::error::Error for AssignError {
 }
 
 enum Assigned<'v, V> {
-    Done(Assignment<'v, V>),
-    Continue {
-        next_buf: PointerBuf,
-        next_value: &'v mut V,
-        same_value: V,
-    },
+    Done(Option<V>),
+    Continue { next_dest: &'v mut V, same_value: V },
 }
 
 #[cfg(feature = "json")]
 mod json {
     use super::*;
-    use crate::{Pointer, PointerBuf, Token};
+    use crate::{Pointer, Token};
     use core::mem;
     use serde_json::{map::Entry, Map, Value};
 
-    impl Expand<Value> for Expansion<'_, Value> {
-        fn expand(&self, src: Source<Value>) -> Result<Value, AssignError> {
-            match self {
-                Expansion::BestGuess => best_guess(src),
-                Expansion::Never => never_expand(src),
-                Expansion::Custom(e) => e.expand(src),
-            }
-        }
-    }
-
-    /// Expansion::Never strategy - never expands the path, erroring if the path
-    /// is not fully exhausted.
-    fn never_expand(src: Source<Value>) -> Result<Value, AssignError> {
-        if src.remaining.is_root() {
-            Ok(src.value)
-        } else {
-            Err(AssignError::FailedToExpand {
-                offset: src.offset,
-                source: "path is not fully exhausted".into(),
-            })
-        }
-    }
-    fn best_guess(src: Source<Value>) -> Result<Value, AssignError> {
-        let Source {
-            mut remaining,
-            mut value,
-            ..
-        } = src;
+    fn expand(mut remaining: &Pointer, mut value: Value) -> Value {
         while let Some((ptr, tok)) = remaining.split_back() {
             remaining = ptr;
-            match tok.decoded().as_ref() {
+            match tok.encoded().as_ref() {
                 "0" | "-" => {
                     value = Value::Array(vec![value]);
                 }
@@ -316,7 +222,7 @@ mod json {
                 }
             }
         }
-        Ok(value)
+        value
     }
 
     impl Assign for Value {
@@ -326,12 +232,11 @@ mod json {
             &'v mut self,
             ptr: &Pointer,
             value: V,
-            expansion: Expansion<'_, Self::Value>,
-        ) -> Result<Assignment<'v, Self::Value>, Self::Error>
+        ) -> Result<Option<Self::Value>, Self::Error>
         where
             V: Into<Self::Value>,
         {
-            assign_value(ptr, self, value.into(), expansion)
+            assign_value(ptr, self, value.into())
         }
     }
 
@@ -339,33 +244,25 @@ mod json {
         mut ptr: &Pointer,
         mut dest: &'v mut Value,
         mut value: Value,
-        expansion: Expansion<'_, Value>,
-    ) -> Result<Assignment<'v, Value>, AssignError> {
+    ) -> Result<Option<Value>, AssignError> {
         let mut offset = 0;
-        let mut buf = PointerBuf::with_capacity(ptr.as_str().len());
 
         while let Some((token, tail)) = ptr.split_front() {
             let tok_len = token.encoded().chars().count();
 
             let assigned = match dest {
-                Value::Array(array) => {
-                    assign_array(token, tail, buf, array, value, offset, &expansion)?
-                }
-                Value::Object(obj) => {
-                    assign_object(token, tail, buf, obj, value, offset, &expansion)?
-                }
-                _ => assign_scalar(token, ptr, buf, dest, value, offset, &expansion)?,
+                Value::Array(array) => assign_array(token, tail, array, value, offset)?,
+                Value::Object(obj) => assign_object(token, tail, obj, value)?,
+                _ => assign_scalar(ptr, dest, value)?,
             };
             match assigned {
                 Assigned::Done(assignment) => {
                     return Ok(assignment);
                 }
                 Assigned::Continue {
-                    next_buf,
-                    next_value,
+                    next_dest: next_value,
                     same_value: same_src,
                 } => {
-                    buf = next_buf;
                     value = same_src;
                     dest = next_value;
                     ptr = tail;
@@ -376,21 +273,15 @@ mod json {
 
         // Pointer is root, we can replace `dest` directly
         let replaced = Some(core::mem::replace(dest, value.into()));
-        Ok(Assignment {
-            assigned: dest,
-            replaced,
-            assigned_to: buf,
-        })
+        Ok(replaced)
     }
 
     fn assign_array<'v>(
         token: Token<'_>,
         remaining: &Pointer,
-        mut buf: PointerBuf,
         array: &'v mut Vec<Value>,
         src: Value,
         offset: usize,
-        expansion: &Expansion<'_, Value>,
     ) -> Result<Assigned<'v, Value>, AssignError> {
         // parsing the index
         let idx = token
@@ -398,7 +289,6 @@ mod json {
             .map_err(|source| AssignError::FailedToParseIndex { offset, source })?
             .for_len_incl(array.len())
             .map_err(|source| AssignError::OutOfBounds { offset, source })?;
-        buf.push_back(idx.into());
 
         debug_assert!(idx <= array.len());
 
@@ -407,55 +297,33 @@ mod json {
             // depending on whether this is the last token or not
             if remaining.is_root() {
                 // last token, we replace the value and call it a day
-                let assigned = array
-                    .last_mut()
-                    .expect("non-empty array should have last_mut");
-                Ok(Assigned::Done(Assignment {
-                    assigned,
-                    assigned_to: buf,
-                    replaced: None,
-                }))
+                Ok(Assigned::Done(Some(mem::replace(&mut array[idx], src))))
             } else {
                 // not the last token, we continue with a mut ref to the element as
                 // the next value
                 Ok(Assigned::Continue {
-                    next_value: &mut array[idx],
+                    next_dest: &mut array[idx],
                     same_value: src,
-                    next_buf: buf,
                 })
             }
         } else {
             // element does not exist in the array.
             // we create the path and assign the value
-            let src = expansion.expand(Source {
-                offset,
-                value: src,
-                resolved: &buf,
-                remaining,
-            })?;
+            let src = expand(remaining, src);
             array.push(src);
-            let assigned = array.last_mut().expect("just pushed");
-            Ok(Assigned::Done(Assignment {
-                assigned,
-                assigned_to: buf,
-                replaced: None,
-            }))
+            Ok(Assigned::Done(None))
         }
     }
 
     fn assign_object<'v>(
         token: Token<'_>,
         remaining: &Pointer,
-        mut buf: PointerBuf,
         obj: &'v mut Map<String, Value>,
         src: Value,
-        offset: usize,
-        expansion: &Expansion<'_, Value>,
     ) -> Result<Assigned<'v, Value>, AssignError> {
         // grabbing the entry of the token
         let entry = obj.entry(token.to_string());
         // adding token to the pointer buf
-        buf.push_back(token);
 
         match entry {
             Entry::Occupied(entry) => {
@@ -464,19 +332,13 @@ mod json {
                 if remaining.is_root() {
                     // if this is the last token, we are done
                     // grab the old value and replace it with the new one
-                    let replaced = Some(mem::replace(entry, src));
-                    Ok(Assigned::Done(Assignment {
-                        assigned: entry,
-                        assigned_to: buf,
-                        replaced,
-                    }))
+                    Ok(Assigned::Done(Some(mem::replace(entry, src))))
                 } else {
                     // if this is not the last token, we continue with a mutable
                     // reference to the entry as the next value
                     Ok(Assigned::Continue {
                         same_value: src,
-                        next_buf: buf,
-                        next_value: entry,
+                        next_dest: entry,
                     })
                 }
             }
@@ -484,47 +346,21 @@ mod json {
                 // if the entry does not exist, we create a value based on the
                 // remaining path with the src value as a leaf and assign it to the
                 // entry
-                let src = expansion.expand(Source {
-                    value: src,
-                    resolved: &buf,
-                    remaining,
-                    offset,
-                })?;
-                let assigned = entry.insert(src);
-                Ok(Assigned::Done(Assignment {
-                    assigned,
-                    assigned_to: buf,
-                    replaced: None,
-                }))
+                entry.insert(expand(remaining, src));
+                Ok(Assigned::Done(None))
             }
         }
     }
 
     fn assign_scalar<'v>(
-        token: Token<'_>,
-        remaining: &'_ Pointer,
-        mut buf: PointerBuf,
+        remaining: &Pointer,
         scalar: &'v mut Value,
         value: Value,
-        offset: usize,
-        expansion: &Expansion<'_, Value>,
     ) -> Result<Assigned<'v, Value>, AssignError> {
         // scalar values are always replaced at the current buf (with its token)
         // build the new src and we replace the value with it.
-
-        buf.push_back(token);
-        let src = expansion.expand(Source {
-            remaining,
-            resolved: &buf,
-            offset,
-            value,
-        })?;
-        let replaced = Some(mem::replace(scalar, src));
-        Ok(Assigned::Done(Assignment {
-            assigned: scalar,
-            assigned_to: buf,
-            replaced,
-        }))
+        let replaced = Some(mem::replace(scalar, expand(remaining, value)));
+        Ok(Assigned::Done(replaced))
     }
 
     #[cfg(test)]
@@ -600,40 +436,19 @@ mod json {
             let mut data = json!({});
 
             let ptr = Pointer::from_static("/foo");
-            let val = json!("bar");
-
-            let assignment = ptr
-                .assign(&mut data, val.clone(), Expansion::BestGuess)
-                .unwrap();
-            assert_eq!(assignment.replaced, None);
-            assert_eq!(assignment.assigned, &val);
-            assert_eq!(assignment.assigned_to, "/foo");
+            let replaced = ptr.assign(&mut data, json!("bar")).unwrap();
+            assert_eq!(replaced, None);
+            assert_eq!(&data, &json!({"foo": "bar"}));
 
             // now testing replacement
-            let val2 = json!("baz");
-            let assignment = ptr
-                .assign(&mut data, val2.clone(), Expansion::BestGuess)
-                .unwrap();
-            assert_eq!(assignment.replaced, Some(Value::String("bar".to_string())));
-            assert_eq!(assignment.assigned, &val2);
-            assert_eq!(assignment.assigned_to, "/foo");
+            let replaced = ptr.assign(&mut data, json!("baz")).unwrap();
+            assert_eq!(replaced, Some(Value::String("bar".to_string())));
+            assert_eq!(&data, &json!({"foo": "baz"}));
 
-            struct Test<'e> {
-                data: Value,
-                ptr: &'static str,
-                expansion: Expansion<'e, Value>,
-            }
-
-            let _tests = [Test {
-                data: json!({}),
-                ptr: "/foo",
-                expansion: Expansion::BestGuess,
-            }];
-
-            let tests = [("/foo", json!("bar"), json!({}), Expansion::BestGuess)];
-            for (pointer, value, mut data, expansion) in tests {
-                let ptr = PointerBuf::from_str(pointer).unwrap();
-                let assignment = ptr.assign(&mut data, value, expansion);
+            let tests = [(json!({}), "/foo", json!("bar"))];
+            for (mut data, ptr, value) in tests {
+                let ptr = PointerBuf::from_str(ptr).unwrap();
+                let replaced = ptr.assign(&mut data, value);
             }
         }
 
@@ -643,20 +458,9 @@ mod json {
             let ptr = Pointer::from_static("/foo/0/bar");
             let val = json!("baz");
 
-            let assignment = ptr.assign(&mut data, val, Expansion::BestGuess).unwrap();
-            assert_eq!(assignment.replaced, None);
-            assert_eq!(assignment.assigned_to, "/foo");
-            assert_eq!(assignment.replaced, None);
-            assert_eq!(
-                json!({
-                    "foo": [
-                        {
-                            "bar": "baz"
-                        }
-                    ]
-                }),
-                data.clone()
-            );
+            let replaced = ptr.assign(&mut data, val).unwrap();
+            assert_eq!(replaced, None);
+            assert_eq!(&data, &json!({"foo": [{"bar": "baz"}]}),);
         }
 
         #[test]
@@ -666,14 +470,12 @@ mod json {
             let tests = [
                 (
                     "/foo/-/bar",
-                    "/foo",
                     json!("baz"),
                     json!({ "foo": [{ "bar": "baz" }] }),
                     None,
                 ),
                 (
                     "/foo/-/bar",
-                    "/foo/1",
                     json!("qux"),
                     json!({"foo": [{ "bar": "baz" }, { "bar": "qux" }]
                     }),
@@ -681,43 +483,25 @@ mod json {
                 ),
                 (
                     "/foo/-/bar",
-                    "/foo/2",
                     json!("quux"),
-                    json!({
-                        "foo": [
-                            { "bar": "baz" },
-                            { "bar": "qux" },
-                            { "bar": "quux" }
-                        ]
-                    }),
+                    json!({"foo": [{"bar": "baz"},{"bar": "qux"},{"bar": "quux"}]}),
                     None,
                 ),
                 (
                     "/foo/0/bar",
-                    "/foo/0/bar",
                     json!("grault"),
-                    json!({
-                        "foo": [
-                            { "bar": "grault" },
-                            { "bar": "qux" },
-                            { "bar": "quux" }
-                        ]
-                    }),
+                    json!({"foo": [{"bar": "grault"},{"bar": "qux"},{"bar": "quux"}]}),
                     Some(json!("baz")),
                 ),
             ];
 
-            for (path, assigned_to, val, expected, replaced) in tests {
+            for (path, val, expected, expected_replaced) in tests {
                 let ptr = PointerBuf::parse(path).expect(&format!("failed to parse \"{path}\""));
-                let assignment = ptr
-                    .assign(&mut data, val.clone(), Expansion::BestGuess)
+                let replaced = ptr
+                    .assign(&mut data, val.clone())
                     .expect(&format!("failed to assign \"{path}\""));
-                assert_eq!(
-                    assignment.assigned_to, *assigned_to,
-                    "assigned_to not equal"
-                );
-                assert_eq!(assignment.replaced, replaced, "replaced not equal");
                 assert_eq!(&expected, &data);
+                assert_eq!(expected_replaced, replaced, "replaced not equal");
             }
         }
 
@@ -726,18 +510,9 @@ mod json {
             let mut data = json!({});
             let ptr = PointerBuf::try_from("/foo/bar").unwrap();
             let val = json!("baz");
-
-            let assignment = ptr.assign(&mut data, val, Expansion::BestGuess).unwrap();
-            assert_eq!(assignment.assigned_to, "/foo");
-            assert_eq!(assignment.replaced, None);
-            assert_eq!(
-                &json!({
-                    "foo": {
-                        "bar": "baz"
-                    }
-                }),
-                &data
-            );
+            let replaced = ptr.assign(&mut data, val).unwrap();
+            assert_eq!(&json!({"foo": {"bar": "baz"}}), &data);
+            assert_eq!(replaced, None);
         }
 
         #[test]
@@ -749,17 +524,8 @@ mod json {
             let ptr = Pointer::from_static("/foo/bar/baz");
             let val = json!("qux");
 
-            ptr.assign(&mut data, val, Expansion::BestGuess).unwrap();
-            assert_eq!(
-                &json!({
-                    "foo": {
-                        "bar": {
-                            "baz": "qux"
-                        }
-                    }
-                }),
-                &data
-            );
+            ptr.assign(&mut data, val).unwrap();
+            assert_eq!(&json!({"foo":{"bar":{"baz": "qux"}}}), &data);
         }
 
         #[test]
