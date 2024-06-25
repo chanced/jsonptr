@@ -330,30 +330,24 @@ impl Pointer {
     }
 
     /// Finds the commonality between this and another `Pointer`.
-    pub fn intersection<'a>(&'a self, other: &Self) -> &'a Self {
-        if &self.0 == "/" || &other.0 == "/" {
-            if self.0 != other.0 {
-                return Self::root();
-            } else {
-                return self;
-            }
-        }
-        let mut last_slash = 0;
+    pub fn intersection<'a>(&'a self, mut other: &Self) -> &'a Self {
+        //  self: /a/
+        // other: /a/suffix
         let mut idx = 0;
-        for (a, b) in self.0.bytes().zip(other.0.bytes()) {
-            if a != b {
-                return Self::new(&self.0[..last_slash]);
+        let mut this = self;
+        while let Some((tok, remaining)) = this.split_front() {
+            if let Some((other_tok, other_remaining)) = other.split_front() {
+                if tok != other_tok {
+                    break;
+                }
+                this = remaining;
+                other = other_remaining;
+                idx += tok.encoded().chars().count() + 1;
+            } else {
+                break;
             }
-            if a == b'/' {
-                last_slash = idx;
-            }
-            idx += 1;
         }
-        if idx == self.0.len() || self.0.as_bytes()[idx] == b'/' {
-            Self::new(&self.0[..idx])
-        } else {
-            Self::new(&self.0[..last_slash])
-        }
+        self.split_at(idx).map_or(self, |(head, _)| head)
     }
 
     /// Attempts to delete a `serde_json::Value` based upon the path in this
@@ -1201,34 +1195,65 @@ mod tests {
         b.append(&suffix_1);
         let isect = a.intersection(&b);
         if isect != base {
-            println!("base: {base:?}\nisect: {isect:?}");
+            println!("\nintersection failed\nbase: {base:?}\nisect: {isect:?}\nsuffix_0: {suffix_0:?}\nsuffix_1: {suffix_1:?}\n");
         }
         TestResult::from_bool(isect == base)
     }
 
-    #[test]
-    fn test_intersection_issue_44() {
-        let base = PointerBuf::new();
-        let suffix_0 = Pointer::from_static("/").to_buf();
-        let suffix_1 = Pointer::from_static("/a/b/c").to_buf();
-        let mut a = base.clone();
-        a.append(&suffix_0);
-        let mut b = base.clone();
-        b.append(&suffix_1);
-        let isect = a.intersection(&b);
-        assert_eq!(isect, base);
+    /*
 
-        let base = PointerBuf::must_parse("/a");
-        let suffix_0 = PointerBuf::must_parse("/");
-        let suffix_1 = PointerBuf::must_parse("/suffix_1");
-        let mut a = base.clone();
-        a.append(&suffix_0);
-        let mut b = base.clone();
-        b.append(&suffix_1);
-        let isect = a.intersection(&b);
-        assert_eq!(
-            isect, base,
-            "intersection failed\n\n expected: \"{base}\"\n   actual: \"{isect}\""
-        );
+        base: /\u{c15cb}ª+@{+v\u{69356})¨}4^QB>\u{10ee5f}\u{93}\u{b7543}_\u{93}\u{953}cf3<\u{9d}~0¡\u{100000}蓫%j9}W>z\u{96}\u{a0}+ \u{1b}\u{fffff})\u{1e}\u{18}=cv%+ \u{3}[W[n\u{8f}7\u{e309}+쑸=¢@D\u{8c}!⥤\u{87}\u{10}돈8¡홶볆~0\u{99}\u{7f}R,{.2⁑7\u{93}
+        a_suffix: /\"@\u{206a} 뼙2\u{8e}\u{8c}膠j,\u{202b}j\u{e001}獈5❇ \u{1}䷘o\u{1c}pQr\"\u{c9f99}$\u{ffffe}\u{2008},,'('R+\u{11}¡閚)\n\u{9f}\u{87}}縆i\u{1d}웎) ⁃캧z\u{c94f2}\u{7f}\u{3}|ኖ>\\#M\u{206e})\u{87}+\u{e000}]pm\u{87}‚rjIe@ \u{e000}\u{2006}(\n ―52⭧䋪\u{f046d}
+        b_suffix: ""
+    */
+
+    #[test]
+    fn test_intersection() {
+        struct Test {
+            base: &'static str,
+            a_suffix: &'static str,
+            b_suffix: &'static str,
+        }
+
+        let tests = [
+            Test {
+                base: "",
+                a_suffix: "/",
+                b_suffix: "/a/b/c",
+            },
+            Test {
+                base: "/a",
+                a_suffix: "/",
+                b_suffix: "/suffix",
+            },
+            Test {
+                base: "/a",
+                a_suffix: "/suffix",
+                b_suffix: "",
+            },
+            Test {
+                base: "/¦\\>‶“lv\u{eedd}\u{8a}Y\n\u{99}𘐷vT\n\u{4}Hª\\ 嗱\\Yl6Y`\"1\u{6dd}\u{17}\0\u{10}ዄ8\"Z닍6i)V;\u{6be4c}\u{b}\u{59836}`\u{1e}㑍§~05\u{1d}\u{8a}[뵔\u{437c3}j\u{f326}\";*\u{c}*U\u{1b}\u{8a}I\u{4}묁",
+                a_suffix: "/Y\u{2064}",
+                b_suffix: "",
+            }
+        ];
+
+        for Test {
+            base,
+            a_suffix,
+            b_suffix,
+        } in tests
+        {
+            let base = PointerBuf::must_parse(base);
+            let mut a = base.clone();
+            let mut b = base.clone();
+            a.append(&PointerBuf::must_parse(a_suffix));
+            b.append(&PointerBuf::must_parse(b_suffix));
+            let intersection = a.intersection(&b);
+            assert_eq!(
+                intersection, base,
+                "\nintersection failed\n\nbase:{base}\na_suffix:{a_suffix}\nb_suffix:{b_suffix} expected: \"{base}\"\n   actual: \"{intersection}\"\n"
+            );
+        }
     }
 }
