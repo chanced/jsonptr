@@ -449,7 +449,7 @@ mod json {
                 expected_result: expected_replaced,
             }) in tests.into_iter().enumerate()
             {
-                let ptr = PointerBuf::from_str(ptr).unwrap();
+                let ptr = Pointer::from_static(ptr);
                 let replaced = ptr.assign(&mut data, value.clone());
                 assert_eq!(
                     &expected_data, &data,
