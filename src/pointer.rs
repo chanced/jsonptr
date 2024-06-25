@@ -638,10 +638,7 @@ impl PointerBuf {
 
     /// Merges two `Pointer`s by appending `other` onto `self`.
     pub fn append<P: AsRef<Pointer>>(&mut self, other: P) -> &PointerBuf {
-        self._append(other.as_ref())
-    }
-
-    fn _append(&mut self, other: &Pointer) -> &PointerBuf {
+        let other = other.as_ref();
         if self.is_root() {
             self.0 = other.0.to_string();
         } else if !other.is_root() {

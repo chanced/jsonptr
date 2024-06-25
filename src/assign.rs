@@ -148,7 +148,7 @@ enum Assigned<'v, V> {
 #[cfg(feature = "json")]
 mod json {
     use super::*;
-    use crate::{Pointer, PointerBuf, Token};
+    use crate::{Pointer,  Token};
     use core::mem;
     use serde_json::{map::Entry, Map, Value};
 
@@ -514,7 +514,7 @@ mod json {
             ];
 
             for (path, val, expected, expected_replaced) in tests {
-                let ptr = PointerBuf::must_parse(path);
+                let ptr = Pointer::from_static(path);
                 let replaced = ptr
                     .assign(&mut data, val.clone())
                     .expect(&format!("failed to assign \"{path}\""));
@@ -526,7 +526,7 @@ mod json {
         #[test]
         fn test_assign_with_obj_path() {
             let mut data = json!({});
-            let ptr = PointerBuf::try_from("/foo/bar").unwrap();
+            let ptr = Pointer::from_static("/foo/bar");
             let val = json!("baz");
             let replaced = ptr.assign(&mut data, val).unwrap();
             assert_eq!(&json!({"foo": {"bar": "baz"}}), &data);
