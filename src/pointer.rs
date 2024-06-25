@@ -12,26 +12,30 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 fn validate(value: &str) -> Result<&str, ParseError> {
-    match value.chars().next() {
-        Some('/') => {}                                        // expected
+    if value.is_empty() {
+        return Ok(value);
+    }
+
+    match value.bytes().next() {
+        Some(b'/') => {}                                       // expected
         Some(_) => return Err(ParseError::NoLeadingBackslash), // invalid pointer - missing leading slash
         None => return Ok(value),                              // done
     }
     let mut ptr_offset = 0;
     let mut tok_offset = 0;
-    let mut chars = value.char_indices();
+    let mut bytes = value.bytes().enumerate();
 
-    while let Some((offset, c)) = chars.next() {
-        if c == '/' {
+    while let Some((offset, c)) = bytes.next() {
+        if c == b'/' {
             tok_offset = 0;
             ptr_offset = offset;
             continue;
         }
         tok_offset += 1;
-        if c == '~' {
+        if c == b'~' {
             // pulling down
-            let next = chars.next().map(|(_, c)| c);
-            if !matches!(next, Some('0') | Some('1')) {
+            let next = bytes.next().map(|(_, c)| c);
+            if !matches!(next, Some(b'0') | Some(b'1')) {
                 // '~' must be followed by '0' or '1' in order to be properly encoded
                 return Err(ParseError::InvalidEncoding {
                     offset: ptr_offset,
@@ -343,7 +347,7 @@ impl Pointer {
                 }
                 this = remaining;
                 other = other_remaining;
-                idx += tok.encoded().chars().count() + 1;
+                idx += tok.encoded().len() + 1;
             } else {
                 break;
             }

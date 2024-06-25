@@ -192,7 +192,7 @@ mod json {
         let mut offset = 0;
 
         while let Some((token, tail)) = ptr.split_front() {
-            let tok_len = token.encoded().chars().count();
+            let tok_len = token.encoded().len();
 
             let assigned = match dest {
                 Value::Array(array) => assign_array(token, tail, array, value, offset)?,
