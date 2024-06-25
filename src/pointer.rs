@@ -99,12 +99,16 @@ const fn is_valid_ptr(value: &str) -> bool {
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Pointer(str);
 
+impl<'a> Default for &'a Pointer {
+    fn default() -> Self {
+        unsafe { &*("" as *const str as *const Self) }
+    }
+}
 impl core::fmt::Display for Pointer {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.0.fmt(f)
     }
 }
-
 impl Pointer {
     /// Private constructor for strings that are known to be correctly encoded
     ///
@@ -121,10 +125,21 @@ impl Pointer {
     /// Attempts to parse a string into a `Pointer`.
     ///
     /// If successful, this does not allocate.
+    ///
+    /// ## Errors
+    /// Returns a `ParseError` if the string is not a valid JSON Pointer.
     pub fn parse<S: AsRef<str> + ?Sized>(s: &S) -> Result<&Self, ParseError> {
         validate(s.as_ref()).map(Self::new)
     }
-
+    /// Attempts to parse a string into a `Pointer`.
+    ///
+    /// If successful, this does not allocate.
+    ///
+    /// ## Panics
+    /// Panics string is not a valid JSON Pointer.
+    pub fn must_parse<S: AsRef<str> + ?Sized>(s: &S) -> &Self {
+        Self::parse(s).expect("invalid JSON Pointer")
+    }
     /// Creates a static `Pointer` from a string.
     ///
     /// # Panics
@@ -462,6 +477,26 @@ impl PartialEq<Pointer> for PointerBuf {
         self.0 == other.0
     }
 }
+impl PartialEq<PointerBuf> for String {
+    fn eq(&self, other: &PointerBuf) -> bool {
+        self == &other.0
+    }
+}
+impl PartialEq<String> for PointerBuf {
+    fn eq(&self, other: &String) -> bool {
+        &self.0 == other
+    }
+}
+impl AsRef<Pointer> for Pointer {
+    fn as_ref(&self) -> &Pointer {
+        self
+    }
+}
+impl AsRef<Pointer> for PointerBuf {
+    fn as_ref(&self) -> &Pointer {
+        self
+    }
+}
 
 impl PartialEq<PointerBuf> for &Pointer {
     fn eq(&self, other: &PointerBuf) -> bool {
@@ -534,8 +569,19 @@ impl PointerBuf {
     }
 
     /// Attempts to parse a string into a `PointerBuf`.
-    pub fn parse(s: &str) -> Result<Self, ParseError> {
-        Pointer::parse(s).map(Pointer::to_buf)
+    ///
+    /// ## Errors
+    /// Returns a `ParseError` if the string is not a valid JSON Pointer.
+    pub fn parse<S: AsRef<str> + ?Sized>(s: &S) -> Result<Self, ParseError> {
+        Pointer::parse(&s).map(Pointer::to_buf)
+    }
+    /// Attempts to parse a string into a `Pointer`.
+    ///
+    ///
+    /// ## Panics
+    /// Panics string is not a valid JSON Pointer.
+    pub fn must_parse<S: AsRef<str> + ?Sized>(s: &S) -> Self {
+        Self::parse(s).expect("invalid JSON Pointer")
     }
 
     /// Creates a new `PointerBuf` from a slice of non-encoded strings.
@@ -595,9 +641,13 @@ impl PointerBuf {
     }
 
     /// Merges two `Pointer`s by appending `other` onto `self`.
-    pub fn append(&mut self, other: &PointerBuf) -> &PointerBuf {
+    pub fn append<P: AsRef<Pointer>>(&mut self, other: P) -> &PointerBuf {
+        self._append(other.as_ref())
+    }
+
+    fn _append(&mut self, other: &Pointer) -> &PointerBuf {
         if self.is_root() {
-            self.0.clone_from(&other.0);
+            self.0 = other.0.to_string();
         } else if !other.is_root() {
             self.0.push_str(&other.0);
         }
@@ -743,6 +793,7 @@ mod tests {
     use super::*;
     use quickcheck::TestResult;
     use quickcheck_macros::quickcheck;
+    use serde_json::json;
 
     #[test]
     #[should_panic]
@@ -1149,6 +1200,9 @@ mod tests {
         let mut b = base.clone();
         b.append(&suffix_1);
         let isect = a.intersection(&b);
+        if isect != base {
+            println!("base: {base:?}\nisect: {isect:?}");
+        }
         TestResult::from_bool(isect == base)
     }
 
@@ -1157,13 +1211,24 @@ mod tests {
         let base = PointerBuf::new();
         let suffix_0 = Pointer::from_static("/").to_buf();
         let suffix_1 = Pointer::from_static("/a/b/c").to_buf();
-        println!("suffix_1: {suffix_1:?}");
         let mut a = base.clone();
         a.append(&suffix_0);
         let mut b = base.clone();
         b.append(&suffix_1);
         let isect = a.intersection(&b);
-        //
         assert_eq!(isect, base);
+
+        let base = PointerBuf::must_parse("/a");
+        let suffix_0 = PointerBuf::must_parse("/");
+        let suffix_1 = PointerBuf::must_parse("/suffix_1");
+        let mut a = base.clone();
+        a.append(&suffix_0);
+        let mut b = base.clone();
+        b.append(&suffix_1);
+        let isect = a.intersection(&b);
+        assert_eq!(
+            isect, base,
+            "intersection failed\n\n expected: \"{base}\"\n   actual: \"{isect}\""
+        );
     }
 }

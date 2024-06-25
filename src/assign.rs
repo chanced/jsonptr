@@ -148,7 +148,7 @@ enum Assigned<'v, V> {
 #[cfg(feature = "json")]
 mod json {
     use super::*;
-    use crate::{Pointer, Token};
+    use crate::{Pointer, PointerBuf, Token};
     use core::mem;
     use serde_json::{map::Entry, Map, Value};
 
@@ -313,26 +313,160 @@ mod json {
 
         use serde_json::{json, Value};
 
-        use crate::{Pointer, PointerBuf};
+        use crate::{assign::{json, AssignError}, OutOfBoundsError, Pointer, PointerBuf};
 
+        struct Test {
+            data: Value,
+            ptr: &'static str,
+            value: Value,
+            expected_data: Value,
+            expected_result: Result<Option<Value>, AssignError>,
+        }
         #[test]
         fn test_assign() {
-            let mut data = json!({});
+            let tests = [
+                Test {
+                    data: json!({}),
+                    ptr: "/foo",
+                    value: json!("bar"),
+                    expected_data: json!({"foo": "bar"}),
+                    expected_result: Ok(None),
+                },
+                Test {
+                    data: json!({"foo": "bar"}),
+                    ptr: "",
+                    value: json!("baz"),
+                    expected_data: json!("baz"),
+                    expected_result: Ok(Some(json!({"foo": "bar"}))),
+                },
+                Test {
+                    data: json!({"foo": "bar"}),
+                    ptr: "/foo",
+                    value: json!("baz"),
+                    expected_data: json!({"foo": "baz"}),
+                    expected_result: Ok(Some(json!("bar"))),
+                },
+                Test {
+                    data: json!({"foo": "bar"}),
+                    ptr: "/foo/bar",
+                    value: json!("baz"),
+                    expected_data: json!({"foo": {"bar": "baz"}}),
+                    expected_result: Ok(Some(json!("bar"))),
+                },
+                Test {
+                    data: json!({}),
+                    ptr: "/",
+                    value: json!("foo"),
+                    expected_data: json!({"": "foo"}),
+                    expected_result: Ok(None),
+                },
+                Test {
+                    data: json!({}),
+                    ptr: "/-",
+                    value: json!("foo"),
+                    expected_data: json!({"-": "foo"}),
+                    expected_result: Ok(None),
+                },
+                Test {
+                    data: json!(null),
+                    ptr: "/-",
+                    value: json!(34),
+                    expected_data: json!([34]),
+                    expected_result: Ok(Some(json!(null))),
+                },
+                Test {
+                    data: json!({"foo": "bar"}),
+                    ptr: "/foo/-",
+                    value: json!("baz"),
+                    expected_data: json!({"foo": ["baz"]}),
+                    expected_result: Ok(Some(json!("bar"))),
+                },
+                Test {
+                    data: json!({}),
+                    ptr: "/0",
+                    value: json!("foo"),
+                    expected_data: json!({"0": "foo"}),
+                    expected_result: Ok(None),
+                },
+                Test {
+                    data: json!(null),
+                    ptr: "/1",
+                    value: json!("foo"),
+                    expected_data: json!({"1": "foo"}),
+                    expected_result: Ok(Some(json!(null))),
+                },
+                Test {
+                    data: json!([]),
+                    ptr: "/0",
+                    expected_data: json!(["foo"]),
+                    value: json!("foo"),
+                    expected_result: Ok(None),
+                },
+                Test {
+                    data: json!([]),
+                    ptr: "/0",
+                    expected_data: json!(["foo"]),
+                    value: json!("foo"),
+                    expected_result: Ok(None),
+                },
+                Test {
+                    data: json!([]),
+                    ptr: "/-",
+                    value: json!("foo"),
+                    expected_result: Ok(None),
+                    expected_data: json!(["foo"]),
+                },
+                Test {
+                    data: json!([]),
+                    ptr: "/1",
+                    value: json!("foo"),
+                    expected_result: Err(AssignError::OutOfBounds {
+                        offset: 0,
+                        source: OutOfBoundsError{
+                            index: 1,
+                            length: 0,
+                        },
+                    }),
+                    expected_data: json!([]),
+                },
+                Test {
+                    data: json!([]),
+                    ptr: "/a",
+                    value: json!("foo"),
+                    expected_result: Err(AssignError::FailedToParseIndex {
+                        offset: 0,
+                        source: json::ParseIndexError { source: usize::from_str("foo").unwrap_err() },
+                    }),
+                    expected_data: json!([]),
+                },
+            ];
 
-            let ptr = Pointer::from_static("/foo");
-            let replaced = ptr.assign(&mut data, json!("bar")).unwrap();
-            assert_eq!(replaced, None);
-            assert_eq!(&data, &json!({"foo": "bar"}));
-
-            // now testing replacement
-            let replaced = ptr.assign(&mut data, json!("baz")).unwrap();
-            assert_eq!(replaced, Some(Value::String("bar".to_string())));
-            assert_eq!(&data, &json!({"foo": "baz"}));
-
-            let tests = [(json!({}), "/foo", json!("bar"))];
-            for (mut data, ptr, value) in tests {
+            for (i,Test {
+                mut data,
+                ptr,
+                value,
+                expected_data,
+                expected_result: expected_replaced,
+            }) in tests.into_iter().enumerate()
+            {
                 let ptr = PointerBuf::from_str(ptr).unwrap();
-                let replaced = ptr.assign(&mut data, value);
+                let replaced = ptr.assign(&mut data, value.clone());
+                assert_eq!(
+                    &expected_data, &data,
+                    "data not as expected.\n\nexpected:\n\n{expected_data}\n\nactual:\n{data}\n"
+                );
+                assert_eq!(
+                    &expected_replaced,
+                    &replaced,
+                    "\nreplaced not as expected for test index {i}:\n\npointer:{ptr}\nvalue:{value}\n\ndata:\n{data}\n\nexpected data:\n{expected_data}\n\nexpected:\n{}\n\nactual:\n{}\n\n",
+                    expected_replaced
+                        .as_ref()
+                        .map_or("None".to_string(), |v| serde_json::to_string_pretty(&v).unwrap()),
+                    replaced
+                        .as_ref()
+                        .map_or("None".to_string(), |v| serde_json::to_string_pretty(&v).unwrap()),
+    
+                );
             }
         }
 
@@ -380,7 +514,7 @@ mod json {
             ];
 
             for (path, val, expected, expected_replaced) in tests {
-                let ptr = PointerBuf::parse(path).expect(&format!("failed to parse \"{path}\""));
+                let ptr = PointerBuf::must_parse(path);
                 let replaced = ptr
                     .assign(&mut data, val.clone())
                     .expect(&format!("failed to assign \"{path}\""));
