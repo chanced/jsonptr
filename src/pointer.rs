@@ -99,9 +99,9 @@ const fn is_valid_ptr(value: &str) -> bool {
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Pointer(str);
 
-impl<'a> Default for &'a Pointer {
+impl Default for &'static Pointer {
     fn default() -> Self {
-        unsafe { &*("" as *const str as *const Self) }
+        Pointer::root()
     }
 }
 impl core::fmt::Display for Pointer {
@@ -331,8 +331,9 @@ impl Pointer {
 
     /// Finds the commonality between this and another `Pointer`.
     pub fn intersection<'a>(&'a self, mut other: &Self) -> &'a Self {
-        //  self: /a/
-        // other: /a/suffix
+        if self.is_root() || other.is_root() {
+            return Self::root();
+        }
         let mut idx = 0;
         let mut this = self;
         while let Some((tok, remaining)) = this.split_front() {
@@ -347,6 +348,7 @@ impl Pointer {
                 break;
             }
         }
+
         self.split_at(idx).map_or(self, |(head, _)| head)
     }
 
