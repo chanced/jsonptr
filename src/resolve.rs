@@ -156,13 +156,13 @@ impl ResolveError {
 
     /// Returns `true` if this error is `FailedToParseIndex`; otherwise returns
     /// `false`.
-    pub fn is_out_of_bounds(&self) -> bool {
+    #[must_use] pub fn is_out_of_bounds(&self) -> bool {
         matches!(self, Self::OutOfBounds { .. })
     }
 
     /// Returns `true` if this error is `FailedToParseIndex`; otherwise returns
     /// `false`.
-    pub fn is_failed_to_parse_index(&self) -> bool {
+    #[must_use] pub fn is_failed_to_parse_index(&self) -> bool {
         matches!(self, Self::FailedToParseIndex { .. })
     }
 }
@@ -199,7 +199,7 @@ impl std::error::Error for ResolveError {
 
 // #[cfg(feature = "json")]
 mod json {
-    use super::*;
+    use super::{Pointer, Resolve, ResolveError, ResolveMut};
     use serde_json::Value;
 
     impl Resolve for Value {
@@ -224,7 +224,7 @@ mod json {
 
                     Value::Object(v) => v
                         .get(token.decoded().as_ref())
-                        .ok_or_else(|| ResolveError::NotFound { offset }),
+                        .ok_or(ResolveError::NotFound { offset }),
                     // found a leaf node but the pointer hasn't been exhausted
                     _ => Err(ResolveError::Unreachable { offset }),
                 }?;
@@ -255,7 +255,7 @@ mod json {
                     }
                     Value::Object(v) => v
                         .get_mut(token.decoded().as_ref())
-                        .ok_or_else(|| ResolveError::NotFound { offset }),
+                        .ok_or(ResolveError::NotFound { offset }),
                     // found a leaf node but the pointer hasn't been exhausted
                     _ => Err(ResolveError::Unreachable { offset }),
                 }?;
@@ -372,7 +372,7 @@ mod json {
             assert!(res.is_err());
             let err = res.unwrap_err();
             assert!(err.is_unreachable());
-            assert_eq!(err.offset(), 9)
+            assert_eq!(err.offset(), 9);
         }
 
         #[test]
@@ -465,7 +465,7 @@ mod toml {
 
                     Value::Table(v) => v
                         .get(token.decoded().as_ref())
-                        .ok_or_else(|| ResolveError::NotFound { offset }),
+                        .ok_or(ResolveError::NotFound { offset }),
                     // found a leaf node but the pointer hasn't been exhausted
                     _ => Err(ResolveError::Unreachable { offset }),
                 }?;
@@ -496,7 +496,7 @@ mod toml {
                     }
                     Value::Table(v) => v
                         .get_mut(token.decoded().as_ref())
-                        .ok_or_else(|| ResolveError::NotFound { offset }),
+                        .ok_or(ResolveError::NotFound { offset }),
                     // found a leaf node but the pointer hasn't been exhausted
                     _ => Err(ResolveError::Unreachable { offset }),
                 }?;

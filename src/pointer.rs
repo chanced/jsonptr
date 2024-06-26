@@ -701,7 +701,8 @@ impl PointerBuf {
     /// Attempts to replace a `Token` by the index, returning the replaced
     /// `Token` if it already exists. Returns `None` otherwise.
     ///
-    /// A `ReplaceTokenError` is returned if the index is out of bounds.
+    /// ## Errors
+    /// A [`ReplaceTokenError`] is returned if the index is out of bounds.
     pub fn replace_token(
         &mut self,
         index: usize,
@@ -720,7 +721,7 @@ impl PointerBuf {
                 index,
             });
         }
-        let old = tokens.get(index).map(|t| t.to_owned());
+        let old = tokens.get(index).map(super::token::Token::to_owned);
         tokens[index] = token;
 
         let mut buf = String::new();
@@ -839,9 +840,9 @@ mod tests {
     use quickcheck_macros::quickcheck;
 
     #[test]
-    #[should_panic]
+    #[should_panic = "attempt to use `Pointer::from_static` on an invalid JSON Pointer"]
     fn from_const_validates() {
-        Pointer::from_static("foo/bar");
+        let _ = Pointer::from_static("foo/bar");
     }
 
     #[test]
