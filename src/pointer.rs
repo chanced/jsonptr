@@ -35,7 +35,7 @@ fn validate(value: &str) -> Result<&str, ParseError> {
         if c == b'~' {
             // pulling down
             let next = bytes.next().map(|(_, c)| c);
-            if !matches!(next, Some(b'0') | Some(b'1')) {
+            if !matches!(next, Some(b'0' | b'1')) {
                 // '~' must be followed by '0' or '1' in order to be properly encoded
                 return Err(ParseError::InvalidEncoding {
                     offset: ptr_offset,
@@ -118,12 +118,13 @@ impl Pointer {
     ///
     /// This is a zero-copy constructor
     fn new<S: AsRef<str> + ?Sized>(s: &S) -> &Self {
-        unsafe { &*(s.as_ref() as *const str as *const Self) }
+        unsafe { &*(core::ptr::from_ref::<str>(s.as_ref()) as *const Self) }
     }
 
     /// Constant reference to a root pointer
+    #[must_use]
     pub const fn root() -> &'static Self {
-        unsafe { &*("" as *const str as *const Self) }
+        unsafe { &*(core::ptr::from_ref::<str>("") as *const Self) }
     }
 
     /// Attempts to parse a string into a `Pointer`.
@@ -163,22 +164,26 @@ impl Pointer {
     /// let bar = data.resolve(POINTER).unwrap();
     /// assert_eq!(bar, "baz");
     /// ````
+    #[must_use]
     pub const fn from_static(s: &'static str) -> &'static Self {
         assert!(is_valid_ptr(s), "invalid JSON Pointer");
-        unsafe { &*(s as *const str as *const Self) }
+        unsafe { &*(std::ptr::from_ref::<str>(s) as *const Self) }
     }
 
     /// The encoded string representation of this `Pointer`
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
-    /// Converts into an owned PointerBuf
+    /// Converts into an owned [`PointerBuf`]
+    #[must_use]
     pub fn to_buf(&self) -> PointerBuf {
         PointerBuf(self.0.to_string())
     }
 
     /// Returns an iterator of `Token`s in the `Pointer`.
+    #[must_use]
     pub fn tokens(&self) -> Tokens {
         let mut s = self.0.split('/');
         // skipping the first '/'
@@ -187,21 +192,25 @@ impl Pointer {
     }
 
     /// Returns the number of tokens in the `Pointer`.
+    #[must_use]
     pub fn count(&self) -> usize {
         self.tokens().count()
     }
 
     /// Returns `true` if the JSON Pointer equals `""`.
+    #[must_use]
     pub fn is_root(&self) -> bool {
         self.0.is_empty()
     }
 
     /// Returns a `serde_json::Value` representation of this `Pointer`
+    #[must_use]
     pub fn to_value(&self) -> Value {
         Value::String(self.0.to_string())
     }
 
     /// Returns the last `Token` in the `Pointer`.
+    #[must_use]
     pub fn back(&self) -> Option<Token> {
         self.0
             .rsplit_once('/')
@@ -211,11 +220,13 @@ impl Pointer {
     /// Returns the last token in the `Pointer`.
     ///
     /// alias for `back`
+    #[must_use]
     pub fn last(&self) -> Option<Token> {
         self.back()
     }
 
     /// Returns the first `Token` in the `Pointer`.
+    #[must_use]
     pub fn front(&self) -> Option<Token> {
         if self.is_root() {
             return None;
@@ -232,11 +243,13 @@ impl Pointer {
     /// Returns the first `Token` in the `Pointer`.
     ///
     /// alias for `front`
+    #[must_use]
     pub fn first(&self) -> Option<Token> {
         self.front()
     }
 
     /// Splits the `Pointer` into the first `Token` and a remainder `Pointer`.
+    #[must_use]
     pub fn split_front(&self) -> Option<(Token, &Self)> {
         if self.is_root() {
             return None;
@@ -277,8 +290,9 @@ impl Pointer {
     /// assert_eq!(tail, Pointer::from_static("/bar/baz"));
     /// assert_eq!(ptr.split_at(3), None);
     /// ```
+    #[must_use]
     pub fn split_at(&self, idx: usize) -> Option<(&Self, &Self)> {
-        if self.0.get(idx..idx + 1) != Some("/") {
+        if self.0.get(idx..=idx) != Some("/") {
             return None;
         }
         let (head, tail) = self.0.split_at(idx);
@@ -286,6 +300,7 @@ impl Pointer {
     }
 
     /// Splits the `Pointer` into the parent path and the last `Token`.
+    #[must_use]
     pub fn split_back(&self) -> Option<(&Self, Token)> {
         self.0
             .rsplit_once('/')
@@ -293,6 +308,7 @@ impl Pointer {
     }
 
     /// A pointer to the parent of the current path.
+    #[must_use]
     pub fn parent(&self) -> Option<&Self> {
         self.0.rsplit_once('/').map(|(front, _)| Self::new(front))
     }
@@ -317,17 +333,47 @@ impl Pointer {
     /// let ptr = Pointer::root();
     /// assert_eq!(ptr.get(0), None);
     /// ```
+    #[must_use]
     pub fn get(&self, index: usize) -> Option<Token> {
-        self.tokens().nth(index).to_owned()
+        self.tokens().nth(index).clone()
     }
 
     /// Attempts to resolve a `Value` based on the path in this `Pointer`.
+    ///
+    /// ## Errors
+    /// Returns [`R::Error`](`Resolve::Error`) if an error occurs while
+    /// resolving.
+    ///
+    /// The rules of such are determined by the `R`'s implementation of
+    /// [`Resolve`] but provided implementations return
+    /// [`ResolveError`](crate::resolve::ResolveError) if:
+    /// - The path is unreachable (e.g. a scalar is encountered prior to the end
+    ///   of the path)
+    /// - The path is not found (e.g. a key in an object or an index in an array
+    ///   does not exist)
+    /// - An [`Token`] cannot be parsed as an array
+    ///   [`Index`](crate::index::Index)
+    /// - An array [`Index`](crate::index::Index) is out of bounds
     pub fn resolve<'v, R: Resolve>(&self, value: &'v R) -> Result<&'v R::Value, R::Error> {
         value.resolve(self)
     }
 
     /// Attempts to resolve a mutable `Value` based on the path in this `Pointer`.
     ///
+    /// ## Errors
+    /// Returns [`R::Error`](`ResolveMut::Error`) if an error occurs while
+    /// resolving.
+    ///
+    /// The rules of such are determined by the `R`'s implementation of
+    /// [`ResolveMut`] but provided implementations return
+    /// [`ResolveError`](crate::resolve::ResolveError) if:
+    /// - The path is unreachable (e.g. a scalar is encountered prior to the end
+    ///   of the path)
+    /// - The path is not found (e.g. a key in an object or an index in an array
+    ///   does not exist)
+    /// - An [`Token`] cannot be parsed as an array
+    ///   [`Index`](crate::index::Index)
+    /// - An array [`Index`](crate::index::Index) is out of bounds
     pub fn resolve_mut<'v, R: ResolveMut>(
         &self,
         value: &'v mut R,
@@ -336,6 +382,7 @@ impl Pointer {
     }
 
     /// Finds the commonality between this and another `Pointer`.
+    #[must_use]
     pub fn intersection<'a>(&'a self, other: &Self) -> &'a Self {
         if self.is_root() || other.is_root() {
             return Self::root();
@@ -410,7 +457,11 @@ impl Pointer {
     /// assert_eq!(data, json!([{"foo": "bar"}]));
     /// assert_eq!(replaced, None);
     /// ```
-    pub fn assign<'d, D, V>(&self, dest: &'d mut D, src: V) -> Result<Option<D::Value>, D::Error>
+    ///
+    /// ## Errors
+    /// Returns [`Assign::Error`] if the path is invalid or if the value cannot be assigned.
+    ///
+    pub fn assign<D, V>(&self, dest: &mut D, src: V) -> Result<Option<D::Value>, D::Error>
     where
         D: Assign,
         V: Into<D::Value>,
@@ -558,6 +609,7 @@ pub struct PointerBuf(String);
 
 impl PointerBuf {
     /// Creates a new `PointerBuf` pointing to a document root.
+    #[must_use]
     pub fn new() -> Self {
         Self(String::new())
     }
@@ -584,7 +636,7 @@ impl PointerBuf {
         T: Into<Token<'a>>,
     {
         let mut inner = String::new();
-        for t in tokens.into_iter().map(|v| v.into()) {
+        for t in tokens.into_iter().map(Into::into) {
             inner.push('/');
             inner.push_str(t.encoded());
         }
@@ -592,6 +644,7 @@ impl PointerBuf {
     }
 
     /// Coerces to a Pointer slice.
+    #[must_use]
     pub fn as_ptr(&self) -> &Pointer {
         self
     }

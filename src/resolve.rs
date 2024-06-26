@@ -1,7 +1,7 @@
 use crate::{OutOfBoundsError, ParseIndexError, Pointer};
 
-/// Resolve is implemented by types which can resolve a reference to a
-/// value type from a path represented by a JSON Pointer.
+/// A trait implemented by types which can resolve a reference to a value type
+/// from a path represented by a JSON [`Pointer`].
 ///
 /// Provided implementations include:
 ///
@@ -23,13 +23,16 @@ pub trait Resolve {
     /// Error associated with `Resolve`
     type Error;
 
-    /// Resolve a reference to `Self::Value` based on the path in a
-    /// [Pointer].
+    /// Resolve a reference to `Self::Value` based on the path in a [Pointer].
+    ///
+    /// ## Errors
+    /// Returns a [`Self::Error`](Resolve::Error) if the [`Pointer`] can not
+    /// be resolved.
     fn resolve(&self, ptr: &Pointer) -> Result<&Self::Value, Self::Error>;
 }
 
-/// ResolveMut is implemented by types which can resolve a mutable reference to
-/// a `serde_json::Value` from the path in a JSON Pointer.
+/// A trait implemented by types which can resolve a mutable reference to a
+/// `serde_json::Value` from the path in a JSON [`Pointer`].
 pub trait ResolveMut {
     /// The type of value that is being resolved.
     ///
@@ -46,6 +49,10 @@ pub trait ResolveMut {
 
     /// Resolve a mutable reference to a `serde_json::Value` based on the path
     /// in a JSON Pointer.
+    ///
+    /// ## Errors
+    /// Returns a [`Self::Error`](ResolveMut::Error) if the [`Pointer`] can not
+    /// be resolved.
     fn resolve_mut(&mut self, ptr: &Pointer) -> Result<&mut Self::Value, Self::Error>;
 }
 
@@ -123,6 +130,7 @@ pub enum ResolveError {
 impl ResolveError {
     /// Offset of the partial pointer starting with the token which caused the
     /// error.
+    #[must_use]
     pub fn offset(&self) -> usize {
         match self {
             Self::FailedToParseIndex { offset, .. }
@@ -134,12 +142,14 @@ impl ResolveError {
 
     /// Returns `true` if this error is `FailedToParseIndex`; otherwise returns
     /// `false`.
+    #[must_use]
     pub fn is_unreachable(&self) -> bool {
         matches!(self, Self::Unreachable { .. })
     }
 
     /// Returns `true` if this error is `FailedToParseIndex`; otherwise returns
     /// `false`.
+    #[must_use]
     pub fn is_not_found(&self) -> bool {
         matches!(self, Self::NotFound { .. })
     }
@@ -161,16 +171,16 @@ impl core::fmt::Display for ResolveError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::FailedToParseIndex { offset, .. } => {
-                write!(f, "failed to parse index at offset {}", offset)
+                write!(f, "failed to parse index at offset {offset}")
             }
             Self::OutOfBounds { offset, .. } => {
-                write!(f, "index at offset {} out of bounds", offset)
+                write!(f, "index at offset {offset} out of bounds")
             }
             Self::NotFound { offset, .. } => {
-                write!(f, "pointer starting at offset {} not found", offset)
+                write!(f, "pointer starting at offset {offset} not found")
             }
             Self::Unreachable { offset, .. } => {
-                write!(f, "pointer starting at offset {} is unreachable", offset)
+                write!(f, "pointer starting at offset {offset} is unreachable")
             }
         }
     }
@@ -614,7 +624,7 @@ mod toml {
             assert!(res.is_err());
             let err = res.unwrap_err();
             assert!(err.is_unreachable());
-            assert_eq!(err.offset(), 9)
+            assert_eq!(err.offset(), 9);
         }
 
         #[test]

@@ -82,8 +82,11 @@ pub trait Assign {
 
     /// Assigns a value of based on the path provided by a JSON Pointer,
     /// returning the replaced value, if any.
-    fn assign<'v, V>(
-        &'v mut self,
+    /// 
+    /// # Errors
+    /// Returns [`Self::Error`] if the assignment fails.
+    fn assign<V>(
+        &mut self,
         ptr: &Pointer,
         value: V,
     ) -> Result<Option<Self::Value>, Self::Error>
@@ -91,7 +94,7 @@ pub trait Assign {
         V: Into<Self::Value>;
 }
 
-///
+/// Default error (`json` and `toml`) returned when an assignment fails.
 #[derive(Debug, PartialEq, Eq)]
 pub enum AssignError {
     /// A `Token` within the `Pointer` failed to be parsed as an array index.
@@ -155,7 +158,7 @@ mod json {
     fn expand(mut remaining: &Pointer, mut value: Value) -> Value {
         while let Some((ptr, tok)) = remaining.split_back() {
             remaining = ptr;
-            match tok.encoded().as_ref() {
+            match tok.encoded() {
                 "0" | "-" => {
                     value = Value::Array(vec![value]);
                 }
@@ -172,8 +175,8 @@ mod json {
     impl Assign for Value {
         type Value = Value;
         type Error = AssignError;
-        fn assign<'v, V>(
-            &'v mut self,
+        fn assign<V>(
+            &mut self,
             ptr: &Pointer,
             value: V,
         ) -> Result<Option<Self::Value>, Self::Error>
@@ -184,9 +187,9 @@ mod json {
         }
     }
 
-    pub(crate) fn assign_value<'v>(
+    pub(crate) fn assign_value(
         mut ptr: &Pointer,
-        mut dest: &'v mut Value,
+        mut dest: &mut Value,
         mut value: Value,
     ) -> Result<Option<Value>, AssignError> {
         let mut offset = 0;
@@ -196,8 +199,8 @@ mod json {
 
             let assigned = match dest {
                 Value::Array(array) => assign_array(token, tail, array, value, offset)?,
-                Value::Object(obj) => assign_object(token, tail, obj, value)?,
-                _ => assign_scalar(ptr, dest, value)?,
+                Value::Object(obj) => assign_object(token, tail, obj, value),
+                _ => assign_scalar(ptr, dest, value),
             };
             match assigned {
                 Assigned::Done(assignment) => {
@@ -216,10 +219,10 @@ mod json {
         }
 
         // Pointer is root, we can replace `dest` directly
-        let replaced = Some(core::mem::replace(dest, value.into()));
+        let replaced = Some(core::mem::replace(dest, value));
         Ok(replaced)
     }
-
+    #[allow(clippy::needless_pass_by_value)]
     fn assign_array<'v>(
         token: Token<'_>,
         remaining: &Pointer,
@@ -259,12 +262,13 @@ mod json {
         }
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     fn assign_object<'v>(
         token: Token<'_>,
         remaining: &Pointer,
         obj: &'v mut Map<String, Value>,
         src: Value,
-    ) -> Result<Assigned<'v, Value>, AssignError> {
+    ) -> Assigned<'v, Value> {
         // grabbing the entry of the token
         let entry = obj.entry(token.to_string());
         // adding token to the pointer buf
@@ -276,14 +280,14 @@ mod json {
                 if remaining.is_root() {
                     // if this is the last token, we are done
                     // grab the old value and replace it with the new one
-                    Ok(Assigned::Done(Some(mem::replace(entry, src))))
+                    Assigned::Done(Some(mem::replace(entry, src)))
                 } else {
                     // if this is not the last token, we continue with a mutable
                     // reference to the entry as the next value
-                    Ok(Assigned::Continue {
+                    Assigned::Continue {
                         same_value: src,
                         next_dest: entry,
-                    })
+                    }
                 }
             }
             Entry::Vacant(entry) => {
@@ -291,7 +295,7 @@ mod json {
                 // remaining path with the src value as a leaf and assign it to the
                 // entry
                 entry.insert(expand(remaining, src));
-                Ok(Assigned::Done(None))
+                Assigned::Done(None)
             }
         }
     }
@@ -300,11 +304,11 @@ mod json {
         remaining: &Pointer,
         scalar: &'v mut Value,
         value: Value,
-    ) -> Result<Assigned<'v, Value>, AssignError> {
+    ) -> Assigned<'v, Value> {
         // scalar values are always replaced at the current buf (with its token)
         // build the new src and we replace the value with it.
         let replaced = Some(mem::replace(scalar, expand(remaining, value)));
-        Ok(Assigned::Done(replaced))
+        Assigned::Done(replaced)
     }
 
     #[cfg(test)]
@@ -323,6 +327,7 @@ mod json {
             expected_result: Result<Option<Value>, AssignError>,
         }
         #[test]
+        #[allow(clippy::too_many_lines)]
         fn test_assign() {
             let tests = [
                 Test {
@@ -570,7 +575,7 @@ mod toml {
     fn expand(mut remaining: &Pointer, mut value: Value) -> Value {
         while let Some((ptr, tok)) = remaining.split_back() {
             remaining = ptr;
-            match tok.encoded().as_ref() {
+            match tok.encoded() {
                 "0" | "-" => {
                     value = Value::Array(vec![value]);
                 }
@@ -587,8 +592,8 @@ mod toml {
     impl Assign for Value {
         type Value = Value;
         type Error = AssignError;
-        fn assign<'v, V>(
-            &'v mut self,
+        fn assign<V>(
+            &mut self,
             ptr: &Pointer,
             value: V,
         ) -> Result<Option<Self::Value>, Self::Error>
@@ -599,9 +604,9 @@ mod toml {
         }
     }
 
-    pub(crate) fn assign_value<'v>(
+    pub(crate) fn assign_value(
         mut ptr: &Pointer,
-        mut dest: &'v mut Value,
+        mut dest: &mut Value,
         mut value: Value,
     ) -> Result<Option<Value>, AssignError> {
         let mut offset = 0;
@@ -611,8 +616,8 @@ mod toml {
 
             let assigned = match dest {
                 Value::Array(array) => assign_array(token, tail, array, value, offset)?,
-                Value::Table(tbl) => assign_object(token, tail, tbl, value)?,
-                _ => assign_scalar(ptr, dest, value)?,
+                Value::Table(tbl) => assign_object(token, tail, tbl, value),
+                _ => assign_scalar(ptr, dest, value),
             };
             match assigned {
                 Assigned::Done(assignment) => {
@@ -631,10 +636,11 @@ mod toml {
         }
 
         // Pointer is root, we can replace `dest` directly
-        let replaced = Some(mem::replace(dest, value.into()));
+        let replaced = Some(mem::replace(dest, value));
         Ok(replaced)
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     fn assign_array<'v>(
         token: Token<'_>,
         remaining: &Pointer,
@@ -674,12 +680,13 @@ mod toml {
         }
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     fn assign_object<'v>(
         token: Token<'_>,
         remaining: &Pointer,
         obj: &'v mut Map<String, Value>,
         src: Value,
-    ) -> Result<Assigned<'v, Value>, AssignError> {
+    ) -> Assigned<'v, Value> {
         // grabbing the entry of the token
         let entry = obj.entry(token.to_string());
         // adding token to the pointer buf
@@ -691,14 +698,14 @@ mod toml {
                 if remaining.is_root() {
                     // if this is the last token, we are done
                     // grab the old value and replace it with the new one
-                    Ok(Assigned::Done(Some(mem::replace(entry, src))))
+                    Assigned::Done(Some(mem::replace(entry, src)))
                 } else {
                     // if this is not the last token, we continue with a mutable
                     // reference to the entry as the next value
-                    Ok(Assigned::Continue {
+                    Assigned::Continue {
                         same_value: src,
                         next_dest: entry,
-                    })
+                    }
                 }
             }
             Entry::Vacant(entry) => {
@@ -706,7 +713,7 @@ mod toml {
                 // remaining path with the src value as a leaf and assign it to the
                 // entry
                 entry.insert(expand(remaining, src));
-                Ok(Assigned::Done(None))
+                Assigned::Done(None)
             }
         }
     }
@@ -715,11 +722,10 @@ mod toml {
         remaining: &Pointer,
         scalar: &'v mut Value,
         value: Value,
-    ) -> Result<Assigned<'v, Value>, AssignError> {
+    ) -> Assigned<'v, Value> {
         // scalar values are always replaced at the current buf (with its token)
         // build the new src and we replace the value with it.
-        let replaced = Some(mem::replace(scalar, expand(remaining, value)));
-        Ok(Assigned::Done(replaced))
+        Assigned::Done(Some(mem::replace(scalar, expand(remaining, value))))
     }
 
     #[cfg(test)]
@@ -739,6 +745,7 @@ mod toml {
             expected_result: Result<Option<Value>, AssignError>,
         }
         #[test]
+        #[allow(clippy::too_many_lines)]
         fn test_assign() {
             let tests = [
                 Test {

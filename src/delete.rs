@@ -108,12 +108,10 @@ mod json {
                 \nexpected:{}\n\nactual:{}\n\n",
                     expected_deleted
                         .as_ref()
-                        .map(to_string_pretty)
-                        .unwrap_or_else(|| "None".to_string()),
+                        .map_or_else(|| "None".to_string(), to_string_pretty),
                     deleted
                         .as_ref()
-                        .map(to_string_pretty)
-                        .unwrap_or_else(|| "None".to_string())
+                        .map_or_else(|| "None".to_string(), to_string_pretty)
                 );
             }
         }
@@ -244,12 +242,10 @@ mod toml {
                 \nexpected:{}\n\nactual:{}\n\n",
                     expected_deleted
                         .as_ref()
-                        .map(to_string_pretty)
-                        .unwrap_or_else(|| "None".to_string()),
+                        .map_or_else(|| "None".to_string(), to_string_pretty),
                     deleted
                         .as_ref()
-                        .map(to_string_pretty)
-                        .unwrap_or_else(|| "None".to_string())
+                        .map_or_else(|| "None".to_string(), to_string_pretty)
                 );
             }
         }

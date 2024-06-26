@@ -21,7 +21,7 @@ quickcheck_macros = "1.0.0"
 
 [features]
 assign  = []
-default = ["std", "toml", "resolve", "assign", "delete"]
+default = ["toml", "resolve", "assign", "delete"]
 delete  = []
 # json    = ["dep:serde_json"]
 resolve = []

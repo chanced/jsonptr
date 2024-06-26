@@ -1,16 +1,16 @@
 //! Abstract index representation for RFC 6901.
 //!
 //! [RFC 6901](https://datatracker.ietf.org/doc/html/rfc6901) defines two valid
-//! ways to represent array indices as Pointer tokens: non-negative integers, and
-//! the character `-`, which stands for the index after the last existing array
-//! member. While attempting to use `-` to access an array is an error, the token
-//! can be useful when paired with [RFC 6902](https://datatracker.ietf.org/doc/
-//! html/rfc6902) as a way to express where to put the new element when extending
-//! an array.
+//! ways to represent array indices as Pointer tokens: non-negative integers,
+//! and the character `-`, which stands for the index after the last existing
+//! array member. While attempting to use `-` to access an array is an error,
+//! the token can be useful when paired with [RFC
+//! 6902](https://datatracker.ietf.org/∑doc/html/rfc6902) as a way to express
+//! where to put the new element when extending an array.
 //!
 //! While this crate doesn't implement RFC 6902, it still must consider
-//! non-numerical indices as valid, and provide a mechanism for manipulating them.
-//! This is what this module provides.
+//! non-numerical indices as valid, and provide a mechanism for manipulating
+//! them. This is what this module provides.
 //!
 //! The main use of the `Index` type is when resolving a [`Token`] instance as a
 //! concrete index for a given array length:
@@ -70,6 +70,8 @@ impl Index {
     /// assert!(Index::Num(1).for_len(1).is_err());
     /// assert!(Index::Next.for_len(1).is_err());
     /// ```
+    /// # Errors
+    /// Returns [`OutOfBoundsError`] if the index is out of bounds.
     pub fn for_len(&self, length: usize) -> Result<usize, OutOfBoundsError> {
         match *self {
             Self::Num(index) if index < length => Ok(index),
@@ -100,6 +102,9 @@ impl Index {
     /// assert_eq!(Index::Next.for_len_incl(1), Ok(1));
     /// assert!(Index::Num(2).for_len_incl(1).is_err());
     /// ```
+    ///
+    /// # Errors
+    /// Returns [`OutOfBoundsError`] if the index is out of bounds.
     pub fn for_len_incl(&self, length: usize) -> Result<usize, OutOfBoundsError> {
         match *self {
             Self::Num(index) if index <= length => Ok(index),
@@ -122,6 +127,7 @@ impl Index {
     /// assert_eq!(Index::Num(42).for_len_unchecked(30), 42);
     /// assert_eq!(Index::Next.for_len_unchecked(30), 30);
     /// ````
+    #[must_use]
     pub fn for_len_unchecked(&self, length: usize) -> usize {
         match *self {
             Self::Num(idx) => idx,
