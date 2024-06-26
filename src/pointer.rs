@@ -840,7 +840,7 @@ mod tests {
     use quickcheck_macros::quickcheck;
 
     #[test]
-    #[should_panic = "attempt to use `Pointer::from_static` on an invalid JSON Pointer"]
+    #[should_panic = "invalid JSON Pointer"]
     fn from_const_validates() {
         let _ = Pointer::from_static("foo/bar");
     }
