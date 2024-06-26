@@ -187,7 +187,7 @@ impl std::error::Error for ResolveError {
     }
 }
 
-#[cfg(feature = "json")]
+// #[cfg(feature = "json")]
 mod json {
     use super::*;
     use serde_json::Value;
@@ -408,6 +408,258 @@ mod json {
             assert_eq!(err.offset(), 9);
 
             let mut data = json!({"foo": "bar"});
+            let ptr = PointerBuf::try_from("/foo/unresolvable").unwrap();
+            let err = data.resolve_mut(&ptr).unwrap_err();
+            assert!(err.is_unreachable());
+            assert_eq!(err.offset(), 4);
+        }
+
+        #[test]
+        fn test_resolve_unresolvable_error() {
+            let data = test_data();
+            let ptr = Pointer::from_static("/foo/bool/unresolvable/not-in-token");
+            let res = ptr.resolve(&data);
+            assert!(res.is_err());
+            let err = res.unwrap_err();
+            assert!(err.is_unreachable());
+            assert_eq!(err.offset(), 9);
+        }
+    }
+}
+
+#[cfg(feature = "toml")]
+mod toml {
+    use super::{Resolve, ResolveError, ResolveMut};
+    use crate::Pointer;
+    use toml::Value;
+
+    impl Resolve for Value {
+        type Value = Value;
+        type Error = ResolveError;
+
+        fn resolve(&self, mut ptr: &Pointer) -> Result<&Value, Self::Error> {
+            let mut offset = 0;
+            let mut value = self;
+            while let Some((token, rem)) = ptr.split_front() {
+                let tok_len = token.encoded().len();
+                ptr = rem;
+                value = match value {
+                    Value::Array(v) => {
+                        let idx = token
+                            .to_index()
+                            .map_err(|source| ResolveError::FailedToParseIndex { offset, source })?
+                            .for_len(v.len())
+                            .map_err(|source| ResolveError::OutOfBounds { offset, source })?;
+                        Ok(&v[idx])
+                    }
+
+                    Value::Table(v) => v
+                        .get(token.decoded().as_ref())
+                        .ok_or_else(|| ResolveError::NotFound { offset }),
+                    // found a leaf node but the pointer hasn't been exhausted
+                    _ => Err(ResolveError::Unreachable { offset }),
+                }?;
+                offset += 1 + tok_len;
+            }
+            Ok(value)
+        }
+    }
+
+    impl ResolveMut for Value {
+        type Value = Value;
+        type Error = ResolveError;
+
+        fn resolve_mut(&mut self, mut ptr: &Pointer) -> Result<&mut Value, ResolveError> {
+            let mut offset = 0;
+            let mut value = self;
+            while let Some((token, rem)) = ptr.split_front() {
+                let tok_len = token.encoded().len();
+                ptr = rem;
+                value = match value {
+                    Value::Array(array) => {
+                        let idx = token
+                            .to_index()
+                            .map_err(|source| ResolveError::FailedToParseIndex { offset, source })?
+                            .for_len(array.len())
+                            .map_err(|source| ResolveError::OutOfBounds { offset, source })?;
+                        Ok(&mut array[idx])
+                    }
+                    Value::Table(v) => v
+                        .get_mut(token.decoded().as_ref())
+                        .ok_or_else(|| ResolveError::NotFound { offset }),
+                    // found a leaf node but the pointer hasn't been exhausted
+                    _ => Err(ResolveError::Unreachable { offset }),
+                }?;
+                offset += 1 + tok_len;
+            }
+            Ok(value)
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use crate::{
+            resolve::{Resolve, ResolveError, ResolveMut},
+            Pointer, PointerBuf,
+        };
+        use toml::{toml, Value};
+
+        fn test_data() -> Value {
+            toml! {
+                "foo" = {
+                    "bar" = {
+                        "baz" = {
+                            "qux" = "quux"
+                        }
+                    },
+                    "strings" = ["zero", "one", "two"],
+                    "bool" = true,
+                    "objects" = [{
+                        "field" = "zero"
+                    }, {
+                        "field" = "one"
+                    }, {
+                        "field" = "two"
+                    }]
+                }
+            }
+            .into()
+        }
+
+        #[test]
+        fn test_rfc_examples() {
+            let mut data: Value = toml! {
+                "foo" = ["bar", "baz"]
+                "" = 0
+                "a/b" = 1
+                "c%d" = 2
+                "e^f" = 3
+                "g|h" = 4
+                "i\\j" = 5
+                "k\"l" = 6
+                " " = 7
+                "m~n" = 8
+            }
+            .into();
+
+            let val = data.get("").unwrap();
+            assert_eq!(val, &0.into());
+
+            // ""           // the whole document
+            let ptr = Pointer::root();
+            assert_eq!(data.resolve(ptr).unwrap(), &data);
+            assert_eq!(&data.resolve_mut(ptr).unwrap().to_owned(), &data);
+
+            // "/foo"       ["bar", "baz"]
+            let ptr = Pointer::from_static("/foo");
+            assert_eq!(
+                data.resolve(ptr).unwrap(),
+                &Value::Array(vec!["bar".into(), "baz".into()])
+            );
+            assert_eq!(
+                data.resolve_mut(ptr).unwrap(),
+                &Value::Array(vec!["bar".into(), "baz".into()])
+            );
+
+            // "/foo/0"     "bar"
+            let ptr = Pointer::from_static("/foo/0");
+            assert_eq!(data.resolve(ptr).unwrap(), &"bar".into());
+
+            // // "/"          0
+            let ptr = Pointer::from_static("/");
+            assert_eq!(data.resolve(ptr).unwrap(), &0.into());
+
+            // "/a~1b"      1
+            assert_eq!(data.get("a/b").unwrap(), &1.into());
+            let ptr = Pointer::from_static("/a~1b");
+            assert_eq!(ptr.as_str(), "/a~1b");
+            assert_eq!(data.get("a/b").unwrap(), &1.into());
+            assert_eq!(&ptr.first().unwrap().decoded(), "a/b");
+            assert_eq!(data.resolve(ptr).unwrap(), &1.into());
+
+            // "/c%d"       2
+            let ptr = Pointer::from_static("/c%d");
+            assert_eq!(data.resolve(ptr).unwrap(), &2.into());
+
+            // // "/e^f"       3
+            let ptr = Pointer::from_static("/e^f");
+            assert_eq!(data.resolve(ptr).unwrap(), &3.into());
+
+            // // "/g|h"       4
+            let ptr = Pointer::from_static("/g|h");
+            assert_eq!(data.resolve(ptr).unwrap(), &4.into());
+
+            // "/i\\j"      5
+            let ptr = Pointer::from_static("/i\\j");
+            assert_eq!(data.resolve(ptr).unwrap(), &5.into());
+
+            // // "/k\"l"      6
+            let ptr = Pointer::from_static("/k\"l");
+            assert_eq!(data.resolve(ptr).unwrap(), &6.into());
+
+            // // "/ "         7
+            let ptr = Pointer::from_static("/ ");
+            assert_eq!(data.resolve(ptr).unwrap(), &7.into());
+            // // "/m~0n"      8
+            let ptr = Pointer::from_static("/m~0n");
+            assert_eq!(data.resolve(ptr).unwrap(), &8.into());
+        }
+
+        #[test]
+        fn test_resolve_unresolvable() {
+            let mut data = test_data();
+            let ptr = Pointer::from_static("/foo/bool/unresolvable");
+            let res = ptr.resolve_mut(&mut data);
+
+            assert!(res.is_err());
+            let err = res.unwrap_err();
+            assert!(err.is_unreachable());
+            assert_eq!(err.offset(), 9)
+        }
+
+        #[test]
+        fn test_resolve_not_found() {
+            let mut data = test_data();
+            let ptr = PointerBuf::from_tokens(["foo", "not_found", "nope"]);
+            let res = ptr.resolve_mut(&mut data);
+            assert!(res.is_err());
+            let err = res.unwrap_err();
+            assert!(err.is_not_found());
+
+            match err {
+                ResolveError::NotFound { offset, .. } => {
+                    assert_eq!(offset, 4);
+                }
+                _ => panic!("expected NotFound"),
+            }
+        }
+
+        #[test]
+        fn test_try_from() {
+            let ptr = PointerBuf::from_tokens(["foo", "bar", "~/"]);
+
+            assert_eq!(PointerBuf::try_from("/foo/bar/~0~1").unwrap(), ptr);
+            let into: PointerBuf = "/foo/bar/~0~1".try_into().unwrap();
+            assert_eq!(ptr, into);
+        }
+
+        #[test]
+        fn test_resolve_mut_unresolvable_error() {
+            let mut data = test_data();
+            let ptr = Pointer::from_static("/foo/bool/unresolvable/not-in-token");
+            let res = ptr.resolve_mut(&mut data);
+            assert!(res.is_err());
+            let err = res.unwrap_err();
+            assert!(err.is_unreachable());
+            assert_eq!(err.offset(), 9);
+
+            let ptr = Pointer::from_static("/foo/bool/unresolvable");
+            let res = ptr.resolve_mut(&mut data);
+            let err = res.unwrap_err();
+            assert!(err.is_unreachable());
+            assert_eq!(err.offset(), 9);
+
+            let mut data: Value = toml! {"foo" = "bar"}.into();
             let ptr = PointerBuf::try_from("/foo/unresolvable").unwrap();
             let err = data.resolve_mut(&ptr).unwrap_err();
             assert!(err.is_unreachable());

@@ -534,11 +534,11 @@ impl PartialOrd<&str> for &Pointer {
     }
 }
 
-impl PartialOrd<String> for Pointer {
-    fn partial_cmp(&self, other: &String) -> Option<Ordering> {
-        self.0.partial_cmp(other)
-    }
-}
+// impl PartialOrd<String> for Pointer {
+//     fn partial_cmp(&self, other: &String) -> Option<Ordering> {
+//         self.0.partial_cmp(other)
+//     }
+// }
 
 impl<'a> IntoIterator for &'a Pointer {
     type Item = Token<'a>;

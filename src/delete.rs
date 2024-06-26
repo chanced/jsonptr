@@ -24,9 +24,9 @@ pub trait Delete {
     fn delete(&mut self, ptr: &Pointer) -> Option<Self::Value>;
 }
 
-#[cfg(feature = "json")]
+// #[cfg(feature = "json")]
 mod json {
-    use super::*;
+    use super::Delete;
     use crate::Pointer;
     use core::mem;
     use serde_json::Value;
@@ -131,6 +131,131 @@ mod json {
 
         fn to_string_pretty(value: &Value) -> String {
             serde_json::to_string_pretty(value).unwrap()
+        }
+    }
+}
+
+#[cfg(feature = "toml")]
+mod toml {
+    use super::Delete;
+    use crate::Pointer;
+    use core::mem;
+    use toml::{Table, Value};
+
+    impl Delete for Value {
+        type Value = Value;
+        fn delete(&mut self, ptr: &Pointer) -> Option<Self::Value> {
+            let Some((parent_ptr, last)) = ptr.split_back() else {
+                // deleting at root
+                return Some(mem::replace(self, Table::default().into()));
+            };
+            parent_ptr
+                .resolve_mut(self)
+                .ok()
+                .and_then(|parent| match parent {
+                    Value::Array(children) => {
+                        let idx = last.to_index().ok()?.for_len_incl(children.len()).ok()?;
+                        children.remove(idx).into()
+                    }
+                    Value::Table(children) => children.remove(last.decoded().as_ref()),
+                    _ => None,
+                })
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use toml::{toml, Table, Value};
+
+        use crate::Pointer;
+
+        struct Test {
+            data: Value,
+            ptr: &'static str,
+            expected_data: Value,
+            expected_deleted: Option<Value>,
+        }
+
+        #[test]
+        fn test_delete_value() {
+            let tests = [
+                Test {
+                    data: toml! {"foo" = "bar"}.into(),
+                    ptr: "/foo",
+                    expected_data: Table::new().into(),
+                    expected_deleted: Some("bar".into()),
+                },
+                Test {
+                    data: toml! {"foo" = "bar"}.into(),
+                    ptr: "/foo/bar",
+                    expected_data: toml! {"foo" = "bar"}.into(),
+                    expected_deleted: None,
+                },
+                Test {
+                    data: toml! {"foo" = {"bar" = "baz"}}.into(),
+                    ptr: "/foo/bar",
+                    expected_data: toml! {"foo" = {}}.into(),
+                    expected_deleted: Some("baz".into()),
+                },
+                Test {
+                    data: toml! {"foo" = {"bar" = ["baz", "qux"]}}.into(),
+                    ptr: "/foo/bar/0",
+                    expected_data: toml! {"foo"={"bar"=["qux"]}}.into(),
+                    expected_deleted: Some("baz".into()),
+                },
+                Test {
+                    data: toml! {"foo" = "bar"}.into(),
+                    ptr: "/foo/0",
+                    expected_data: toml! {"foo"="bar"}.into(),
+                    expected_deleted: None,
+                },
+                Test {
+                    data: toml! {"foo"={"bar"=[{"baz"="qux","remaining"="field"}]}}.into(),
+                    ptr: "/foo/bar/0/baz",
+                    expected_data: toml! {"foo"={"bar"=[{"remaining"="field"}]}}.into(),
+                    expected_deleted: Some("qux".into()),
+                },
+            ];
+            for Test {
+                mut data,
+                ptr,
+                expected_data,
+                expected_deleted,
+            } in tests
+            {
+                let ptr = Pointer::from_static(ptr);
+                let deleted = ptr.delete(&mut data);
+                assert_eq!(
+                    expected_data,
+                    data,
+                    "\ndata not as expected
+                \nptr: \"{ptr}\"
+                \ndata:\n{}
+                \nexpected:\n{}
+                \nactual:\n{}\n\n",
+                    to_string_pretty(&data),
+                    to_string_pretty(&expected_data),
+                    to_string_pretty(&data)
+                );
+                assert_eq!(
+                    expected_deleted,
+                    deleted,
+                    "\ndeleted value not as expected
+                \nexpected:{}\n\nactual:{}\n\n",
+                    expected_deleted
+                        .as_ref()
+                        .map(to_string_pretty)
+                        .unwrap_or_else(|| "None".to_string()),
+                    deleted
+                        .as_ref()
+                        .map(to_string_pretty)
+                        .unwrap_or_else(|| "None".to_string())
+                );
+            }
+        }
+
+        fn to_string_pretty(value: &Value) -> String {
+            toml::to_string_pretty(value).unwrap()
         }
     }
 }

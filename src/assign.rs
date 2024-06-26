@@ -145,9 +145,9 @@ enum Assigned<'v, V> {
     Continue { next_dest: &'v mut V, same_value: V },
 }
 
-#[cfg(feature = "json")]
+// #[cfg(feature = "json")]
 mod json {
-    use super::*;
+    use super::{Assign, AssignError, Assigned};
     use crate::{Pointer,  Token};
     use core::mem;
     use serde_json::{map::Entry, Map, Value};
@@ -326,85 +326,85 @@ mod json {
         fn test_assign() {
             let tests = [
                 Test {
-                    data: json!({}),
                     ptr: "/foo",
+                    data: json!({}),
                     assign: json!("bar"),
                     expected_data: json!({"foo": "bar"}),
                     expected_result: Ok(None),
                 },
                 Test {
-                    data: json!({"foo": "bar"}),
                     ptr: "",
+                    data: json!({"foo": "bar"}),
                     assign: json!("baz"),
                     expected_data: json!("baz"),
                     expected_result: Ok(Some(json!({"foo": "bar"}))),
                 },
                 Test {
-                    data: json!({"foo": "bar"}),
                     ptr: "/foo",
+                    data: json!({"foo": "bar"}),
                     assign: json!("baz"),
                     expected_data: json!({"foo": "baz"}),
                     expected_result: Ok(Some(json!("bar"))),
                 },
                 Test {
-                    data: json!({"foo": "bar"}),
                     ptr: "/foo/bar",
+                    data: json!({"foo": "bar"}),
                     assign: json!("baz"),
                     expected_data: json!({"foo": {"bar": "baz"}}),
                     expected_result: Ok(Some(json!("bar"))),
                 },
                 Test {
-                    data: json!({}),
                     ptr: "/",
+                    data: json!({}),
                     assign: json!("foo"),
                     expected_data: json!({"": "foo"}),
                     expected_result: Ok(None),
                 },
                 Test {
-                    data: json!({}),
                     ptr: "/-",
+                    data: json!({}),
                     assign: json!("foo"),
                     expected_data: json!({"-": "foo"}),
                     expected_result: Ok(None),
                 },
                 Test {
-                    data: json!(null),
                     ptr: "/-",
+                    data: json!(null),
                     assign: json!(34),
                     expected_data: json!([34]),
                     expected_result: Ok(Some(json!(null))),
                 },
                 Test {
-                    data: json!({"foo": "bar"}),
                     ptr: "/foo/-",
+                    data: json!({"foo": "bar"}),
                     assign: json!("baz"),
                     expected_data: json!({"foo": ["baz"]}),
                     expected_result: Ok(Some(json!("bar"))),
                 },
                 Test {
-                    data: json!({}),
                     ptr: "/0",
+                    data: json!({}),
                     assign: json!("foo"),
                     expected_data: json!({"0": "foo"}),
                     expected_result: Ok(None),
                 },
                 Test {
-                    data: json!(null),
                     ptr: "/1",
+                    data: json!(null),
                     assign: json!("foo"),
                     expected_data: json!({"1": "foo"}),
                     expected_result: Ok(Some(json!(null))),
                 },
                 Test {
-                    data: json!([]),
                     ptr: "/0",
+                    data: json!([]),
                     expected_data: json!(["foo"]),
                     assign: json!("foo"),
                     expected_result: Ok(None),
                 },
                 Test {
-                    data: json!([]),
                     ptr: "/1",
+                    data: json!([]),
                     assign: json!("foo"),
                     expected_result: Err(AssignError::OutOfBounds {
                         offset: 0,
@@ -416,8 +416,8 @@ mod json {
                     expected_data: json!([]),
                 },
                 Test {
-                    data: json!([]),
                     ptr: "/a",
+                    data: json!([]),
                     assign: json!("foo"),
                     expected_result: Err(AssignError::FailedToParseIndex {
                         offset: 0,
@@ -439,7 +439,7 @@ mod json {
                 let replaced = ptr.assign(&mut data, assign.clone());
                 assert_eq!(
                     &expected_data, &data,
-                    "data not as expected.\n\nexpected:\n\n{expected_data}\n\nactual:\n{data}\n"
+                    "\ndata not as expected for test index {i}:\n\nexpected:\n\n{expected_data}\n\nactual:\n{data}\n"
                 );
                 assert_eq!(
                     &expected_replaced,
@@ -561,10 +561,11 @@ mod json {
 
 #[cfg(feature = "toml")]
 mod toml {
-    use super::*;
-    use crate::{Pointer,  Token};
+    use crate::{ Pointer, Token};
+    use super::{Assign, AssignError, Assigned};
     use core::mem;
-    use ::toml::{map::Entry, map::Map, Value};
+    use toml::{map::Entry, map::Map, Value};
+
 
     fn expand(mut remaining: &Pointer, mut value: Value) -> Value {
         while let Some((ptr, tok)) = remaining.split_back() {
@@ -786,7 +787,7 @@ mod toml {
                     data: "data".into(),
                     ptr: "/-",
                     assign: 34.into(),
-                    expected_data: toml!{[34]}.into(),
+                    expected_data: Value::Array(vec![34.into()]),
                     expected_result: Ok(Some("data".into())),
                 },
                 Test {
@@ -861,7 +862,7 @@ mod toml {
                 let replaced = ptr.assign(&mut data, value.clone());
                 assert_eq!(
                     &expected_data, &data,
-                    "data not as expected.\n\nexpected:\n\n{expected_data}\n\nactual:\n{data}\n"
+                    "\ndata not as expected for test index {i}:\n\nexpected:\n\n{expected_data}\n\nactual:\n{data}\n"
                 );
                 assert_eq!(
                     &expected_replaced,
