@@ -1,0 +1,15 @@
+---
+source: src/assign.rs
+description: asserting that the replaced TOML data returned from the assignment is as expected
+info:
+  data: data
+  ptr: /-
+  assign: 34
+---
+Ok(
+    Some(
+        String(
+            "data",
+        ),
+    ),
+)

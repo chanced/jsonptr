@@ -342,105 +342,50 @@ mod json {
             assign: Value,
         }
 
-        impl Test {
-            fn all(tests: impl IntoIterator<Item = Test>) {
-                tests.into_iter().for_each(Test::run);
-            }
-            fn run(self) {
-                let mut data = self.data.clone();
+        fn test(data: impl Into<Value>, ptr: &'static str, assign: impl Into<Value>) {
+            let mut data = data.into();
+            let assign = assign.into();
 
-                let ptr = Pointer::from_static(self.ptr);
-                let replaced = ptr.assign(&mut data, self.assign.clone());
-                let mut s = insta::Settings::new();
-
-                s.set_info(&self);
-                insta::with_settings!({
-                    info => &self,
-                    description => "asserting that the JSON data is as expected after assignment",
-                    omit_expression => true // do not include the default expression
-                }, {
-                    assert_snapshot!(&data);
-                });
-                insta::with_settings!({
-                    info => &self,
-                    description => "asserting that the replaced JSON data returned from the assignment is as expected",
-                    omit_expression => true // do not include the default expression
-                }, {
-                    assert_debug_snapshot!(&replaced);
-                });
-            }
+            let test = Test {
+                ptr,
+                data: data.clone(),
+                assign: assign.clone(),
+            };
+            let ptr = Pointer::from_static(test.ptr);
+            let replaced = ptr.assign(&mut data, assign);
+            insta::with_settings!({
+                info => &test,
+                description => "asserting that the JSON data is as expected after assignment",
+                omit_expression => true // do not include the default expression
+            }, {
+                assert_snapshot!(&data);
+            });
+            insta::with_settings!({
+                info => &test,
+                description => "asserting that the replaced JSON data returned from the assignment is as expected",
+                omit_expression => true // do not include the default expression
+            }, {
+                assert_debug_snapshot!(&replaced);
+            });
         }
 
         #[test]
         #[allow(clippy::too_many_lines)]
         fn test_assign() {
-            Test::all([
-                Test {
-                    ptr: "/foo",
-                    data: json!({}),
-                    assign: json!("bar"),
-                },
-                Test {
-                    ptr: "",
-                    data: json!({"foo": "bar"}),
-                    assign: json!("baz"),
-                },
-                Test {
-                    ptr: "/foo",
-                    data: json!({"foo": "bar"}),
-                    assign: json!("baz"),
-                },
-                Test {
-                    ptr: "/foo/bar",
-                    data: json!({"foo": "bar"}),
-                    assign: json!("baz"),
-                },
-                Test {
-                    ptr: "/",
-                    data: json!({}),
-                    assign: json!("foo"),
-                },
-                Test {
-                    ptr: "/-",
-                    data: json!({}),
-                    assign: json!("foo"),
-                },
-                Test {
-                    ptr: "/-",
-                    data: json!(null),
-                    assign: json!(34),
-                },
-                Test {
-                    ptr: "/foo/-",
-                    data: json!({"foo": "bar"}),
-                    assign: json!("baz"),
-                },
-                Test {
-                    ptr: "/0",
-                    data: json!({}),
-                    assign: json!("foo"),
-                },
-                Test {
-                    ptr: "/1",
-                    data: json!(null),
-                    assign: json!("foo"),
-                },
-                Test {
-                    ptr: "/0",
-                    data: json!([]),
-                    assign: json!("foo"),
-                },
-                Test {
-                    ptr: "/1",
-                    data: json!([]),
-                    assign: json!("foo"),
-                },
-                Test {
-                    ptr: "/a",
-                    data: json!([]),
-                    assign: json!("foo"),
-                },
-            ]);
+            test(json!({}), "/foo", json!("bar"));
+            test(json!({"foo": "bar"}), "", json!("baz"));
+            test(json!({"foo": "bar"}), "/foo", json!("baz"));
+            test(json!({"foo": "bar"}), "/foo/bar", json!("baz"));
+            test(json!({}), "/", json!("foo"));
+            test(json!({}), "/-", json!("foo"));
+            test(json!(null), "/-", json!(34));
+            test(json!({"foo": "bar"}), "/foo/-", json!("baz"));
+            test(json!({}), "/0", json!("foo"));
+            test(json!(null), "/1", json!("foo"));
+            test(json!([]), "/0", json!("foo"));
+            test(json!([]), "/-", json!("foo"));
+            test(json!([]), "/1", json!("foo"));
+            test(json!([]), "/a", json!("foo"));
         }
 
         #[test]
@@ -456,30 +401,18 @@ mod json {
 
         #[test]
         fn test_assign_array_with_next_token() {
-            Test::all([
-                Test {
-                    ptr: "/foo/-/bar",
-                    assign: "baz".into(),
-                    data: json!({}),
-                    // expected_result: Ok(None),
-                    // expected_data: json!({"foo":[{"bar": "baz"}]})
-                },
-                Test {
-                    ptr: "/foo/-/bar",
-                    assign: "qux".into(),
-                    data: json!({"foo":[{"bar":"baz" }]}),
-                },
-                Test {
-                    ptr: "/foo/-/bar",
-                    data: json!({"foo":[{"bar":"baz"},{"bar":"qux"}]}),
-                    assign: "quux".into(),
-                },
-                Test {
-                    ptr: "/foo/0/bar",
-                    data: json!({"foo":[{"bar":"baz"},{"bar":"qux"},{"bar":"quux"}]}),
-                    assign: "grault".into(),
-                },
-            ]);
+            test(json!({}), "/foo/-/bar", json!("baz"));
+            test(json!({"foo": [{"bar": "baz"}]}), "/foo/-/bar", json!("qux"));
+            test(
+                json!({"foo": [{"bar": "baz"}, {"bar": "qux"}]}),
+                "/foo/-/bar",
+                json!("quux"),
+            );
+            test(
+                json!({"foo": [{"bar": "baz"}, {"bar": "qux"}, {"bar": "quux"}]}),
+                "/foo/0/bar",
+                json!("grault"),
+            );
         }
 
         #[test]
@@ -704,110 +637,49 @@ mod toml {
             assign: Value,
         }
 
-        impl Test {
-            fn all(tests: impl IntoIterator<Item = Test>) {
-                tests.into_iter().for_each(Test::run);
-            }
-            fn run(self) {
-                let mut data = self.data.clone();
-
-                let ptr = Pointer::from_static(self.ptr);
-                let replaced = ptr.assign(&mut data, self.assign.clone());
-                let mut s = insta::Settings::new();
-
-                s.set_info(&self);
-                insta::with_settings!({
-                    info => &self,
-                    description => "asserting that the TOML data is as expected after assignment",
-                    omit_expression => true // do not include the default expression
-                }, {
-                    assert_snapshot!(&data);
-                });
-                insta::with_settings!({
-                    info => &self,
-                    description => "asserting that the replaced TOML data returned from the assignment is as expected",
-                    omit_expression => true // do not include the default expression
-                }, {
-                    assert_debug_snapshot!(&replaced);
-                });
-            }
+        fn test(data: impl Into<Value>, ptr: &'static str, assign: impl Into<Value>) {
+            let mut data = data.into();
+            let assign = assign.into();
+            let test = Test {
+                ptr,
+                data: data.clone(),
+                assign: assign.clone(),
+            };
+            let ptr = Pointer::from_static(test.ptr);
+            let replaced = ptr.assign(&mut data, assign);
+            insta::with_settings!({
+                info => &test,
+                description => "asserting that the TOML data is as expected after assignment",
+                omit_expression => true // do not include the default expression
+            }, {
+                assert_snapshot!(&data);
+            });
+            insta::with_settings!({
+                info => &test,
+                description => "asserting that the replaced TOML data returned from the assignment is as expected",
+                omit_expression => true // do not include the default expression
+            }, {
+                assert_debug_snapshot!(&replaced);
+            });
         }
 
         #[test]
         #[allow(clippy::too_many_lines)]
         fn test_assign() {
-            Test::all([
-                Test {
-                    data: Value::Table(toml::Table::new()),
-                    ptr: "/foo",
-                    assign: "bar".into(),
-                },
-                Test {
-                    data: toml! {foo =  "bar"}.into(),
-                    ptr: "",
-                    assign: "baz".into(),
-                },
-                Test {
-                    data: toml! { foo = "bar"}.into(),
-                    ptr: "/foo",
-                    assign: "baz".into(),
-                },
-                Test {
-                    data: toml! { foo = "bar"}.into(),
-                    ptr: "/foo/bar",
-                    assign: "baz".into(),
-                },
-                Test {
-                    data: Table::new().into(),
-                    ptr: "/",
-                    assign: "foo".into(),
-                },
-                Test {
-                    data: Table::new().into(),
-                    ptr: "/-",
-                    assign: "foo".into(),
-                },
-                Test {
-                    data: "data".into(),
-                    ptr: "/-",
-                    assign: 34.into(),
-                },
-                Test {
-                    data: toml! {foo = "bar"}.into(),
-                    ptr: "/foo/-",
-                    assign: "baz".into(),
-                },
-                Test {
-                    data: Table::new().into(),
-                    ptr: "/0",
-                    assign: "foo".into(),
-                },
-                Test {
-                    data: 21.into(),
-                    ptr: "/1",
-                    assign: "foo".into(),
-                },
-                Test {
-                    data: Value::Array(vec![]),
-                    ptr: "/0",
-                    assign: "foo".into(),
-                },
-                Test {
-                    data: Value::Array(vec![]),
-                    ptr: "/-",
-                    assign: "foo".into(),
-                },
-                Test {
-                    data: Value::Array(vec![]),
-                    ptr: "/1",
-                    assign: "foo".into(),
-                },
-                Test {
-                    data: Value::Array(vec![]),
-                    ptr: "/a",
-                    assign: "foo".into(),
-                },
-            ]);
+            test(toml::Table::new(), "/foo", "bar");
+            test(toml! {"foo" = "bar"}, "", "baz");
+            test(toml! {"foo" = "bar"}, "/foo", "baz");
+            test(toml! {"foo" = "bar"}, "/foo/bar", "baz");
+            test(Table::new(), "/", "foo");
+            test(Table::new(), "/-", "foo");
+            test("data", "/-", 34);
+            test(toml! {"foo" = "bar"}, "/foo/-", "baz");
+            test(Table::new(), "/0", "foo");
+            test(21, "/1", "foo");
+            test(Value::Array(vec![]), "/0", "foo");
+            test(Value::Array(vec![]), "/-", "foo");
+            test(Value::Array(vec![]), "/1", "foo");
+            test(Value::Array(vec![]), "/a", "foo");
         }
 
         #[test]
@@ -823,28 +695,18 @@ mod toml {
 
         #[test]
         fn test_assign_array_with_next_token() {
-            Test::all([
-                Test {
-                    ptr: "/foo/-/bar",
-                    assign: "baz".into(),
-                    data: Table::new().into(),
-                },
-                Test {
-                    ptr: "/foo/-/bar",
-                    assign: "qux".into(),
-                    data: toml! { "foo" = [{ "bar" = "baz" }] }.into(),
-                },
-                Test {
-                    ptr: "/foo/-/bar",
-                    data: toml! {"foo" = [{ "bar" = "baz" }, { "bar" = "qux" }]}.into(),
-                    assign: "quux".into(),
-                },
-                Test {
-                    ptr: "/foo/0/bar",
-                    data: toml! {"foo" = [{"bar" = "baz"},{"bar" = "qux"},{"bar" = "quux"}]}.into(),
-                    assign: "grault".into(),
-                },
-            ]);
+            test(Table::new(), "/foo/-/bar", "baz");
+            test(toml! {"foo" = [{"bar" = "baz"}]}, "/foo/-/bar", "qux");
+            test(
+                toml! {"foo" = [{"bar" = "baz"}, {"bar" = "qux"}]},
+                "/foo/-/bar",
+                "quux",
+            );
+            test(
+                toml! {"foo" = [{"bar" = "baz"}, {"bar" = "qux"}, {"bar" = "quux"}]},
+                "/foo/0/bar",
+                "grault",
+            );
         }
 
         // #[test]

@@ -1,0 +1,18 @@
+---
+source: src/assign.rs
+description: asserting that the replaced TOML data returned from the assignment is as expected
+info:
+  data: []
+  ptr: /a
+  assign: foo
+---
+Err(
+    FailedToParseIndex {
+        offset: 0,
+        source: ParseIndexError {
+            source: ParseIntError {
+                kind: InvalidDigit,
+            },
+        },
+    },
+)

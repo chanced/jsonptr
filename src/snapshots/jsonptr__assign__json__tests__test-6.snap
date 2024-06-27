@@ -1,0 +1,10 @@
+---
+source: src/assign.rs
+description: asserting that the JSON data is as expected after assignment
+info:
+  data:
+    foo: bar
+  ptr: ""
+  assign: baz
+---
+"baz"

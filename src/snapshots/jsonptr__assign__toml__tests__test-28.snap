@@ -1,0 +1,15 @@
+---
+source: src/assign.rs
+description: asserting that the replaced TOML data returned from the assignment is as expected
+info:
+  data: 21
+  ptr: /1
+  assign: foo
+---
+Ok(
+    Some(
+        Integer(
+            21,
+        ),
+    ),
+)

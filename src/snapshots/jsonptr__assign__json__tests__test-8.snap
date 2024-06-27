@@ -1,0 +1,16 @@
+---
+source: src/assign.rs
+description: asserting that the replaced JSON data returned from the assignment is as expected
+info:
+  data:
+    foo: bar
+  ptr: ""
+  assign: baz
+---
+Ok(
+    Some(
+        Object {
+            "foo": String("bar"),
+        },
+    ),
+)
