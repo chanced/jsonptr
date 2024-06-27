@@ -1,3 +1,87 @@
+//! # Assign values based on JSON [`Pointer`]s
+//! 
+//! This module provides the [`Assign`] trait which allows for the assignment of
+//! values based on a JSON Pointer.
+//! 
+//! ## Feature Flag
+//! This module is enabled by default with the `"assign"` feature flag.
+//! 
+//! # Expansion
+//! The path will automatically be expanded if the [`Pointer`] is not fully
+//! exhausted before reaching a non-existent key in the case of objects, index
+//! in the case of arrays, or a scalar value (including `null`) based upon a
+//! best-guess effort on the meaning of each [`Token`](crate::Token):
+//! - If the [`Token`](crate::Token) is equal to `"0"` or `"-"`, the token will
+//!  be considered an index of an array.
+//! - All tokens not equal to `"0"` or `"-"` will be considered keys of an
+//!   object.
+//! 
+//! 
+//! ## Provided implementations
+//! 
+//! | Lang  |     value type      | feature flag | Default |
+//! | ----- |: ----------------- :|: ---------- :| ------- |
+//! | JSON  | `serde_json::Value` |   `"json"`   |   ✓     |
+//! | TOML  |    `toml::Value`    |   `"toml"`   |         |
+//! 
+//! ## Examples
+//! ### Example using `Pointer::assign`
+//! A basic example demonstrating the use of [`Pointer::assign`] to assign a
+//! value at the path of the JSON Pointer.
+//! ```rust
+//! use jsonptr::Pointer;
+//! use serde_json::json;
+//! 
+//! let mut data = json!({"foo": "bar"});
+//! let ptr = Pointer::from_static("/foo");
+//! let replaced = ptr.assign(&mut data, "baz").unwrap();
+//! assert_eq!(replaced, Some(json!("bar")));
+//! assert_eq!(data, json!({"foo": "baz"}));
+//! ```
+//! 
+//! ### Successful assignment with replacement
+//! A basic example demonstrating a successful assignment where a value is
+//! replaced and returned.
+//! ```rust
+//! use jsonptr::{Pointer, assign::Assign};
+//! use serde_json::{json, Value};
+//!
+//! let mut data = json!({"foo": "bar"});
+//! let ptr = Pointer::from_static("/foo");
+//!
+//! let replaced = data.assign(&ptr, "baz").unwrap();
+//! assert_eq!(replaced, Some(json!("bar")));
+//! assert_eq!(data, json!({"foo": "baz"}));
+//! ```
+//!
+//! ### Successful assignment with path expansion
+//! ```rust
+//! # use jsonptr::{Pointer, assign::Assign};
+//! # use serde_json::{json, Value};
+//! let ptr = Pointer::from_static("/foo/bar/0/baz");
+//! let mut data = serde_json::json!({"foo": "bar"});
+//!
+//! let replaced = data.assign(ptr, json!("qux")).unwrap();
+//!
+//! assert_eq!(&data, &json!({"foo": {"bar": [{"baz": "qux"}]}}));
+//! assert_eq!(replaced, Some(json!("bar")));
+//! ```
+//!
+//! ### Successful assignment with `"-"` token
+//! This example uses the special `"-"` token (per RFC 6901) to represent the
+//! next element in an array.
+//!
+//! ```rust
+//! # use jsonptr::{Pointer, assign::Assign};
+//! # use serde_json::{json, Value};
+//! let ptr = Pointer::from_static("/foo/bar/-/baz");
+//! let mut data = json!({"foo": "bar"});
+//!
+//! let replaced = data.assign(ptr, json!("qux")).unwrap();
+//! assert_eq!(&data, &json!({"foo": {"bar": [{"baz": "qux"}]}}));
+//! assert_eq!(replaced, Some(json!("bar")));
+//! ```
+
 use crate::{OutOfBoundsError, ParseIndexError, Pointer};
 use core::fmt::{self, Debug};
 
@@ -7,8 +91,8 @@ use core::fmt::{self, Debug};
 /// ## Expansion
 /// The path will automatically be expanded the if the [`Pointer`] is not fully
 /// exhausted before reaching a non-existent key in the case of objects, index
-/// in the case of arrays, or a scalar value (including `null`) based upon
-/// a best-guess effort on the meaning of each [`Token`](crate::Token):
+/// in the case of arrays, or a scalar value (including `null`) based upon a
+/// best-guess effort on the meaning of each [`Token`](crate::Token):
 ///
 /// - If the [`Token`](crate::Token) is equal to `"0"` or `"-"`, the token will
 ///  be considered an index of an array.
@@ -18,6 +102,7 @@ use core::fmt::{self, Debug};
 /// ## Examples
 ///
 /// ### Successful assignment with replacement
+/// This example demonstrates a successful assignment with replacement.
 /// ```rust
 /// use jsonptr::{Pointer, assign::Assign};
 /// use serde_json::{json, Value};
@@ -31,6 +116,7 @@ use core::fmt::{self, Debug};
 /// ```
 ///
 /// ### Successful assignment with path expansion
+/// This example demonstrates path expansion, including an array index (`"0"`)
 /// ```rust
 /// # use jsonptr::{Pointer, assign::Assign};
 /// # use serde_json::{json, Value};
@@ -44,9 +130,9 @@ use core::fmt::{self, Debug};
 /// ```
 ///
 /// ### Successful assignment with `"-"` token
-
-/// This example uses the special `"-"` token (per RFC 6901) to represent the
-/// next element in an array.
+///
+/// This example performs path expansion using the special `"-"` token (per RFC
+/// 6901) to represent the next element in an array.
 ///
 /// ```rust
 /// # use jsonptr::{Pointer, assign::Assign};
@@ -58,23 +144,8 @@ use core::fmt::{self, Debug};
 /// assert_eq!(&data, &json!({"foo": {"bar": [{"baz": "qux"}]}}));
 /// assert_eq!(replaced, Some(json!("bar")));
 /// ```
-///
-///
-/// ## Provided implementations
-///
-/// | Language  | Feature Flag |
-/// | --------- | ------------ |
-/// |   JSON    |   `"json"`   |
-/// |   TOML    |   `"toml"`   |
 pub trait Assign {
     /// The type of value that this implementation can operate on.
-    ///
-    /// Provided implementations include:
-    ///
-    /// | Lang  |     value type      | feature flag |
-    /// | ----- |: ----------------- :|: ---------- :|
-    /// | JSON  | `serde_json::Value` |   `"json"`   |
-    /// | TOML  |    `toml::Value`    |   `"toml"`   |
     type Value;
 
     /// Error associated with `Assign`
@@ -94,7 +165,9 @@ pub trait Assign {
         V: Into<Self::Value>;
 }
 
-/// Default error (`json` and `toml`) returned when an assignment fails.
+/// Possible error returned from [`Assign`] implementations for
+/// [`serde_json::Value`] and
+/// [`toml::Value`](https://docs.rs/toml/latest/toml/enum.Value.html).
 #[derive(Debug, PartialEq, Eq)]
 pub enum AssignError {
     /// A `Token` within the `Pointer` failed to be parsed as an array index.
@@ -148,7 +221,6 @@ enum Assigned<'v, V> {
     Continue { next_dest: &'v mut V, same_value: V },
 }
 
-// #[cfg(feature = "json")]
 mod json {
     use super::{Assign, AssignError, Assigned};
     use crate::{Pointer,  Token};

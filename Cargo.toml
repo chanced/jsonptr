@@ -12,7 +12,7 @@ version       = "0.4.7"
 
 [dependencies]
 serde      = { version = "1.0", optional = true, features = ["alloc"] }
-serde_json = { version = "1.0", features = ["alloc"] }
+serde_json = { version = "1.0", features = ["alloc"], optional = true }
 toml       = { version = "0.8", optional = true }
 
 [dev-dependencies]
@@ -21,9 +21,9 @@ quickcheck_macros = "1.0.0"
 
 [features]
 assign  = []
-default = ["toml", "resolve", "assign", "delete"]
+default = ["json", "std", "resolve", "assign", "delete"]
 delete  = []
-# json    = ["dep:serde_json"]
+json    = ["dep:serde_json"]
 resolve = []
 std     = ["serde/std", "serde_json/std"]
 toml    = ["dep:toml", "std"]

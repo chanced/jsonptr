@@ -16,7 +16,8 @@ const SLASH_ENC: u8 = b'1';
 /// represent a key in a JSON object or an index in a JSON array.
 ///
 /// - Indexes should not contain leading zeros.
-/// - `"-"` represents the next, non-existent index in a JSON array.
+/// - When dealing with arrays or path expansion for assignment, `"-"` represent
+///   the next, non-existent index in a JSON array.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Token<'a> {
     inner: Cow<'a, str>,

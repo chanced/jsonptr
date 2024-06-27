@@ -21,22 +21,37 @@ fn validate(value: &str) -> Result<&str, ParseError> {
         Some(_) => return Err(ParseError::NoLeadingBackslash), // invalid pointer - missing leading slash
         None => return Ok(value),                              // done
     }
-    let mut ptr_offset = 0;
-    let mut tok_offset = 0;
-    let mut bytes = value.bytes().enumerate();
+    let mut ptr_offset = 0; // offset within the pointer of the most recent '/' seperator
+    let mut tok_offset = 0; // offset within the current token
 
+    let mut bytes = value.bytes().enumerate();
     while let Some((offset, c)) = bytes.next() {
         if c == b'/' {
+            // resetting the token offset
             tok_offset = 0;
             ptr_offset = offset;
             continue;
         }
         tok_offset += 1;
+        // if the character is a '~', then the next character must be '0' or '1'
+        // otherwise the encoding is invalid and `InvalidEncodingError` is returned
         if c == b'~' {
             // pulling down
             let next = bytes.next().map(|(_, c)| c);
             if !matches!(next, Some(b'0' | b'1')) {
-                // '~' must be followed by '0' or '1' in order to be properly encoded
+                // the pointer is not properly encoded
+                //
+                // we use the pointer offset, which points to the last
+                // encountered seperator, as the offset of the error.
+                // The source `InvalidEncodingError` then uses the token
+                // offset.
+                //
+                // "/foo/invalid~encoding"
+                //      ^       ^
+                //      |       |
+                //  ptr_offset  |
+                //          tok_offset
+                //
                 return Err(ParseError::InvalidEncoding {
                     offset: ptr_offset,
                     source: InvalidEncodingError { offset: tok_offset },
@@ -292,7 +307,7 @@ impl Pointer {
     /// ```
     #[must_use]
     pub fn split_at(&self, idx: usize) -> Option<(&Self, &Self)> {
-        if self.0.get(idx..=idx) != Some("/") {
+        if self.0.as_bytes().get(idx).copied() != Some(b'/') {
             return None;
         }
         let (head, tail) = self.0.split_at(idx);
@@ -354,6 +369,7 @@ impl Pointer {
     /// - An [`Token`] cannot be parsed as an array
     ///   [`Index`](crate::index::Index)
     /// - An array [`Index`](crate::index::Index) is out of bounds
+    #[cfg(feature = "resolve")]
     pub fn resolve<'v, R: Resolve>(&self, value: &'v R) -> Result<&'v R::Value, R::Error> {
         value.resolve(self)
     }
@@ -374,6 +390,7 @@ impl Pointer {
     /// - An [`Token`] cannot be parsed as an array
     ///   [`Index`](crate::index::Index)
     /// - An array [`Index`](crate::index::Index) is out of bounds
+    #[cfg(feature = "resolve")]
     pub fn resolve_mut<'v, R: ResolveMut>(
         &self,
         value: &'v mut R,
@@ -400,10 +417,15 @@ impl Pointer {
     /// Attempts to delete a `serde_json::Value` based upon the path in this
     /// `Pointer`.
     ///
+    /// The rules of deletion are determined by the `D`'s implementation of
+    /// [`Delete`]. The supplied implementations (`json` & `toml`) operate
+    /// as follows:
     /// - If the `Pointer` can be resolved, the `Value` is deleted and returned.
-    /// - If the `Pointer` can not be resolved, Ok(None) is returned.
-    /// - If the `Pointer` is malformed, an error is returned.
-    /// - If the `Pointer` is root, then `value` is replaced with `Value::Null`.
+    /// - If the `Pointer` fails to resolve for any reason, `Ok(None)` is returned.
+    /// - If the `Pointer` is root, `value` is replaced:
+    ///     - `json`: `serde_json::Value::Null`
+    ///     - `toml`: `toml::Value::Table::Default`
+    ///
     ///
     /// ## Examples
     /// ### Deleting a resolved pointer:
@@ -436,6 +458,7 @@ impl Pointer {
     /// assert_eq!(data.delete(&ptr), Some(json!({ "foo": { "bar": "baz" } })));
     /// assert!(data.is_null());
     /// ```
+    #[cfg(feature = "delete")]
     pub fn delete<D: Delete>(&self, value: &mut D) -> Option<D::Value> {
         value.delete(self)
     }
@@ -461,6 +484,7 @@ impl Pointer {
     /// ## Errors
     /// Returns [`Assign::Error`] if the path is invalid or if the value cannot be assigned.
     ///
+    #[cfg(feature = "assign")]
     pub fn assign<D, V>(&self, dest: &mut D, src: V) -> Result<Option<D::Value>, D::Error>
     where
         D: Assign,
@@ -585,11 +609,11 @@ impl PartialOrd<&str> for &Pointer {
     }
 }
 
-// impl PartialOrd<String> for Pointer {
-//     fn partial_cmp(&self, other: &String) -> Option<Ordering> {
-//         self.0.partial_cmp(other)
-//     }
-// }
+impl PartialOrd<String> for Pointer {
+    fn partial_cmp(&self, other: &String) -> Option<Ordering> {
+        self.0.partial_cmp(other.as_str())
+    }
+}
 
 impl<'a> IntoIterator for &'a Pointer {
     type Item = Token<'a>;
@@ -601,9 +625,10 @@ impl<'a> IntoIterator for &'a Pointer {
 
 /// An owned, mutable Pointer (akin to String).
 ///
-/// This type provides methods like [`PointerBuf::push_back`] and [`PointerBuf::replace_token`] that
-/// mutate the pointer in place. It also implements [`core::ops::Deref`] to [`Pointer`], meaning that
-/// all methods on [`Pointer`] slices are available on `PointerBuf` values as well.
+/// This type provides methods like [`PointerBuf::push_back`] and
+/// [`PointerBuf::replace_token`] that mutate the pointer in place. It also
+/// implements [`core::ops::Deref`] to [`Pointer`], meaning that all methods on
+/// [`Pointer`] slices are available on `PointerBuf` values as well.
 #[derive(Clone, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PointerBuf(String);
 

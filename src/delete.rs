@@ -1,3 +1,55 @@
+//! # Delete values based on JSON Pointers
+//!
+//! This module provides the [`Delete`] trait which is implemented by types that
+//! can internally remove a value based on a JSON Pointer.
+//!
+//! ## Provided implementations
+//! | Lang  |       value type      | feature flag |
+//! | ----- |: ------------------- :|: ---------- :|
+//! | JSON  | [`serde_json::Value`] |   `"json"`   |
+//! | TOML  |     `toml::Value`     |   `"toml"`   |
+//!
+//! The rules of deletion are determined by the implementation, with the
+//! provided implementations (`json` & `toml`) operating as follows:
+//! - If the [`Pointer`] can be resolved, then the [`Value`](`Delete::Value`) is
+//!   deleted and returned as `Some(value)`.
+//! - If the [`Pointer`] fails to resolve for any reason, `Ok(None)` is
+//!   returned.
+//! - If the [`Pointer`] is root, `value` is replaced:
+//!     - `json`: `serde_json::Value::Null`
+//!     - `toml`: `toml::Value::Table::Default`
+//!
+//! ## Examples
+//! ### Deleting a resolved pointer:
+//! ```rust
+//! use jsonptr::{Pointer, delete::Delete};
+//! use serde_json::json;
+//!
+//! let mut data = json!({ "foo": { "bar": { "baz": "qux" } } });
+//! let ptr = Pointer::from_static("/foo/bar/baz");
+//! assert_eq!(data.delete(&ptr), Some("qux".into()));
+//! assert_eq!(data, json!({ "foo": { "bar": {} } }));
+//! ```
+//! ### Deleting a non-existent Pointer returns `None`:
+//! ```rust
+//! use jsonptr::{ Pointer, delete::Delete };
+//! use serde_json::json;
+//!
+//! let mut data = json!({});
+//! let ptr = Pointer::from_static("/foo/bar/baz");
+//! assert_eq!(ptr.delete(&mut data), None);
+//! assert_eq!(data, json!({}));
+//! ```
+//! ### Deleting a root pointer replaces the value with `Value::Null`:
+//! ```rust
+//! use jsonptr::{Pointer, delete::Delete};
+//! use serde_json::json;
+//!
+//! let mut data = json!({ "foo": { "bar": "baz" } });
+//! let ptr = Pointer::root();
+//! assert_eq!(data.delete(&ptr), Some(json!({ "foo": { "bar": "baz" } })));
+//! assert!(data.is_null());
+//! ```
 use crate::Pointer;
 
 /// Delete is implemented by types which can internally remove a value based on
@@ -24,7 +76,6 @@ pub trait Delete {
     fn delete(&mut self, ptr: &Pointer) -> Option<Self::Value>;
 }
 
-// #[cfg(feature = "json")]
 mod json {
     use super::Delete;
     use crate::Pointer;

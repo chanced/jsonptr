@@ -1,3 +1,15 @@
+//! # Resolve values based on JSON [`Pointer`]s
+//!
+//! This module provides the [`Resolve`] and [`ResolveMut`] traits which are
+//! implemented by types that can internally resolve a value based on a JSON
+//! Pointer.
+//!
+//! ## Provided implementations
+//! | Lang  |     value type      | feature flag |
+//! | ----- |: ----------------- :|: ---------- :|
+//! | JSON  | `serde_json::Value` |   `"json"`   |
+//! | TOML  |    `toml::Value`    |   `"toml"`   |
+//!
 use crate::{OutOfBoundsError, ParseIndexError, Pointer};
 
 /// A trait implemented by types which can resolve a reference to a value type
@@ -156,13 +168,15 @@ impl ResolveError {
 
     /// Returns `true` if this error is `FailedToParseIndex`; otherwise returns
     /// `false`.
-    #[must_use] pub fn is_out_of_bounds(&self) -> bool {
+    #[must_use]
+    pub fn is_out_of_bounds(&self) -> bool {
         matches!(self, Self::OutOfBounds { .. })
     }
 
     /// Returns `true` if this error is `FailedToParseIndex`; otherwise returns
     /// `false`.
-    #[must_use] pub fn is_failed_to_parse_index(&self) -> bool {
+    #[must_use]
+    pub fn is_failed_to_parse_index(&self) -> bool {
         matches!(self, Self::FailedToParseIndex { .. })
     }
 }
@@ -197,7 +211,6 @@ impl std::error::Error for ResolveError {
     }
 }
 
-// #[cfg(feature = "json")]
 mod json {
     use super::{Pointer, Resolve, ResolveError, ResolveMut};
     use serde_json::Value;
