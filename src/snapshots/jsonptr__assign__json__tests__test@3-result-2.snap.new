@@ -1,0 +1,18 @@
+---
+source: src/assign.rs
+assertion_line: 370
+description: "case #3: asserting that the replaced JSON data returned from the assignment is as expected"
+info:
+  data:
+    foo:
+      - bar: baz
+      - bar: qux
+      - bar: quux
+  ptr: /foo/0/bar
+  assign: grault
+---
+Ok(
+    Some(
+        String("baz"),
+    ),
+)

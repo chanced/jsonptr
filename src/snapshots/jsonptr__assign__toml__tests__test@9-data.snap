@@ -1,0 +1,9 @@
+---
+source: src/assign.rs
+description: "test #9 - asserting that the TOML data is as expected after assignment"
+info:
+  data: 21
+  ptr: /1
+  assign: foo
+---
+{ 1 = "foo" }

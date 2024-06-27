@@ -1,9 +1,0 @@
----
-source: src/assign.rs
-description: asserting that the TOML data is as expected after assignment
-info:
-  data: data
-  ptr: /-
-  assign: 34
----
-[34]

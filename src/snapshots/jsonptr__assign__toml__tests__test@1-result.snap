@@ -1,0 +1,20 @@
+---
+source: src/assign.rs
+description: "test #1 asserting that the replaced TOML data returned from the assignment is as expected"
+info:
+  data:
+    foo: bar
+  ptr: ""
+  assign: baz
+---
+Ok(
+    Some(
+        Table(
+            {
+                "foo": String(
+                    "bar",
+                ),
+            },
+        ),
+    ),
+)

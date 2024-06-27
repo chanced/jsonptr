@@ -1,0 +1,9 @@
+---
+source: src/assign.rs
+description: "case #4: asserting that the JSON data is as expected after assignment"
+info:
+  data: {}
+  ptr: /
+  assign: foo
+---
+{"":"foo"}

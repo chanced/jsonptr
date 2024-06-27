@@ -1,0 +1,12 @@
+---
+source: src/assign.rs
+description: "test #2 - asserting that the TOML data is as expected after assignment"
+info:
+  data:
+    foo:
+      - bar: baz
+      - bar: qux
+  ptr: /foo/-/bar
+  assign: quux
+---
+{ foo = [{ bar = "baz" }, { bar = "qux" }, { bar = "quux" }] }

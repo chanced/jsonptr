@@ -1,0 +1,11 @@
+---
+source: src/assign.rs
+description: "test #4 asserting that the replaced TOML data returned from the assignment is as expected"
+info:
+  data: {}
+  ptr: /
+  assign: foo
+---
+Ok(
+    None,
+)

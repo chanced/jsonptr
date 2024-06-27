@@ -1,0 +1,11 @@
+---
+source: src/assign.rs
+description: "case #8: asserting that the replaced JSON data returned from the assignment is as expected"
+info:
+  data: {}
+  ptr: /0
+  assign: foo
+---
+Ok(
+    None,
+)
