@@ -1,0 +1,13 @@
+---
+source: src/assign.rs
+description: asserting that the json data is as expected after assignment
+info:
+  data:
+    foo:
+      - bar: baz
+      - bar: qux
+      - bar: quux
+  ptr: /foo/0/bar
+  assign: grault
+---
+{"foo":[{"bar":"grault"},{"bar":"qux"},{"bar":"quux"}]}

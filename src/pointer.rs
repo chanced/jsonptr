@@ -1,5 +1,8 @@
+#[cfg(feature = "assign")]
 use crate::assign::Assign;
+#[cfg(feature = "delete")]
 use crate::delete::Delete;
+#[cfg(feature = "resolve")]
 use crate::resolve::{Resolve, ResolveMut};
 use crate::{InvalidEncodingError, ParseError, ReplaceTokenError, Token, Tokens};
 use alloc::{
@@ -7,9 +10,8 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
+use core::fmt;
 use core::{borrow::Borrow, cmp::Ordering, ops::Deref, slice, str::FromStr};
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 fn validate(value: &str) -> Result<&str, ParseError> {
     if value.is_empty() {
@@ -220,8 +222,9 @@ impl Pointer {
 
     /// Returns a `serde_json::Value` representation of this `Pointer`
     #[must_use]
-    pub fn to_value(&self) -> Value {
-        Value::String(self.0.to_string())
+    #[cfg(feature = "json")]
+    pub fn to_json_value(&self) -> serde_json::Value {
+        serde_json::Value::String(self.0.to_string())
     }
 
     /// Returns the last `Token` in the `Pointer`.
@@ -418,13 +421,13 @@ impl Pointer {
     /// `Pointer`.
     ///
     /// The rules of deletion are determined by the `D`'s implementation of
-    /// [`Delete`]. The supplied implementations (`json` & `toml`) operate
+    /// [`Delete`]. The supplied implementations (`"json"` & `"toml"`) operate
     /// as follows:
     /// - If the `Pointer` can be resolved, the `Value` is deleted and returned.
     /// - If the `Pointer` fails to resolve for any reason, `Ok(None)` is returned.
     /// - If the `Pointer` is root, `value` is replaced:
-    ///     - `json`: `serde_json::Value::Null`
-    ///     - `toml`: `toml::Value::Table::Default`
+    ///     - `"json"`: `serde_json::Value::Null`
+    ///     - `"toml"`: `toml::Value::Table::Default`
     ///
     ///
     /// ## Examples
@@ -494,12 +497,44 @@ impl Pointer {
     }
 }
 
-impl Serialize for Pointer {
+#[cfg(feature = "serde")]
+impl serde::Serialize for Pointer {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
         <str>::serialize(&self.0, serializer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de: 'p, 'p> serde::Deserialize<'de> for &'p Pointer {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::{Error, Visitor};
+
+        struct PointerVisitor;
+
+        impl<'a> Visitor<'a> for PointerVisitor {
+            type Value = &'a Pointer;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a borrowed Pointer")
+            }
+
+            fn visit_borrowed_str<E>(self, v: &'a str) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
+                Pointer::parse(v).map_err(|err| {
+                    Error::custom(format!("failed to parse json pointer\n\ncaused by:\n{err}"))
+                })
+            }
+        }
+
+        deserializer.deserialize_str(PointerVisitor)
     }
 }
 
@@ -579,9 +614,10 @@ impl PartialEq<&Pointer> for PointerBuf {
     }
 }
 
-impl From<&Pointer> for Value {
+#[cfg(feature = "json")]
+impl From<&Pointer> for serde_json::Value {
     fn from(ptr: &Pointer) -> Self {
-        ptr.to_value()
+        ptr.to_json_value()
     }
 }
 
@@ -785,7 +821,8 @@ impl Deref for PointerBuf {
     }
 }
 
-impl<'de> Deserialize<'de> for PointerBuf {
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for PointerBuf {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -796,7 +833,8 @@ impl<'de> Deserialize<'de> for PointerBuf {
     }
 }
 
-impl Serialize for PointerBuf {
+#[cfg(feature = "serde")]
+impl serde::Serialize for PointerBuf {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -1274,13 +1312,6 @@ mod tests {
         }
         TestResult::from_bool(isect == base)
     }
-
-    /*
-
-        base: /\u{c15cb}ª+@{+v\u{69356})¨}4^QB>\u{10ee5f}\u{93}\u{b7543}_\u{93}\u{953}cf3<\u{9d}~0¡\u{100000}蓫%j9}W>z\u{96}\u{a0}+ \u{1b}\u{fffff})\u{1e}\u{18}=cv%+ \u{3}[W[n\u{8f}7\u{e309}+쑸=¢@D\u{8c}!⥤\u{87}\u{10}돈8¡홶볆~0\u{99}\u{7f}R,{.2⁑7\u{93}
-        a_suffix: /\"@\u{206a} 뼙2\u{8e}\u{8c}膠j,\u{202b}j\u{e001}獈5❇ \u{1}䷘o\u{1c}pQr\"\u{c9f99}$\u{ffffe}\u{2008},,'('R+\u{11}¡閚)\n\u{9f}\u{87}}縆i\u{1d}웎) ⁃캧z\u{c94f2}\u{7f}\u{3}|ኖ>\\#M\u{206e})\u{87}+\u{e000}]pm\u{87}‚rjIe@ \u{e000}\u{2006}(\n ―52⭧䋪\u{f046d}
-        b_suffix: ""
-    */
 
     #[test]
     fn test_intersection() {

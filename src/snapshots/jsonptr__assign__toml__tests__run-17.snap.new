@@ -1,0 +1,20 @@
+---
+source: src/assign.rs
+assertion_line: 731
+description: asserting that the replaced TOML data returned from the assignment is as expected
+info:
+  data:
+    foo:
+      - bar: baz
+      - bar: qux
+      - bar: quux
+  ptr: /foo/0/bar
+  assign: grault
+---
+Ok(
+    Some(
+        String(
+            "baz",
+        ),
+    ),
+)

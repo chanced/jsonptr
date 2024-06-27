@@ -10,14 +10,14 @@
 //! | TOML  |     `toml::Value`     |   `"toml"`   |
 //!
 //! The rules of deletion are determined by the implementation, with the
-//! provided implementations (`json` & `toml`) operating as follows:
+//! provided implementations (`"json"` & `"toml"`) operating as follows:
 //! - If the [`Pointer`] can be resolved, then the [`Value`](`Delete::Value`) is
 //!   deleted and returned as `Some(value)`.
 //! - If the [`Pointer`] fails to resolve for any reason, `Ok(None)` is
 //!   returned.
 //! - If the [`Pointer`] is root, `value` is replaced:
-//!     - `json`: `serde_json::Value::Null`
-//!     - `toml`: `toml::Value::Table::Default`
+//!     - `"json"`: `serde_json::Value::Null`
+//!     - `"toml`: `toml::Value::Table::Default`
 //!
 //! ## Examples
 //! ### Deleting a resolved pointer:
