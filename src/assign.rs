@@ -326,150 +326,6 @@ mod json {
         let replaced = Some(mem::replace(scalar, expand(remaining, value)));
         Assigned::Done(replaced)
     }
-
-    #[cfg(test)]
-    #[cfg(feature = "serde")]
-    mod tests {
-        use crate::{Pointer, PointerBuf};
-        use insta::{assert_debug_snapshot, assert_snapshot};
-        use serde::Serialize;
-        use serde_json::{json, Value};
-
-        #[derive(Serialize, Debug)]
-        struct Test {
-            data: Value,
-            ptr: &'static str,
-            assign: Value,
-        }
-
-        fn test(idx: usize, data: impl Into<Value>, ptr: &'static str, assign: impl Into<Value>) {
-            let mut data = data.into();
-            let assign = assign.into();
-
-            let test = Test {
-                ptr,
-                data: data.clone(),
-                assign: assign.clone(),
-            };
-            let ptr = Pointer::from_static(test.ptr);
-            let replaced = ptr.assign(&mut data, assign);
-            insta::with_settings!({
-                snapshot_suffix => format!("{idx}-data"),
-                info => &test,
-                description => format!("case #{idx}: asserting that the JSON data is as expected after assignment"),
-                omit_expression => true // do not include the default expression
-            }, {
-                assert_snapshot!(&data);
-            });
-            insta::with_settings!({
-                info => &test,
-                snapshot_suffix => format!("{idx}-result"),
-                description => format!("case #{idx}: asserting that the replaced JSON data returned from the assignment is as expected"),
-                omit_expression => true // do not include the default expression
-            }, {
-                assert_debug_snapshot!(&replaced);
-            });
-        }
-
-        #[test]
-        #[allow(clippy::too_many_lines)]
-        fn test_assign() {
-            test(0, json!({}), "/foo", json!("bar"));
-            test(1, json!({"foo": "bar"}), "", json!("baz"));
-            test(2, json!({"foo": "bar"}), "/foo", json!("baz"));
-            test(3, json!({"foo": "bar"}), "/foo/bar", json!("baz"));
-            test(4, json!({}), "/", json!("foo"));
-            test(5, json!({}), "/-", json!("foo"));
-            test(6, json!(null), "/-", json!(34));
-            test(7, json!({"foo": "bar"}), "/foo/-", json!("baz"));
-            test(8, json!({}), "/0", json!("foo"));
-            test(9, json!(null), "/1", json!("foo"));
-            test(10, json!([]), "/0", json!("foo"));
-            test(11, json!([]), "/-", json!("foo"));
-            test(12, json!([]), "/1", json!("foo"));
-            test(13, json!([]), "/a", json!("foo"));
-        }
-
-        #[test]
-        fn test_assign_with_explicit_array_path() {
-            let mut data = json!({});
-            let ptr = Pointer::from_static("/foo/0/bar");
-            let val = json!("baz");
-
-            let replaced = ptr.assign(&mut data, val).unwrap();
-            assert_eq!(replaced, None);
-            assert_eq!(&data, &json!({"foo": [{"bar": "baz"}]}),);
-        }
-
-        #[test]
-        fn test_assign_array_with_next_token() {
-            test(0, json!({}), "/foo/-/bar", json!("baz"));
-            test(
-                1,
-                json!({"foo": [{"bar": "baz"}]}),
-                "/foo/-/bar",
-                json!("qux"),
-            );
-            test(
-                2,
-                json!({"foo": [{"bar": "baz"}, {"bar": "qux"}]}),
-                "/foo/-/bar",
-                json!("quux"),
-            );
-            test(
-                3,
-                json!({"foo": [{"bar": "baz"}, {"bar": "qux"}, {"bar": "quux"}]}),
-                "/foo/0/bar",
-                json!("grault"),
-            );
-        }
-
-        #[test]
-        fn test_assign_with_obj_path() {
-            let mut data = json!({});
-            let ptr = Pointer::from_static("/foo/bar");
-            let val = json!("baz");
-            let replaced = ptr.assign(&mut data, val).unwrap();
-            assert_eq!(&json!({"foo": {"bar": "baz"}}), &data);
-            assert_eq!(replaced, None);
-        }
-
-        #[test]
-        fn test_assign_with_scalar_replace() {
-            let mut data = json!({
-                "foo": "bar"
-            });
-
-            let ptr = Pointer::from_static("/foo/bar/baz");
-            let val = json!("qux");
-
-            ptr.assign(&mut data, val).unwrap();
-            assert_eq!(&json!({"foo":{"bar":{"baz": "qux"}}}), &data);
-        }
-
-        #[test]
-        fn nested_maps_with_empty_keys() {
-            let data = json!({
-                "": {
-                    "": {
-                        "bar": 42,
-                    }
-                }
-            });
-
-            {
-                let ptr = Pointer::from_static("///bar");
-                assert_eq!(ptr.resolve(&data).unwrap(), 42);
-            }
-            {
-                let mut ptr = PointerBuf::new();
-                ptr.push_back("".into());
-                ptr.push_back("".into());
-                ptr.push_back("bar".into());
-                assert_eq!(ptr.resolve(&data).unwrap(), 42);
-            }
-        }
-    }
 }
 
 #[cfg(feature = "toml")]
@@ -630,142 +486,363 @@ mod toml {
         // build the new src and we replace the value with it.
         Assigned::Done(Some(mem::replace(scalar, expand(remaining, value))))
     }
+}
 
-    #[cfg(test)]
-    mod tests {
-        use crate::Pointer;
-        use ::toml::{toml, Value};
-        use insta::{assert_debug_snapshot, assert_snapshot};
-        use serde::Serialize;
-        use toml::Table;
+#[cfg(test)]
+#[allow(clippy::too_many_lines)]
+mod tests {
+    use super::{Assign, AssignError};
+    use crate::{OutOfBoundsError, ParseIndexError, Pointer};
+    use core::fmt::{Debug, Display};
+    use serde::Serialize;
+    use std::str::FromStr;
 
-        #[derive(Serialize, Debug)]
-        struct Test {
-            data: Value,
-            ptr: &'static str,
-            assign: Value,
+    #[test]
+    #[cfg(feature = "json")]
+    fn test_assign_json() {
+        use serde_json::json;
+        Test::all([
+            Test {
+                ptr: "/foo",
+                data: json!({}),
+                assign: json!("bar"),
+                expected_data: json!({"foo": "bar"}),
+                expected_result: Ok(None),
+            },
+            Test {
+                ptr: "",
+                data: json!({"foo": "bar"}),
+                assign: json!("baz"),
+                expected_data: json!("baz"),
+                expected_result: Ok(Some(json!({"foo": "bar"}))),
+            },
+            Test {
+                ptr: "/foo",
+                data: json!({"foo": "bar"}),
+                assign: json!("baz"),
+                expected_data: json!({"foo": "baz"}),
+                expected_result: Ok(Some(json!("bar"))),
+            },
+            Test {
+                ptr: "/foo/bar",
+                data: json!({"foo": "bar"}),
+                assign: json!("baz"),
+                expected_data: json!({"foo": {"bar": "baz"}}),
+                expected_result: Ok(Some(json!("bar"))),
+            },
+            Test {
+                ptr: "/foo/bar",
+                data: json!({}),
+                assign: json!("baz"),
+                expected_data: json!({"foo": {"bar": "baz"}}),
+                expected_result: Ok(None),
+            },
+            Test {
+                ptr: "/",
+                data: json!({}),
+                assign: json!("foo"),
+                expected_data: json!({"": "foo"}),
+                expected_result: Ok(None),
+            },
+            Test {
+                ptr: "/-",
+                data: json!({}),
+                assign: json!("foo"),
+                expected_data: json!({"-": "foo"}),
+                expected_result: Ok(None),
+            },
+            Test {
+                ptr: "/-",
+                data: json!(null),
+                assign: json!(34),
+                expected_data: json!([34]),
+                expected_result: Ok(Some(json!(null))),
+            },
+            Test {
+                ptr: "/foo/-",
+                data: json!({"foo": "bar"}),
+                assign: json!("baz"),
+                expected_data: json!({"foo": ["baz"]}),
+                expected_result: Ok(Some(json!("bar"))),
+            },
+            Test {
+                ptr: "/foo/-/bar",
+                assign: "baz".into(),
+                data: json!({}),
+                expected_result: Ok(None),
+                expected_data: json!({"foo":[{"bar": "baz"}]}),
+            },
+            Test {
+                ptr: "/foo/-/bar",
+                assign: "qux".into(),
+                data: json!({"foo":[{"bar":"baz" }]}),
+                expected_result: Ok(None),
+                expected_data: json!({"foo":[{"bar":"baz"},{"bar":"qux"}]}),
+            },
+            Test {
+                ptr: "/foo/-/bar",
+                data: json!({"foo":[{"bar":"baz"},{"bar":"qux"}]}),
+                assign: "quux".into(),
+                expected_result: Ok(None),
+                expected_data: json!({"foo":[{"bar":"baz"},{"bar":"qux"},{"bar":"quux"}]}),
+            },
+            Test {
+                ptr: "/foo/0/bar",
+                data: json!({"foo":[{"bar":"baz"},{"bar":"qux"},{"bar":"quux"}]}),
+                assign: "grault".into(),
+                expected_result: Ok(Some("baz".into())),
+                expected_data: json!({"foo":[{"bar":"grault"},{"bar":"qux"},{"bar":"quux"}]}),
+            },
+            Test {
+                ptr: "/0",
+                data: json!({}),
+                assign: json!("foo"),
+                expected_data: json!({"0": "foo"}),
+                expected_result: Ok(None),
+            },
+            Test {
+                ptr: "/1",
+                data: json!(null),
+                assign: json!("foo"),
+                expected_data: json!({"1": "foo"}),
+                expected_result: Ok(Some(json!(null))),
+            },
+            Test {
+                ptr: "/0",
+                data: json!([]),
+                expected_data: json!(["foo"]),
+                assign: json!("foo"),
+                expected_result: Ok(None),
+            },
+            Test {
+                ptr: "///bar",
+                data: json!({"":{"":{"bar": 42}}}),
+                assign: json!(34),
+                expected_data: json!({"":{"":{"bar":34}}}),
+                expected_result: Ok(Some(json!(42))),
+            },
+            Test {
+                ptr: "/1",
+                data: json!([]),
+                assign: json!("foo"),
+                expected_result: Err(AssignError::OutOfBounds {
+                    offset: 0,
+                    source: OutOfBoundsError {
+                        index: 1,
+                        length: 0,
+                    },
+                }),
+                expected_data: json!([]),
+            },
+            Test {
+                ptr: "/a",
+                data: json!([]),
+                assign: json!("foo"),
+                expected_result: Err(AssignError::FailedToParseIndex {
+                    offset: 0,
+                    source: ParseIndexError {
+                        source: usize::from_str("foo").unwrap_err(),
+                    },
+                }),
+                expected_data: json!([]),
+            },
+        ]);
+    }
+
+    #[test]
+    #[cfg(feature = "toml")]
+    fn test_assign_toml() {
+        use toml::{toml, Table, Value};
+
+        Test::all([
+            Test {
+                data: Value::Table(toml::Table::new()),
+                ptr: "/foo",
+                assign: "bar".into(),
+                expected_data: toml! { "foo" = "bar" }.into(),
+                expected_result: Ok(None),
+            },
+            Test {
+                data: toml! {foo =  "bar"}.into(),
+                ptr: "",
+                assign: "baz".into(),
+                expected_data: "baz".into(),
+                expected_result: Ok(Some(toml! {foo =  "bar"}.into())),
+            },
+            Test {
+                data: toml! { foo = "bar"}.into(),
+                ptr: "/foo",
+                assign: "baz".into(),
+                expected_data: toml! {foo = "baz"}.into(),
+                expected_result: Ok(Some("bar".into())),
+            },
+            Test {
+                data: toml! { foo = "bar"}.into(),
+                ptr: "/foo/bar",
+                assign: "baz".into(),
+                expected_data: toml! {foo = { bar = "baz"}}.into(),
+                expected_result: Ok(Some("bar".into())),
+            },
+            Test {
+                data: Table::new().into(),
+                ptr: "/",
+                assign: "foo".into(),
+                expected_data: toml! {"" =  "foo"}.into(),
+                expected_result: Ok(None),
+            },
+            Test {
+                data: Table::new().into(),
+                ptr: "/-",
+                assign: "foo".into(),
+                expected_data: toml! {"-" = "foo"}.into(),
+                expected_result: Ok(None),
+            },
+            Test {
+                data: "data".into(),
+                ptr: "/-",
+                assign: 34.into(),
+                expected_data: Value::Array(vec![34.into()]),
+                expected_result: Ok(Some("data".into())),
+            },
+            Test {
+                data: toml! {foo = "bar"}.into(),
+                ptr: "/foo/-",
+                assign: "baz".into(),
+                expected_data: toml! {foo =  ["baz"]}.into(),
+                expected_result: Ok(Some("bar".into())),
+            },
+            Test {
+                data: Table::new().into(),
+                ptr: "/0",
+                assign: "foo".into(),
+                expected_data: toml! {"0" = "foo"}.into(),
+                expected_result: Ok(None),
+            },
+            Test {
+                data: 21.into(),
+                ptr: "/1",
+                assign: "foo".into(),
+                expected_data: toml! {"1" = "foo"}.into(),
+                expected_result: Ok(Some(21.into())),
+            },
+            Test {
+                data: Value::Array(vec![]),
+                ptr: "/0",
+                expected_data: vec![Value::from("foo")].into(),
+                assign: "foo".into(),
+                expected_result: Ok(None),
+            },
+            Test {
+                ptr: "/foo/-/bar",
+                assign: "baz".into(),
+                data: Table::new().into(),
+                expected_result: Ok(None),
+                expected_data: toml! { "foo" = [{ "bar" = "baz" }] }.into(),
+            },
+            Test {
+                ptr: "/foo/-/bar",
+                assign: "qux".into(),
+                data: toml! { "foo" = [{ "bar" = "baz" }] }.into(),
+                expected_result: Ok(None),
+                expected_data: toml! {"foo" = [{ "bar" = "baz" }, { "bar" = "qux" }]}.into(),
+            },
+            Test {
+                ptr: "/foo/-/bar",
+                data: toml! {"foo" = [{ "bar" = "baz" }, { "bar" = "qux" }]}.into(),
+                assign: "quux".into(),
+                expected_result: Ok(None),
+                expected_data: toml! {"foo" = [{"bar" = "baz"},{"bar" = "qux"},{"bar" = "quux"}]}
+                    .into(),
+            },
+            Test {
+                ptr: "/foo/0/bar",
+                data: toml! {"foo" = [{"bar" = "baz"},{"bar" = "qux"},{"bar" = "quux"}]}.into(),
+                assign: "grault".into(),
+                expected_result: Ok(Some("baz".into())),
+                expected_data:
+                    toml! {"foo" = [{"bar" = "grault"},{"bar" = "qux"},{"bar" = "quux"}]}.into(),
+            },
+            Test {
+                data: Value::Array(vec![]),
+                ptr: "/-",
+                assign: "foo".into(),
+                expected_result: Ok(None),
+                expected_data: vec!["foo"].into(),
+            },
+            Test {
+                data: Value::Array(vec![]),
+                ptr: "/1",
+                assign: "foo".into(),
+                expected_result: Err(AssignError::OutOfBounds {
+                    offset: 0,
+                    source: OutOfBoundsError {
+                        index: 1,
+                        length: 0,
+                    },
+                }),
+                expected_data: Value::Array(vec![]),
+            },
+            Test {
+                data: Value::Array(vec![]),
+                ptr: "/a",
+                assign: "foo".into(),
+                expected_result: Err(AssignError::FailedToParseIndex {
+                    offset: 0,
+                    source: ParseIndexError {
+                        source: usize::from_str("foo").unwrap_err(),
+                    },
+                }),
+                expected_data: Value::Array(vec![]),
+            },
+        ]);
+    }
+
+    #[derive(Debug)]
+    struct Test<V: Assign> {
+        data: V,
+        ptr: &'static str,
+        assign: V,
+        expected_data: V,
+        expected_result: Result<Option<V>, V::Error>,
+    }
+
+    impl<V> Test<V>
+    where
+        V: Assign + Clone + PartialEq + Display + Debug + Serialize,
+        V::Value: From<V> + Debug + PartialEq + Serialize,
+        V::Error: Debug + PartialEq,
+        Result<Option<V>, V::Error>: PartialEq<Result<Option<V::Value>, V::Error>>,
+    {
+        fn all(tests: impl IntoIterator<Item = Test<V>>) {
+            tests.into_iter().enumerate().for_each(|(i, t)| t.run(i));
         }
-
-        fn test(idx: usize, data: impl Into<Value>, ptr: &'static str, assign: impl Into<Value>) {
-            let mut data = data.into();
-            let assign = assign.into();
-            let test = Test {
+        fn run(self, i: usize) {
+            let Test {
                 ptr,
-                data: data.clone(),
-                assign: assign.clone(),
-            };
-            let ptr = Pointer::from_static(test.ptr);
-            let replaced = ptr.assign(&mut data, assign);
-            insta::with_settings!({
-                info => &test,
-                snapshot_suffix => format!("{idx}-data"),
-                description => format!("test #{idx} - asserting that the TOML data is as expected after assignment"),
-                omit_expression => true // do not include the default expression
-            }, {
-                assert_snapshot!(&data);
-            });
-            insta::with_settings!({
-                info => &test,
-                snapshot_suffix => format!("{idx}-result"),
-                description => format!("test #{idx} asserting that the replaced TOML data returned from the assignment is as expected"),
-                omit_expression => true // do not include the default expression
-            }, {
-                assert_debug_snapshot!(&replaced);
-            });
-        }
-
-        #[test]
-        #[allow(clippy::too_many_lines)]
-        fn test_assign() {
-            test(0, toml::Table::new(), "/foo", "bar");
-            test(1, toml! {"foo" = "bar"}, "", "baz");
-            test(2, toml! {"foo" = "bar"}, "/foo", "baz");
-            test(3, toml! {"foo" = "bar"}, "/foo/bar", "baz");
-            test(4, Table::new(), "/", "foo");
-            test(5, Table::new(), "/-", "foo");
-            test(6, "data", "/-", 34);
-            test(7, toml! {"foo" = "bar"}, "/foo/-", "baz");
-            test(8, Table::new(), "/0", "foo");
-            test(9, 21, "/1", "foo");
-            test(10, Value::Array(vec![]), "/0", "foo");
-            test(11, Value::Array(vec![]), "/-", "foo");
-            test(12, Value::Array(vec![]), "/1", "foo");
-            test(13, Value::Array(vec![]), "/a", "foo");
-        }
-
-        #[test]
-        fn test_assign_with_explicit_array_path() {
-            let mut data: Value = Table::new().into();
-            let ptr = Pointer::from_static("/foo/0/bar");
-            let val: Value = "baz".into();
-
-            let replaced = ptr.assign(&mut data, val).unwrap();
-            assert_eq!(replaced, None);
-            assert_eq!(&data, &(toml! {"foo" = [{"bar" = "baz"}]}.into()));
-        }
-
-        #[test]
-        fn test_assign_array_with_next_token() {
-            test(0, Table::new(), "/foo/-/bar", "baz");
-            test(1, toml! {"foo" = [{"bar" = "baz"}]}, "/foo/-/bar", "qux");
-            test(
-                2,
-                toml! {"foo" = [{"bar" = "baz"}, {"bar" = "qux"}]},
-                "/foo/-/bar",
-                "quux",
+                mut data,
+                assign,
+                expected_data,
+                expected_result,
+                ..
+            } = self;
+            let ptr = Pointer::from_static(ptr);
+            let replaced = ptr.assign(&mut data, assign.clone());
+            assert_eq!(
+                &expected_data, &data,
+                "\ndata not as expected for test index {i}:\n\nexpected:\n\n{expected_data}\n\nactual:\n{data}\n"
             );
-            test(
-                3,
-                toml! {"foo" = [{"bar" = "baz"}, {"bar" = "qux"}, {"bar" = "quux"}]},
-                "/foo/0/bar",
-                "grault",
+            assert_eq!(
+                &expected_result,
+                &replaced,
+                "\nreplaced not as expected for test index {i}:\n\npointer:{ptr}\nassign:{assign}\n\ndata:\n{data}\n\nexpected data:\n{expected_data}\n\nexpected:\n{}\n\nactual:\n{}\n\n",
+                expected_result
+                    .as_ref()
+                    .map_or("None".to_string(), |v| serde_json::to_string_pretty(&v).unwrap()),
+                replaced
+                    .as_ref()
+                    .map_or("None".to_string(), |v| serde_json::to_string_pretty(&v).unwrap()),
+
             );
         }
-
-        // #[test]
-        // fn test_assign_with_obj_path() {
-        //     let mut data = json!({});
-        //     let ptr = Pointer::from_static("/foo/bar");
-        //     let val = json!("baz");
-        //     let replaced = ptr.assign(&mut data, val).unwrap();
-        //     assert_eq!(&json!({"foo": {"bar": "baz"}}), &data);
-        //     assert_eq!(replaced, None);
-        // }
-
-        // #[test]
-        // fn test_assign_with_scalar_replace() {
-        //     let mut data = json!({
-        //         "foo": "bar"
-        //     });
-
-        //     let ptr = Pointer::from_static("/foo/bar/baz");
-        //     let val = json!("qux");
-
-        //     ptr.assign(&mut data, val).unwrap();
-        //     assert_eq!(&json!({"foo":{"bar":{"baz": "qux"}}}), &data);
-        // }
-
-        // #[test]
-        // fn nested_maps_with_empty_keys() {
-        //     let data = json!({
-        //         "": {
-        //             "": {
-        //                 "bar": 42,
-        //             }
-        //         }
-        //     });
-
-        //     {
-        //         let ptr = Pointer::from_static("///bar");
-        //         assert_eq!(ptr.resolve(&data).unwrap(), 42);
-        //     }
-        //     {
-        //         let mut ptr = PointerBuf::new();
-        //         ptr.push_back("".into());
-        //         ptr.push_back("".into());
-        //         ptr.push_back("bar".into());
-        //         assert_eq!(ptr.resolve(&data).unwrap(), 42);
-        //     }
-        // }
     }
 }

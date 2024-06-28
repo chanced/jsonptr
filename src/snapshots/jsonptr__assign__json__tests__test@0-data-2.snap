@@ -1,9 +1,0 @@
----
-source: src/assign.rs
-description: "case #0: asserting that the JSON data is as expected after assignment"
-info:
-  data: {}
-  ptr: /foo/-/bar
-  assign: baz
----
-{"foo":[{"bar":"baz"}]}

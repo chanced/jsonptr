@@ -16,10 +16,8 @@ serde_json = { version = "1.0", optional = true, features = ["alloc"] }
 toml       = { version = "0.8", optional = true }
 
 [dev-dependencies]
-insta             = { version = "1.39.0", features = ["serde"] }
 quickcheck        = "1.0.3"
 quickcheck_macros = "1.0.0"
-serde             = { version = "1.0", features = ["alloc", "derive"] }
 
 [features]
 assign  = []
