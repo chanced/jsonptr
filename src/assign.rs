@@ -6,6 +6,13 @@
 //! ## Feature Flag
 //! This module is enabled by default with the `"assign"` feature flag.
 //!
+//! ## Provided implementations
+//!
+//! | Lang  |     value type      | feature flag | Default |
+//! | ----- |: ----------------- :|: ---------- :| ------- |
+//! | JSON  | `serde_json::Value` |   `"json"`   |   ✓     |
+//! | TOML  |    `toml::Value`    |   `"toml"`   |         |
+//!
 //! # Expansion
 //! The path will automatically be expanded if the [`Pointer`] is not fully
 //! exhausted before reaching a non-existent key in the case of objects, index
@@ -17,12 +24,6 @@
 //!   object.
 //!
 //!
-//! ## Provided implementations
-//!
-//! | Lang  |     value type      | feature flag | Default |
-//! | ----- |: ----------------- :|: ---------- :| ------- |
-//! | JSON  | `serde_json::Value` |   `"json"`   |   ✓     |
-//! | TOML  |    `toml::Value`    |   `"toml"`   |         |
 //!
 //! ## Example
 //! ```rust
@@ -38,14 +39,25 @@
 use crate::{OutOfBoundsError, ParseIndexError, Pointer};
 use core::fmt::{self, Debug};
 
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                                    Assign                                    ║
+║                                   ¯¯¯¯¯¯¯¯                                   ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
+
 /// Implemented by types which can internally assign a
 /// ([`Value`](`Assign::Value`)) at a path represented by a JSON [`Pointer`].
 ///
 /// ## Expansion
-/// For provided implementations (`"json"`, and `"toml"`) path will automatically be expanded the if the [`Pointer`] is not fully
-/// exhausted before reaching a non-existent key in the case of objects, index
-/// in the case of arrays, or a scalar value (including `null`) based upon a
-/// best-guess effort on the meaning of each [`Token`](crate::Token):
+/// For provided implementations (`"json"`, and `"toml"`) path will
+/// automatically be expanded the if the [`Pointer`] is not fully exhausted
+/// before reaching a non-existent key in the case of objects, index in the case
+/// of arrays, or a scalar value (including `null`) based upon a best-guess
+/// effort on the meaning of each [`Token`](crate::Token):
 ///
 /// - If the [`Token`](crate::Token) is equal to `"0"` or `"-"`, the token will
 ///  be considered an index of an array.
@@ -114,9 +126,19 @@ pub trait Assign {
         V: Into<Self::Value>;
 }
 
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                                 AssignError                                  ║
+║                                ¯¯¯¯¯¯¯¯¯¯¯¯¯                                 ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
+
 /// Possible error returned from [`Assign`] implementations for
 /// [`serde_json::Value`] and
-/// [`toml::Value`](https://docs.rs/toml/latest/toml/enum.Value.html).
+/// [`toml::Value`](https://docs.rs/toml/0.8.14/toml/index.html).
 #[derive(Debug, PartialEq, Eq)]
 pub enum AssignError {
     /// A `Token` within the `Pointer` failed to be parsed as an array index.
@@ -169,6 +191,16 @@ enum Assigned<'v, V> {
     Done(Option<V>),
     Continue { next_dest: &'v mut V, same_value: V },
 }
+
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                                  json impl                                   ║
+║                                 ¯¯¯¯¯¯¯¯¯¯¯                                  ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
 
 mod json {
     use super::{Assign, AssignError, Assigned};
@@ -327,6 +359,16 @@ mod json {
         Assigned::Done(replaced)
     }
 }
+
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                                  toml impl                                   ║
+║                                 ¯¯¯¯¯¯¯¯¯¯¯                                  ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
 
 #[cfg(feature = "toml")]
 mod toml {
@@ -488,14 +530,67 @@ mod toml {
     }
 }
 
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                                    Tests                                     ║
+║                                   ¯¯¯¯¯¯¯                                    ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
+
 #[cfg(test)]
 #[allow(clippy::too_many_lines)]
 mod tests {
     use super::{Assign, AssignError};
     use crate::{OutOfBoundsError, ParseIndexError, Pointer};
     use core::fmt::{Debug, Display};
-    use serde::Serialize;
     use std::str::FromStr;
+
+    #[derive(Debug)]
+    struct Test<V: Assign> {
+        data: V,
+        ptr: &'static str,
+        assign: V,
+        expected_data: V,
+        expected_result: Result<Option<V>, V::Error>,
+    }
+
+    impl<V> Test<V>
+    where
+        V: Assign + Clone + PartialEq + Display + Debug,
+        V::Value: Debug + PartialEq + From<V>,
+        V::Error: Debug + PartialEq,
+        Result<Option<V>, V::Error>: PartialEq<Result<Option<V::Value>, V::Error>>,
+    {
+        fn all(tests: impl IntoIterator<Item = Test<V>>) {
+            tests.into_iter().enumerate().for_each(|(i, t)| t.run(i));
+        }
+        fn run(self, i: usize) {
+            let Test {
+                ptr,
+                mut data,
+                assign,
+                expected_data,
+                expected_result,
+                ..
+            } = self;
+            let ptr = Pointer::from_static(ptr);
+            let replaced = ptr.assign(&mut data, assign.clone());
+            assert_eq!(
+                &expected_data, &data,
+                "test #{i}:\n\ndata: \n{data:#?}\n\nexpected_data\n{expected_data:#?}"
+            );
+            assert_eq!(&expected_result, &replaced);
+        }
+    }
+
+    /*
+    ╔═══════════════════════════════════════════════════╗
+    ║                        json                       ║
+    ╚═══════════════════════════════════════════════════╝
+    */
 
     #[test]
     #[cfg(feature = "json")]
@@ -649,6 +744,12 @@ mod tests {
         ]);
     }
 
+    /*
+    ╔══════════════════════════════════════════════════╗
+    ║                       toml                       ║
+    ╚══════════════════════════════════════════════════╝
+    */
+
     #[test]
     #[cfg(feature = "toml")]
     fn test_assign_toml() {
@@ -737,30 +838,30 @@ mod tests {
                 assign: "baz".into(),
                 data: Table::new().into(),
                 expected_result: Ok(None),
-                expected_data: toml! { "foo" = [{ "bar" = "baz" }] }.into(),
+                expected_data: toml! { "foo" = [{"bar" = "baz"}] }.into(),
             },
             Test {
                 ptr: "/foo/-/bar",
                 assign: "qux".into(),
-                data: toml! { "foo" = [{ "bar" = "baz" }] }.into(),
+                data: toml! {"foo" = [{"bar" = "baz"}] }.into(),
                 expected_result: Ok(None),
-                expected_data: toml! {"foo" = [{ "bar" = "baz" }, { "bar" = "qux" }]}.into(),
+                expected_data: toml! {"foo" = [{"bar" = "baz"}, {"bar" = "qux"}]}.into(),
             },
             Test {
                 ptr: "/foo/-/bar",
-                data: toml! {"foo" = [{ "bar" = "baz" }, { "bar" = "qux" }]}.into(),
+                data: toml! {"foo" = [{"bar" = "baz"}, {"bar" = "qux"}]}.into(),
                 assign: "quux".into(),
                 expected_result: Ok(None),
-                expected_data: toml! {"foo" = [{"bar" = "baz"},{"bar" = "qux"},{"bar" = "quux"}]}
+                expected_data: toml! {"foo" = [{"bar" = "baz"}, {"bar" = "qux"}, {"bar" = "quux"}]}
                     .into(),
             },
             Test {
                 ptr: "/foo/0/bar",
-                data: toml! {"foo" = [{"bar" = "baz"},{"bar" = "qux"},{"bar" = "quux"}]}.into(),
+                data: toml! {"foo" = [{"bar" = "baz"}, {"bar" = "qux"}, {"bar" = "quux"}]}.into(),
                 assign: "grault".into(),
                 expected_result: Ok(Some("baz".into())),
                 expected_data:
-                    toml! {"foo" = [{"bar" = "grault"},{"bar" = "qux"},{"bar" = "quux"}]}.into(),
+                    toml! {"foo" = [{"bar" = "grault"}, {"bar" = "qux"}, {"bar" = "quux"}]}.into(),
             },
             Test {
                 data: Value::Array(vec![]),
@@ -795,54 +896,5 @@ mod tests {
                 expected_data: Value::Array(vec![]),
             },
         ]);
-    }
-
-    #[derive(Debug)]
-    struct Test<V: Assign> {
-        data: V,
-        ptr: &'static str,
-        assign: V,
-        expected_data: V,
-        expected_result: Result<Option<V>, V::Error>,
-    }
-
-    impl<V> Test<V>
-    where
-        V: Assign + Clone + PartialEq + Display + Debug + Serialize,
-        V::Value: From<V> + Debug + PartialEq + Serialize,
-        V::Error: Debug + PartialEq,
-        Result<Option<V>, V::Error>: PartialEq<Result<Option<V::Value>, V::Error>>,
-    {
-        fn all(tests: impl IntoIterator<Item = Test<V>>) {
-            tests.into_iter().enumerate().for_each(|(i, t)| t.run(i));
-        }
-        fn run(self, i: usize) {
-            let Test {
-                ptr,
-                mut data,
-                assign,
-                expected_data,
-                expected_result,
-                ..
-            } = self;
-            let ptr = Pointer::from_static(ptr);
-            let replaced = ptr.assign(&mut data, assign.clone());
-            assert_eq!(
-                &expected_data, &data,
-                "\ndata not as expected for test index {i}:\n\nexpected:\n\n{expected_data}\n\nactual:\n{data}\n"
-            );
-            assert_eq!(
-                &expected_result,
-                &replaced,
-                "\nreplaced not as expected for test index {i}:\n\npointer:{ptr}\nassign:{assign}\n\ndata:\n{data}\n\nexpected data:\n{expected_data}\n\nexpected:\n{}\n\nactual:\n{}\n\n",
-                expected_result
-                    .as_ref()
-                    .map_or("None".to_string(), |v| serde_json::to_string_pretty(&v).unwrap()),
-                replaced
-                    .as_ref()
-                    .map_or("None".to_string(), |v| serde_json::to_string_pretty(&v).unwrap()),
-
-            );
-        }
     }
 }

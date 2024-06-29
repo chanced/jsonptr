@@ -13,93 +13,15 @@ use alloc::{
 use core::fmt;
 use core::{borrow::Borrow, cmp::Ordering, ops::Deref, slice, str::FromStr};
 
-fn validate(value: &str) -> Result<&str, ParseError> {
-    if value.is_empty() {
-        return Ok(value);
-    }
-
-    match value.bytes().next() {
-        Some(b'/') => {}                                       // expected
-        Some(_) => return Err(ParseError::NoLeadingBackslash), // invalid pointer - missing leading slash
-        None => return Ok(value),                              // done
-    }
-    let mut ptr_offset = 0; // offset within the pointer of the most recent '/' seperator
-    let mut tok_offset = 0; // offset within the current token
-
-    let mut bytes = value.bytes().enumerate();
-    while let Some((offset, c)) = bytes.next() {
-        if c == b'/' {
-            // resetting the token offset
-            tok_offset = 0;
-            ptr_offset = offset;
-            continue;
-        }
-        tok_offset += 1;
-        // if the character is a '~', then the next character must be '0' or '1'
-        // otherwise the encoding is invalid and `InvalidEncodingError` is returned
-        if c == b'~' {
-            // pulling down
-            let next = bytes.next().map(|(_, c)| c);
-            if !matches!(next, Some(b'0' | b'1')) {
-                // the pointer is not properly encoded
-                //
-                // we use the pointer offset, which points to the last
-                // encountered seperator, as the offset of the error.
-                // The source `InvalidEncodingError` then uses the token
-                // offset.
-                //
-                // "/foo/invalid~encoding"
-                //      ^       ^
-                //      |       |
-                //  ptr_offset  |
-                //          tok_offset
-                //
-                return Err(ParseError::InvalidEncoding {
-                    offset: ptr_offset,
-                    source: InvalidEncodingError { offset: tok_offset },
-                });
-            }
-            tok_offset += 1;
-        }
-    }
-    Ok(value)
-}
-
-unsafe fn extend_one_before(s: &str) -> &str {
-    let ptr = s.as_ptr().offset(-1);
-    let len = s.len() + 1;
-    let slice = slice::from_raw_parts(ptr, len);
-    core::str::from_utf8_unchecked(slice)
-}
-
-const fn is_valid_ptr(value: &str) -> bool {
-    let bytes = value.as_bytes();
-
-    if bytes.is_empty() {
-        // root pointer
-        return true;
-    }
-
-    match bytes[0] {
-        b'/' => {}
-        _ => return false,
-    }
-
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'~' {
-            if i + 1 >= bytes.len() {
-                return false;
-            }
-            if bytes[i + 1] != b'0' && bytes[i + 1] != b'1' {
-                return false;
-            }
-        }
-        i += 1;
-    }
-
-    true
-}
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                                   Pointer                                    ║
+║                                  ¯¯¯¯¯¯¯¯¯                                   ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
 
 /// A JSON Pointer is a string containing a sequence of zero or more reference
 /// tokens, each prefixed by a '/' character.
@@ -659,6 +581,16 @@ impl<'a> IntoIterator for &'a Pointer {
     }
 }
 
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                                  PointerBuf                                  ║
+║                                 ¯¯¯¯¯¯¯¯¯¯¯¯                                 ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
+
 /// An owned, mutable Pointer (akin to String).
 ///
 /// This type provides methods like [`PointerBuf::push_back`] and
@@ -896,6 +828,104 @@ impl core::fmt::Display for PointerBuf {
     }
 }
 
+fn validate(value: &str) -> Result<&str, ParseError> {
+    if value.is_empty() {
+        return Ok(value);
+    }
+
+    match value.bytes().next() {
+        Some(b'/') => {}                                       // expected
+        Some(_) => return Err(ParseError::NoLeadingBackslash), // invalid pointer - missing leading slash
+        None => return Ok(value),                              // done
+    }
+    let mut ptr_offset = 0; // offset within the pointer of the most recent '/' seperator
+    let mut tok_offset = 0; // offset within the current token
+
+    let mut bytes = value.bytes().enumerate();
+    while let Some((offset, c)) = bytes.next() {
+        if c == b'/' {
+            // resetting the token offset
+            tok_offset = 0;
+            ptr_offset = offset;
+            continue;
+        }
+        tok_offset += 1;
+        // if the character is a '~', then the next character must be '0' or '1'
+        // otherwise the encoding is invalid and `InvalidEncodingError` is returned
+        if c == b'~' {
+            // pulling down
+            let next = bytes.next().map(|(_, c)| c);
+            if !matches!(next, Some(b'0' | b'1')) {
+                // the pointer is not properly encoded
+                //
+                // we use the pointer offset, which points to the last
+                // encountered seperator, as the offset of the error.
+                // The source `InvalidEncodingError` then uses the token
+                // offset.
+                //
+                // "/foo/invalid~encoding"
+                //      ^       ^
+                //      |       |
+                //  ptr_offset  |
+                //          tok_offset
+                //
+                return Err(ParseError::InvalidEncoding {
+                    offset: ptr_offset,
+                    source: InvalidEncodingError { offset: tok_offset },
+                });
+            }
+            tok_offset += 1;
+        }
+    }
+    Ok(value)
+}
+
+unsafe fn extend_one_before(s: &str) -> &str {
+    let ptr = s.as_ptr().offset(-1);
+    let len = s.len() + 1;
+    let slice = slice::from_raw_parts(ptr, len);
+    core::str::from_utf8_unchecked(slice)
+}
+
+const fn is_valid_ptr(value: &str) -> bool {
+    let bytes = value.as_bytes();
+
+    if bytes.is_empty() {
+        // root pointer
+        return true;
+    }
+
+    match bytes[0] {
+        b'/' => {}
+        _ => return false,
+    }
+
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'~' {
+            if i + 1 >= bytes.len() {
+                return false;
+            }
+            if bytes[i + 1] != b'0' && bytes[i + 1] != b'1' {
+                return false;
+            }
+        }
+        i += 1;
+    }
+
+    true
+}
+
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                                    Tests                                     ║
+║                                   ¯¯¯¯¯¯¯                                    ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1116,6 +1146,15 @@ mod tests {
 
         let ptr = Pointer::root();
         assert_eq!(ptr.first(), None);
+    }
+
+    #[test]
+    fn test_pointerbuf_try_from() {
+        let ptr = PointerBuf::from_tokens(["foo", "bar", "~/"]);
+
+        assert_eq!(PointerBuf::try_from("/foo/bar/~0~1").unwrap(), ptr);
+        let into: PointerBuf = "/foo/bar/~0~1".try_into().unwrap();
+        assert_eq!(ptr, into);
     }
 
     #[test]

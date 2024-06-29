@@ -3,12 +3,6 @@
 //! This module provides the [`Delete`] trait which is implemented by types that
 //! can internally remove a value based on a JSON Pointer.
 //!
-//! ## Provided implementations
-//! | Lang  |       value type      | feature flag |
-//! | ----- |: ------------------- :|: ---------- :|
-//! | JSON  | [`serde_json::Value`] |   `"json"`   |
-//! | TOML  |     `toml::Value`     |   `"toml"`   |
-//!
 //! The rules of deletion are determined by the implementation, with the
 //! provided implementations (`"json"` & `"toml"`) operating as follows:
 //! - If the [`Pointer`] can be resolved, then the [`Value`](`Delete::Value`) is
@@ -16,8 +10,18 @@
 //! - If the [`Pointer`] fails to resolve for any reason, `Ok(None)` is
 //!   returned.
 //! - If the [`Pointer`] is root, `value` is replaced:
-//!     - `"json"`: `serde_json::Value::Null`
-//!     - `"toml`: `toml::Value::Table::Default`
+//!     - `"json"` - `serde_json::Value::Null`
+//!     - `"toml"` - `toml::Value::Table::Default`
+//!
+//! ## Feature Flag
+//! This module is enabled by default with the `"resolve"` feature flag.
+//!
+//! ## Provided implementations
+//!
+//! | Lang  |     value type      | feature flag | Default |
+//! | ----- |: ----------------- :|: ---------- :| ------- |
+//! | JSON  | `serde_json::Value` |   `"json"`   |   ✓     |
+//! | TOML  |    `toml::Value`    |   `"toml"`   |         |
 //!
 //! ## Examples
 //! ### Deleting a resolved pointer:
@@ -52,30 +56,37 @@
 //! ```
 use crate::Pointer;
 
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                                    Delete                                    ║
+║                                   ¯¯¯¯¯¯¯¯                                   ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
+
 /// Delete is implemented by types which can internally remove a value based on
 /// a JSON Pointer
-///
-/// Provided implementations include:
-///
-/// | Language  | Feature Flag |
-/// | --------- | ------------ |
-/// |   JSON    |   `"json"`   |
-/// |   TOML    |   `"toml"`   |
 pub trait Delete {
     /// The type of value that this implementation can operate on.
-    ///
-    /// Provided implementations include:
-    ///
-    /// | Lang  |     value type      | feature flag |
-    /// | ----- |: ----------------- :|: ---------- :|
-    /// | JSON  | `serde_json::Value` |   `"json"`   |
-    /// | TOML  |    `toml::Value`    |   `"toml"`   |
     type Value;
 
     /// Attempts to internally delete a value based upon a [Pointer].
     fn delete(&mut self, ptr: &Pointer) -> Option<Self::Value>;
 }
 
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                                  json impl                                   ║
+║                                 ¯¯¯¯¯¯¯¯¯¯¯                                  ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
+
+#[cfg(feature = "json")]
 mod json {
     use super::Delete;
     use crate::Pointer;
@@ -102,88 +113,17 @@ mod json {
                 })
         }
     }
-
-    #[cfg(test)]
-    mod tests {
-        use super::*;
-        use serde_json::json;
-        #[test]
-        fn test_delete_value() {
-            let tests = [
-                (json!({"foo": "bar"}), "/foo", json!({}), Some(json!("bar"))),
-                (
-                    json!({"foo": "bar"}), // data
-                    "/foo/bar",            // ptr
-                    json!({"foo": "bar"}), // expected_data
-                    None,                  // expected_deleted
-                ),
-                (
-                    json!({"foo": {"bar": "baz"}}), // data
-                    "/foo/bar",                     // ptr
-                    json!({"foo": {}}),             // expected_data
-                    Some(json!("baz")),             // expected_deleted
-                ),
-                (
-                    json!({"foo": {"bar": ["baz", "qux"]}}), // data
-                    "/foo/bar/0",                            // ptr
-                    json!({"foo": {"bar": ["qux"]}}),        // expected_data
-                    Some(json!("baz")),                      // expected_deleted
-                ),
-                (json!({"foo": "bar"}), "/foo/0", json!({"foo": "bar"}), None),
-                (
-                    json!({"foo": { "bar": [{"baz": "qux", "remaining": "field"}]}}),
-                    "/foo/bar/0/baz",
-                    json!({"foo": { "bar": [{"remaining": "field"}]}}),
-                    Some(json!("qux")),
-                ),
-            ];
-            for (mut data, ptr, expected_data, expected_deleted) in tests {
-                let ptr = Pointer::from_static(ptr);
-                let deleted = ptr.delete(&mut data);
-                assert_eq!(
-                    expected_data,
-                    data,
-                    "\ndata not as expected
-                \nptr: \"{ptr}\"
-                \ndata:\n{}
-                \nexpected:\n{}
-                \nactual:\n{}\n\n",
-                    to_string_pretty(&data),
-                    to_string_pretty(&expected_data),
-                    to_string_pretty(&data)
-                );
-                assert_eq!(
-                    expected_deleted,
-                    deleted,
-                    "\ndeleted value not as expected
-                \nexpected:{}\n\nactual:{}\n\n",
-                    expected_deleted
-                        .as_ref()
-                        .map_or_else(|| "None".to_string(), to_string_pretty),
-                    deleted
-                        .as_ref()
-                        .map_or_else(|| "None".to_string(), to_string_pretty)
-                );
-            }
-        }
-
-        #[test]
-        fn test_issue_18() {
-            let mut data = json!({
-                "Example": 21,
-                "test": "test"
-            });
-            let pointer = Pointer::from_static("/Example");
-            pointer.delete(&mut data);
-            assert_eq!(json!({"test": "test"}), data);
-        }
-
-        fn to_string_pretty(value: &Value) -> String {
-            serde_json::to_string_pretty(value).unwrap()
-        }
-    }
 }
 
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                                  toml impl                                   ║
+║                                 ¯¯¯¯¯¯¯¯¯¯¯                                  ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
 #[cfg(feature = "toml")]
 mod toml {
     use super::Delete;
@@ -211,98 +151,196 @@ mod toml {
                 })
         }
     }
+}
 
-    #[cfg(test)]
-    mod tests {
-        use toml::{toml, Table, Value};
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                                    Tests                                     ║
+║                                   ¯¯¯¯¯¯¯                                    ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
 
-        use crate::Pointer;
+#[cfg(test)]
+mod tests {
+    use super::Delete;
+    use crate::Pointer;
+    use core::fmt;
 
-        struct Test {
-            data: Value,
-            ptr: &'static str,
-            expected_data: Value,
-            expected_deleted: Option<Value>,
+    use serde_json::json;
+    struct Test<V> {
+        data: V,
+        ptr: &'static str,
+        expected_data: V,
+        expected_deleted: Option<V>,
+    }
+    impl<V> Test<V>
+    where
+        V: Delete<Value = V> + Clone + PartialEq + fmt::Display + fmt::Debug,
+    {
+        fn all(tests: impl IntoIterator<Item = Test<V>>) {
+            tests.into_iter().enumerate().for_each(|(i, t)| t.run(i));
         }
-
-        #[test]
-        fn test_delete_value() {
-            let tests = [
-                Test {
-                    data: toml! {"foo" = "bar"}.into(),
-                    ptr: "/foo",
-                    expected_data: Table::new().into(),
-                    expected_deleted: Some("bar".into()),
-                },
-                Test {
-                    data: toml! {"foo" = "bar"}.into(),
-                    ptr: "/foo/bar",
-                    expected_data: toml! {"foo" = "bar"}.into(),
-                    expected_deleted: None,
-                },
-                Test {
-                    data: toml! {"foo" = {"bar" = "baz"}}.into(),
-                    ptr: "/foo/bar",
-                    expected_data: toml! {"foo" = {}}.into(),
-                    expected_deleted: Some("baz".into()),
-                },
-                Test {
-                    data: toml! {"foo" = {"bar" = ["baz", "qux"]}}.into(),
-                    ptr: "/foo/bar/0",
-                    expected_data: toml! {"foo"={"bar"=["qux"]}}.into(),
-                    expected_deleted: Some("baz".into()),
-                },
-                Test {
-                    data: toml! {"foo" = "bar"}.into(),
-                    ptr: "/foo/0",
-                    expected_data: toml! {"foo"="bar"}.into(),
-                    expected_deleted: None,
-                },
-                Test {
-                    data: toml! {"foo"={"bar"=[{"baz"="qux","remaining"="field"}]}}.into(),
-                    ptr: "/foo/bar/0/baz",
-                    expected_data: toml! {"foo"={"bar"=[{"remaining"="field"}]}}.into(),
-                    expected_deleted: Some("qux".into()),
-                },
-            ];
-            for Test {
+        fn run(self, i: usize) {
+            let Test {
                 mut data,
                 ptr,
                 expected_data,
                 expected_deleted,
-            } in tests
-            {
-                let ptr = Pointer::from_static(ptr);
-                let deleted = ptr.delete(&mut data);
-                assert_eq!(
-                    expected_data,
-                    data,
-                    "\ndata not as expected
-                \nptr: \"{ptr}\"
-                \ndata:\n{}
-                \nexpected:\n{}
-                \nactual:\n{}\n\n",
-                    to_string_pretty(&data),
-                    to_string_pretty(&expected_data),
-                    to_string_pretty(&data)
-                );
-                assert_eq!(
-                    expected_deleted,
-                    deleted,
-                    "\ndeleted value not as expected
-                \nexpected:{}\n\nactual:{}\n\n",
-                    expected_deleted
-                        .as_ref()
-                        .map_or_else(|| "None".to_string(), to_string_pretty),
-                    deleted
-                        .as_ref()
-                        .map_or_else(|| "None".to_string(), to_string_pretty)
-                );
-            }
-        }
+            } = self;
 
-        fn to_string_pretty(value: &Value) -> String {
-            toml::to_string_pretty(value).unwrap()
+            let ptr = Pointer::from_static(ptr);
+            let deleted = ptr.delete(&mut data);
+            assert_eq!(
+                expected_data, 
+                data,
+                "\ntest delete #{i} failed:\ndata not as expected\n\nptr: \"{ptr}\"\n\nexpected data:\n{expected_data:#?}\n\nactual data:\n{data:#?}\n\n"
+            );
+            assert_eq!(
+                expected_deleted,
+                deleted,
+                "\ntest delete #{i} failed:\n\ndeleted value not as expected\nexpected deleted:{expected_data:#?}\n\nactual deleted:{deleted:#?}\n\n",
+            );
         }
+    }
+    /*
+    ╔═══════════════════════════════════════════════════╗
+    ║                        json                       ║
+    ╚═══════════════════════════════════════════════════╝
+    */
+    #[test]
+    #[cfg(feature = "json")]
+    fn test_delete_json() {
+        Test::all([
+            // 0
+            Test { 
+                ptr: "/foo",
+                data: json!({"foo": "bar"}),
+                expected_data: json!({}),
+                expected_deleted: Some(json!("bar")),
+            },
+            // 1
+            Test { 
+                ptr: "/foo/bar",
+                data: json!({"foo": {"bar": "baz"}}),
+                expected_data: json!({"foo": {}}),
+                expected_deleted: Some(json!("baz")),
+            },
+             // 2
+            Test {
+                ptr: "/foo/bar",
+                data: json!({"foo": "bar"}),
+                expected_data: json!({"foo": "bar"}),
+                expected_deleted: None,
+            },
+            // 3
+            Test { 
+                ptr: "/foo/bar",
+                data: json!({"foo": {"bar": "baz"}}),
+                expected_data: json!({"foo": {}}),
+                expected_deleted: Some(json!("baz")),
+            },
+             // 4
+            Test {
+                ptr: "/foo/bar/0",
+                data: json!({"foo": {"bar": ["baz", "qux"]}}),
+                expected_data: json!({"foo": {"bar": ["qux"]}}),
+                expected_deleted: Some(json!("baz")),
+            },
+            // 5
+            Test { 
+                ptr: "/foo/0",
+                data: json!({"foo": "bar"}),
+                expected_data: json!({"foo": "bar"}),
+                expected_deleted: None,
+            },
+             // 6
+            Test {
+                ptr: "/foo/bar/0/baz",
+                data: json!({"foo": { "bar": [{"baz": "qux", "remaining": "field"}]}}),
+                expected_data: json!({"foo": { "bar": [{"remaining": "field"}]} }),
+                expected_deleted: Some(json!("qux")),
+            },
+             // 7 
+             // issue #18 - unable to delete root token https://github.com/chanced/jsonptr/issues/18
+             Test {
+                ptr: "/Example",
+                data: json!({"Example": 21, "test": "test"}),
+                expected_data: json!({"test": "test"}),
+                expected_deleted: Some(json!(21)),
+            }
+        ]);
+    }
+    /*
+    ╔═══════════════════════════════════════════════════╗
+    ║                        toml                       ║
+    ╚═══════════════════════════════════════════════════╝
+    */
+    #[test]
+    #[cfg(feature = "toml")]
+    fn test_delete_toml() {
+        use toml::{Value,Table,toml};
+
+        Test::all([
+            // 0
+            Test { 
+                data: toml!{"foo" = "bar"}.into(),
+                ptr: "/foo",
+                expected_data: Value::Table(Table::new()),
+                expected_deleted: Some("bar".into()),
+            },
+            // 1
+            Test { 
+                data: toml!{"foo" = {"bar" = "baz"}}.into(),
+                ptr: "/foo/bar",
+                expected_data: toml!{"foo" = {}}.into(),
+                expected_deleted: Some("baz".into()),
+            },
+            // 2
+            Test { 
+                data: toml!{"foo" = "bar"}.into(),
+                ptr: "/foo/bar",
+                expected_data: toml!{"foo" = "bar"}.into(),
+                expected_deleted: None,
+            },
+            // 3
+            Test { 
+                data: toml!{"foo" = {"bar" = "baz"}}.into(),
+                ptr: "/foo/bar",
+                expected_data: toml!{"foo" = {}}.into(),
+                expected_deleted: Some("baz".into()),
+            },
+             // 4
+            Test {
+                data: toml!{"foo" = {"bar" = ["baz", "qux"]}}.into(),
+                ptr: "/foo/bar/0",
+                expected_data: toml!{"foo" = {"bar" = ["qux"]}}.into(),
+                expected_deleted: Some("baz".into()),
+            },
+            // 5
+            Test { 
+                data: toml!{"foo" = "bar"}.into(),
+                ptr: "/foo/0",
+                expected_data: toml!{"foo" = "bar"}.into(),
+                expected_deleted: None,
+            },
+             // 6
+            Test {
+                data: toml!{"foo" = { "bar" = [{"baz" = "qux", "remaining" = "field"}]}}.into(),
+                ptr: "/foo/bar/0/baz",
+                expected_data: toml!{"foo" = { "bar" = [{"remaining" = "field"}]} }.into(),
+                expected_deleted: Some("qux".into()),
+            },
+             // 7 
+             // issue #18 - unable to delete root token https://github.com/chanced/jsonptr/issues/18
+            Test {
+                data: toml!{"Example" = 21 "test" = "test"}.into(),
+                ptr: "/Example",
+                expected_data: toml!{"test" = "test"}.into(),
+                expected_deleted: Some(21.into()),
+            }
+        ]);
     }
 }
