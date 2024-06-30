@@ -90,7 +90,7 @@ impl Pointer {
     /// ````
     #[must_use]
     pub const fn from_static(s: &'static str) -> &'static Self {
-        assert!(is_valid_ptr(s), "invalid JSON Pointer");
+        assert!(validate(s).is_ok(), "invalid json pointer");
         unsafe { &*(std::ptr::from_ref::<str>(s) as *const Self) }
     }
 
@@ -805,54 +805,61 @@ impl core::fmt::Display for PointerBuf {
     }
 }
 
-fn validate(value: &str) -> Result<&str, ParseError> {
+const fn validate(value: &str) -> Result<&str, ParseError> {
     if value.is_empty() {
         return Ok(value);
     }
-
-    match value.bytes().next() {
-        Some(b'/') => {}                                       // expected
-        Some(_) => return Err(ParseError::NoLeadingBackslash), // invalid pointer - missing leading slash
-        None => return Ok(value),                              // done
+    let bytes = value.as_bytes();
+    if bytes[0] != b'/' {
+        return Err(ParseError::NoLeadingBackslash);
     }
     let mut ptr_offset = 0; // offset within the pointer of the most recent '/' seperator
     let mut tok_offset = 0; // offset within the current token
 
-    let mut bytes = value.bytes().enumerate();
-    while let Some((offset, c)) = bytes.next() {
-        if c == b'/' {
-            // resetting the token offset
-            tok_offset = 0;
-            ptr_offset = offset;
-            continue;
-        }
-        tok_offset += 1;
-        // if the character is a '~', then the next character must be '0' or '1'
-        // otherwise the encoding is invalid and `InvalidEncodingError` is returned
-        if c == b'~' {
-            // pulling down
-            let next = bytes.next().map(|(_, c)| c);
-            if !matches!(next, Some(b'0' | b'1')) {
-                // the pointer is not properly encoded
-                //
-                // we use the pointer offset, which points to the last
-                // encountered seperator, as the offset of the error.
-                // The source `InvalidEncodingError` then uses the token
-                // offset.
-                //
-                // "/foo/invalid~encoding"
-                //      ^       ^
-                //      |       |
-                //  ptr_offset  |
-                //          tok_offset
-                //
-                return Err(ParseError::InvalidEncoding {
-                    offset: ptr_offset,
-                    source: InvalidEncodingError { offset: tok_offset },
-                });
+    let bytes = value.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'/' => {
+                // backslashes ('/') seperate tokens
+                // we increment the ptr_offset to point to this character
+                ptr_offset = i;
+                // and reset the token offset
+                tok_offset = 0;
             }
-            tok_offset += 1;
+            b'~' => {
+                // if the character is a '~', then the next character must be '0' or '1'
+                // otherwise the encoding is invalid and `InvalidEncodingError` is returned
+                if i + 1 >= bytes.len() || (bytes[i + 1] != b'0' && bytes[i + 1] != b'1') {
+                    // the pointer is not properly encoded
+                    //
+                    // we use the pointer offset, which points to the last
+                    // encountered seperator, as the offset of the error.
+                    // The source `InvalidEncodingError` then uses the token
+                    // offset.
+                    //
+                    // "/foo/invalid~encoding"
+                    //      ^       ^
+                    //      |       |
+                    //  ptr_offset  |
+                    //          tok_offset
+                    //
+                    return Err(ParseError::InvalidEncoding {
+                        offset: ptr_offset,
+                        source: InvalidEncodingError { offset: tok_offset },
+                    });
+                }
+                // already checked the next character, so we skip it
+                i += 1;
+                // incrementing the pointer offset since the next byte has
+                // already been checked
+                tok_offset += 1;
+            }
+            _ => {}
         }
+        i += 1;
+        // not a seperator so we increment the token offset
+        tok_offset += 1;
     }
     Ok(value)
 }
@@ -862,35 +869,6 @@ unsafe fn extend_one_before(s: &str) -> &str {
     let len = s.len() + 1;
     let slice = slice::from_raw_parts(ptr, len);
     core::str::from_utf8_unchecked(slice)
-}
-
-const fn is_valid_ptr(value: &str) -> bool {
-    let bytes = value.as_bytes();
-
-    if bytes.is_empty() {
-        // root pointer
-        return true;
-    }
-
-    match bytes[0] {
-        b'/' => {}
-        _ => return false,
-    }
-
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'~' {
-            if i + 1 >= bytes.len() {
-                return false;
-            }
-            if bytes[i + 1] != b'0' && bytes[i + 1] != b'1' {
-                return false;
-            }
-        }
-        i += 1;
-    }
-
-    true
 }
 
 /*
@@ -910,7 +888,7 @@ mod tests {
     use quickcheck_macros::quickcheck;
 
     #[test]
-    #[should_panic = "invalid JSON Pointer"]
+    #[should_panic = "invalid json pointer"]
     fn from_const_validates() {
         let _ = Pointer::from_static("foo/bar");
     }
