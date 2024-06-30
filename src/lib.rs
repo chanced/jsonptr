@@ -2,17 +2,32 @@
 #![warn(missing_docs)]
 #![deny(clippy::all, clippy::pedantic)]
 #![cfg_attr(not(feature = "std"), no_std)]
+#![allow(
+    clippy::module_name_repetitions,
+    clippy::into_iter_without_iter,
+    clippy::needless_pass_by_value,
+    clippy::expect_fun_call
+)]
 extern crate alloc;
 
 use core::{fmt, num::ParseIntError};
 
 pub mod prelude;
 
+#[cfg(feature = "assign")]
 pub mod assign;
+#[cfg(feature = "assign")]
+pub use assign::Assign;
 
+#[cfg(feature = "delete")]
 pub mod delete;
+#[cfg(feature = "delete")]
+pub use delete::Delete;
 
+#[cfg(feature = "resolve")]
 pub mod resolve;
+#[cfg(feature = "resolve")]
+pub use resolve::{Resolve, ResolveMut};
 
 mod tokens;
 pub use tokens::*;
@@ -28,6 +43,16 @@ pub use index::Index;
 
 #[cfg(test)]
 mod arbitrary;
+
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                                  ParseError                                  ║
+║                                 ¯¯¯¯¯¯¯¯¯¯¯¯                                 ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
 
 /// Indicates that a `Pointer` was malformed and unable to be parsed.
 #[derive(Debug, PartialEq)]
@@ -63,12 +88,14 @@ impl fmt::Display for ParseError {
 impl ParseError {
     /// Returns `true` if this error is `NoLeadingBackslash`; otherwise returns
     /// `false`.
+    #[must_use]
     pub fn is_no_leading_backslash(&self) -> bool {
         matches!(self, Self::NoLeadingBackslash { .. })
     }
 
     /// Returns `true` if this error is `InvalidEncoding`; otherwise returns
     /// `false`.
+    #[must_use]
     pub fn is_invalid_encoding(&self) -> bool {
         matches!(self, Self::InvalidEncoding { .. })
     }
@@ -85,6 +112,7 @@ impl ParseError {
     /// let err = PointerBuf::parse("/foo/invalid~tilde/invalid").unwrap_err();
     /// assert_eq!(err.pointer_offset(), 4)
     /// ```
+    #[must_use]
     pub fn pointer_offset(&self) -> usize {
         match *self {
             Self::NoLeadingBackslash { .. } => 0,
@@ -93,7 +121,7 @@ impl ParseError {
     }
 
     /// Offset of the character index from within the first token of
-    /// [Self::pointer_offset])
+    /// [`Self::pointer_offset`])
     /// ```text
     /// "/foo/invalid~tilde/invalid"
     ///              ↑
@@ -104,6 +132,7 @@ impl ParseError {
     /// let err = PointerBuf::parse("/foo/invalid~tilde/invalid").unwrap_err();
     /// assert_eq!(err.source_offset(), 8)
     /// ```
+    #[must_use]
     pub fn source_offset(&self) -> usize {
         match self {
             Self::NoLeadingBackslash { .. } => 0,
@@ -122,6 +151,7 @@ impl ParseError {
     /// let err = PointerBuf::parse("/foo/invalid~tilde/invalid").unwrap_err();
     /// assert_eq!(err.pointer_offset(), 4)
     /// ```
+    #[must_use]
     pub fn complete_offset(&self) -> usize {
         self.source_offset() + self.pointer_offset()
     }
@@ -132,10 +162,20 @@ impl std::error::Error for ParseError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::InvalidEncoding { source, .. } => Some(source),
-            _ => None,
+            Self::NoLeadingBackslash => None,
         }
     }
 }
+
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                               ParseIndexError                                ║
+║                              ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯                               ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
 
 /// Indicates that the `Token` could not be parsed as valid RFC 6901 index.
 #[derive(Debug, PartialEq, Eq)]
@@ -163,6 +203,16 @@ impl std::error::Error for ParseIndexError {
     }
 }
 
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                             InvalidEncodingError                             ║
+║                            ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯                            ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
+
 /// A token within a json pointer contained invalid encoding (`~` not followed
 /// by `0` or `1`).
 ///
@@ -174,6 +224,7 @@ pub struct InvalidEncodingError {
 
 impl InvalidEncodingError {
     /// The byte offset of the first invalid `~`.
+    #[must_use]
     pub fn offset(&self) -> usize {
         self.offset
     }
@@ -210,6 +261,16 @@ impl std::error::Error for IndexError {
     }
 }
 
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                               OutOfBoundsError                               ║
+║                              ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
+
 /// Indicates that an `Index` is not within the given bounds.
 #[derive(Debug, PartialEq, Eq)]
 pub struct OutOfBoundsError {
@@ -239,10 +300,20 @@ impl fmt::Display for OutOfBoundsError {
 #[cfg(feature = "std")]
 impl std::error::Error for OutOfBoundsError {}
 
-/// NotFoundError indicates that a Pointer's path was not found in the data.
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                                NotFoundError                                 ║
+║                               ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯                                ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
+
+/// An error that indicates a [`Pointer`]'s path was not found in the data.
 #[derive(Debug, PartialEq, Eq)]
 pub struct NotFoundError {
-    /// The starting offset of the `Token` within the `Pointer` which could not
+    /// The starting offset of the [`Token`] within the [`Pointer`] which could not
     /// be resolved.
     pub offset: usize,
 }
@@ -255,6 +326,16 @@ impl fmt::Display for NotFoundError {
 
 #[cfg(feature = "std")]
 impl std::error::Error for NotFoundError {}
+
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                              ReplaceTokenError                               ║
+║                             ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
 
 /// Returned from `Pointer::replace_token` when the provided index is out of
 /// bounds.

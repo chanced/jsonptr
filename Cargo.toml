@@ -20,6 +20,12 @@ quickcheck        = "1.0.3"
 quickcheck_macros = "1.0.0"
 
 [features]
-default = ["std", "json"]
-json    = ["dep:serde_json"]
-std     = ["serde/std", "serde_json?/std"]
+assign  = []
+default = ["std", "serde", "json", "toml", "resolve", "assign", "delete"]
+delete  = []
+impl    = []
+json    = ["dep:serde_json", "serde"]
+resolve = []
+serde   = []
+std     = ["serde/std", "serde_json/std"]
+toml    = ["dep:toml", "serde", "std"]

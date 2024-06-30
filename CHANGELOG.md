@@ -25,6 +25,7 @@ This is a breaking release including:
 
 ### Changed
 
+-   JSON Pointers with leading `"#"` are no longer accepted. Previously, the erroneous leading hashtag was allowed during parsing but discarded.
 -   `Assign`, `Resolve`, `ResolveMut`, `Delete` all now use associated types `Value` and `Error`, allowing for more impls other than JSON
 -   Debug implementation now preserves type information (e.g. prints `PathBuf("/foo/bar")` instead of `"/foo/bar"`) - `Display` remains the same
 -   Original `Pointer` type renamed to `PointerBuf`

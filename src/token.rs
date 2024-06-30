@@ -12,11 +12,22 @@ const ENC_PREFIX: u8 = b'~';
 const TILDE_ENC: u8 = b'0';
 const SLASH_ENC: u8 = b'1';
 
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                                    Token                                     ║
+║                                   ¯¯¯¯¯¯¯                                    ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
+
 /// A `Token` is a segment of a JSON Pointer, seperated by '/' (%x2F). It can
 /// represent a key in a JSON object or an index in a JSON array.
 ///
 /// - Indexes should not contain leading zeros.
-/// - `"-"` represents the next, non-existent index in a JSON array.
+/// - When dealing with arrays or path expansion for assignment, `"-"` represent
+///   the next, non-existent index in a JSON array.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Token<'a> {
     inner: Cow<'a, str>,
@@ -48,6 +59,10 @@ impl<'a> Token<'a> {
     /// let err = Token::from_encoded("foo/oops~bar").unwrap_err();
     /// assert_eq!(err.offset(), 3);
     /// ```
+    ///
+    /// ## Errors
+    /// Returns `InvalidEncodingError` if the input string is not a valid RFC
+    /// 6901 (`~` must be followed by `0` or `1`)
     pub fn from_encoded(s: &'a str) -> Result<Self, InvalidEncodingError> {
         let mut escaped = false;
         for (offset, b) in s.bytes().enumerate() {
@@ -128,6 +143,7 @@ impl<'a> Token<'a> {
     ///
     /// If the token is not already owned, this will clone the referenced string
     /// slice.
+    #[must_use]
     pub fn into_owned(self) -> Token<'static> {
         Token {
             inner: Cow::Owned(self.inner.into_owned()),
@@ -141,6 +157,7 @@ impl<'a> Token<'a> {
     ///
     /// This method is like [`Self::into_owned`], except it doesn't take
     /// ownership of the original `Token`.
+    #[must_use]
     pub fn to_owned(&self) -> Token<'static> {
         Token {
             inner: Cow::Owned(self.inner.clone().into_owned()),
@@ -155,6 +172,7 @@ impl<'a> Token<'a> {
     /// # use jsonptr::Token;
     /// assert_eq!(Token::new("~bar").encoded(), "~0bar");
     /// ```
+    #[must_use]
     pub fn encoded(&self) -> &str {
         &self.inner
     }
@@ -167,6 +185,7 @@ impl<'a> Token<'a> {
     /// # use jsonptr::Token;
     /// assert_eq!(Token::new("~bar").decoded(), "~bar");
     /// ```
+    #[must_use]
     pub fn decoded(&self) -> Cow<'_, str> {
         if let Some(i) = self.inner.bytes().position(|b| b == ENC_PREFIX) {
             let input = self.inner.as_bytes();
@@ -214,7 +233,7 @@ impl<'a> Token<'a> {
     /// which stands for the next, non-existent member after the last array
     /// element.
     ///
-    /// # Examples
+    /// ## Examples
     ///
     /// ```
     /// # use jsonptr::{Index, Token};
@@ -224,6 +243,8 @@ impl<'a> Token<'a> {
     /// assert!(Token::new("a").to_index().is_err());
     /// assert!(Token::new("-1").to_index().is_err());
     /// ```
+    /// ## Errors
+    /// Returns [`ParseIndexError`] if the token is not a valid array index.
     pub fn to_index(&self) -> Result<Index, ParseIndexError> {
         self.try_into()
     }
@@ -295,6 +316,16 @@ impl core::fmt::Display for Token<'_> {
         write!(f, "{}", self.decoded())
     }
 }
+
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                                    Tests                                     ║
+║                                   ¯¯¯¯¯¯¯                                    ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
 
 #[cfg(test)]
 mod tests {

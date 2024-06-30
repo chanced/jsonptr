@@ -19,7 +19,7 @@ impl Arbitrary for PointerBuf {
     }
 
     fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-        let tokens: Vec<_> = self.tokens().map(|t| t.into_owned()).collect();
+        let tokens: Vec<_> = self.tokens().map(Token::into_owned).collect();
         Box::new((0..self.count()).map(move |i| {
             let subset: Vec<_> = tokens
                 .iter()
