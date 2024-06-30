@@ -33,6 +33,8 @@ use core::{borrow::Borrow, cmp::Ordering, fmt, ops::Deref, slice, str::FromStr};
 /// assert_eq!(bar, "baz");
 /// ```
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+// See https://doc.rust-lang.org/src/std/path.rs.html#1985
+#[cfg_attr(not(doc), repr(transparent))]
 pub struct Pointer(str);
 
 impl Default for &'static Pointer {
