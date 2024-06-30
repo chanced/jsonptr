@@ -5,7 +5,8 @@
 #![allow(
     clippy::module_name_repetitions,
     clippy::into_iter_without_iter,
-    clippy::needless_pass_by_value
+    clippy::needless_pass_by_value,
+    clippy::expect_fun_call
 )]
 extern crate alloc;
 

@@ -489,10 +489,7 @@ mod toml {
         src: Value,
     ) -> Assigned<'v, Value> {
         // grabbing the entry of the token
-        let entry = obj.entry(token.to_string());
-        // adding token to the pointer buf
-
-        match entry {
+        match obj.entry(token.to_string()) {
             Entry::Occupied(entry) => {
                 // if the entry exists, we either replace it or continue
                 let entry = entry.into_mut();

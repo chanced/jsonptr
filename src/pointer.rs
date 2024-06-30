@@ -76,16 +76,6 @@ impl Pointer {
         validate(s.as_ref()).map(Self::new)
     }
 
-    /// Attempts to parse a string into a `Pointer`.
-    ///
-    /// If successful, this does not allocate.
-    ///
-    /// ## Panics
-    /// Panics string is not a valid JSON Pointer.
-    pub fn must_parse<S: AsRef<str> + ?Sized>(s: &S) -> &Self {
-        Self::parse(s).expect("invalid JSON Pointer")
-    }
-
     /// Creates a static `Pointer` from a string.
     ///
     /// # Panics
@@ -613,14 +603,6 @@ impl PointerBuf {
     /// Returns a `ParseError` if the string is not a valid JSON Pointer.
     pub fn parse<S: AsRef<str> + ?Sized>(s: &S) -> Result<Self, ParseError> {
         Pointer::parse(&s).map(Pointer::to_buf)
-    }
-    /// Attempts to parse a string into a `Pointer`.
-    ///
-    ///
-    /// ## Panics
-    /// Panics string is not a valid JSON Pointer.
-    pub fn must_parse<S: AsRef<str> + ?Sized>(s: &S) -> Self {
-        Self::parse(s).expect("invalid JSON Pointer")
     }
 
     /// Creates a new `PointerBuf` from a slice of non-encoded strings.
@@ -1389,11 +1371,11 @@ mod tests {
             b_suffix,
         } in tests
         {
-            let base = PointerBuf::must_parse(base);
+            let base = PointerBuf::parse(base).expect(&format!("failed to parse ${base}"));
             let mut a = base.clone();
             let mut b = base.clone();
-            a.append(&PointerBuf::must_parse(a_suffix));
-            b.append(&PointerBuf::must_parse(b_suffix));
+            a.append(&PointerBuf::parse(a_suffix).unwrap());
+            b.append(&PointerBuf::parse(b_suffix).unwrap());
             let intersection = a.intersection(&b);
             assert_eq!(
                 intersection, base,
