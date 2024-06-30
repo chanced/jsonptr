@@ -14,11 +14,20 @@ use core::{fmt, num::ParseIntError};
 
 pub mod prelude;
 
+#[cfg(feature = "assign")]
 pub mod assign;
+#[cfg(feature = "assign")]
+pub use assign::Assign;
 
+#[cfg(feature = "delete")]
 pub mod delete;
+#[cfg(feature = "delete")]
+pub use delete::Delete;
 
+#[cfg(feature = "resolve")]
 pub mod resolve;
+#[cfg(feature = "resolve")]
+pub use resolve::{Resolve, ResolveMut};
 
 mod tokens;
 pub use tokens::*;

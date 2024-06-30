@@ -1,17 +1,10 @@
-#[cfg(feature = "assign")]
-use crate::assign::Assign;
-#[cfg(feature = "delete")]
-use crate::delete::Delete;
-#[cfg(feature = "resolve")]
-use crate::resolve::{Resolve, ResolveMut};
 use crate::{InvalidEncodingError, ParseError, ReplaceTokenError, Token, Tokens};
 use alloc::{
     borrow::ToOwned,
     string::{String, ToString},
     vec::Vec,
 };
-use core::fmt;
-use core::{borrow::Borrow, cmp::Ordering, ops::Deref, slice, str::FromStr};
+use core::{borrow::Borrow, cmp::Ordering, fmt, ops::Deref, slice, str::FromStr};
 
 /*
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -285,7 +278,7 @@ impl Pointer {
     ///   [`Index`](crate::index::Index)
     /// - An array [`Index`](crate::index::Index) is out of bounds
     #[cfg(feature = "resolve")]
-    pub fn resolve<'v, R: Resolve>(&self, value: &'v R) -> Result<&'v R::Value, R::Error> {
+    pub fn resolve<'v, R: crate::Resolve>(&self, value: &'v R) -> Result<&'v R::Value, R::Error> {
         value.resolve(self)
     }
 
@@ -306,7 +299,7 @@ impl Pointer {
     ///   [`Index`](crate::index::Index)
     /// - An array [`Index`](crate::index::Index) is out of bounds
     #[cfg(feature = "resolve")]
-    pub fn resolve_mut<'v, R: ResolveMut>(
+    pub fn resolve_mut<'v, R: crate::ResolveMut>(
         &self,
         value: &'v mut R,
     ) -> Result<&'v mut R::Value, R::Error> {
@@ -374,7 +367,7 @@ impl Pointer {
     /// assert!(data.is_null());
     /// ```
     #[cfg(feature = "delete")]
-    pub fn delete<D: Delete>(&self, value: &mut D) -> Option<D::Value> {
+    pub fn delete<D: crate::Delete>(&self, value: &mut D) -> Option<D::Value> {
         value.delete(self)
     }
 
@@ -402,7 +395,7 @@ impl Pointer {
     #[cfg(feature = "assign")]
     pub fn assign<D, V>(&self, dest: &mut D, src: V) -> Result<Option<D::Value>, D::Error>
     where
-        D: Assign,
+        D: crate::Assign,
         V: Into<D::Value>,
     {
         dest.assign(self, src)
