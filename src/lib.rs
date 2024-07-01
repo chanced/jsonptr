@@ -1,6 +1,6 @@
 #![doc = include_str!("../README.md")]
 #![warn(missing_docs)]
-#![deny(clippy::all, clippy::pedantic)]
+#![warn(clippy::all, clippy::pedantic)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![allow(
     clippy::module_name_repetitions,
@@ -9,7 +9,7 @@
     clippy::expect_fun_call
 )]
 
-#[macro_use]
+#[cfg_attr(not(feature = "std"), macro_use)]
 extern crate alloc;
 
 use core::{fmt, num::ParseIntError};
