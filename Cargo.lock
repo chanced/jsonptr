@@ -74,7 +74,7 @@ dependencies = [
  "quickcheck_macros",
  "serde",
  "serde_json",
- "syn 1.0.109",
+ "syn 2.0.46",
  "toml",
 ]
 
