@@ -1,12 +1,13 @@
 #![doc = include_str!("../README.md")]
 #![warn(missing_docs)]
-#![warn(clippy::all, clippy::pedantic)]
+#![deny(clippy::all, clippy::pedantic)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![allow(
     clippy::module_name_repetitions,
     clippy::into_iter_without_iter,
     clippy::needless_pass_by_value,
-    clippy::expect_fun_call
+    clippy::expect_fun_call,
+    clippy::must_use_candidate
 )]
 
 #[cfg_attr(not(feature = "std"), macro_use)]
@@ -89,14 +90,14 @@ impl fmt::Display for ParseError {
 impl ParseError {
     /// Returns `true` if this error is `NoLeadingBackslash`; otherwise returns
     /// `false`.
-    #[must_use]
+
     pub fn is_no_leading_backslash(&self) -> bool {
         matches!(self, Self::NoLeadingBackslash { .. })
     }
 
     /// Returns `true` if this error is `InvalidEncoding`; otherwise returns
     /// `false`.
-    #[must_use]
+
     pub fn is_invalid_encoding(&self) -> bool {
         matches!(self, Self::InvalidEncoding { .. })
     }
@@ -113,7 +114,7 @@ impl ParseError {
     /// let err = PointerBuf::parse("/foo/invalid~tilde/invalid").unwrap_err();
     /// assert_eq!(err.pointer_offset(), 4)
     /// ```
-    #[must_use]
+
     pub fn pointer_offset(&self) -> usize {
         match *self {
             Self::NoLeadingBackslash { .. } => 0,
@@ -133,7 +134,7 @@ impl ParseError {
     /// let err = PointerBuf::parse("/foo/invalid~tilde/invalid").unwrap_err();
     /// assert_eq!(err.source_offset(), 8)
     /// ```
-    #[must_use]
+
     pub fn source_offset(&self) -> usize {
         match self {
             Self::NoLeadingBackslash { .. } => 0,
@@ -152,7 +153,7 @@ impl ParseError {
     /// let err = PointerBuf::parse("/foo/invalid~tilde/invalid").unwrap_err();
     /// assert_eq!(err.pointer_offset(), 4)
     /// ```
-    #[must_use]
+
     pub fn complete_offset(&self) -> usize {
         self.source_offset() + self.pointer_offset()
     }
@@ -225,7 +226,7 @@ pub struct InvalidEncodingError {
 
 impl InvalidEncodingError {
     /// The byte offset of the first invalid `~`.
-    #[must_use]
+
     pub fn offset(&self) -> usize {
         self.offset
     }

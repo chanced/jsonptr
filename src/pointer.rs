@@ -56,7 +56,7 @@ impl Pointer {
     }
 
     /// Constant reference to a root pointer
-    #[must_use]
+    
     pub const fn root() -> &'static Self {
         unsafe { &*(core::ptr::from_ref::<str>("") as *const Self) }
     }
@@ -88,26 +88,26 @@ impl Pointer {
     /// let bar = data.resolve(POINTER).unwrap();
     /// assert_eq!(bar, "baz");
     /// ````
-    #[must_use]
+    
     pub const fn from_static(s: &'static str) -> &'static Self {
         assert!(validate(s).is_ok(), "invalid json pointer");
         unsafe { &*(core::ptr::from_ref::<str>(s) as *const Self) }
     }
 
     /// The encoded string representation of this `Pointer`
-    #[must_use]
+    
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
     /// Converts into an owned [`PointerBuf`]
-    #[must_use]
+    
     pub fn to_buf(&self) -> PointerBuf {
         PointerBuf(self.0.to_string())
     }
 
     /// Returns an iterator of `Token`s in the `Pointer`.
-    #[must_use]
+    
     pub fn tokens(&self) -> Tokens {
         let mut s = self.0.split('/');
         // skipping the first '/'
@@ -116,26 +116,26 @@ impl Pointer {
     }
 
     /// Returns the number of tokens in the `Pointer`.
-    #[must_use]
+    
     pub fn count(&self) -> usize {
         self.tokens().count()
     }
 
     /// Returns `true` if the JSON Pointer equals `""`.
-    #[must_use]
+    
     pub fn is_root(&self) -> bool {
         self.0.is_empty()
     }
 
     /// Returns a `serde_json::Value` representation of this `Pointer`
-    #[must_use]
+    
     #[cfg(feature = "json")]
     pub fn to_json_value(&self) -> serde_json::Value {
         serde_json::Value::String(self.0.to_string())
     }
 
     /// Returns the last `Token` in the `Pointer`.
-    #[must_use]
+    
     pub fn back(&self) -> Option<Token> {
         self.0
             .rsplit_once('/')
@@ -145,13 +145,13 @@ impl Pointer {
     /// Returns the last token in the `Pointer`.
     ///
     /// alias for `back`
-    #[must_use]
+    
     pub fn last(&self) -> Option<Token> {
         self.back()
     }
 
     /// Returns the first `Token` in the `Pointer`.
-    #[must_use]
+    
     pub fn front(&self) -> Option<Token> {
         if self.is_root() {
             return None;
@@ -168,13 +168,13 @@ impl Pointer {
     /// Returns the first `Token` in the `Pointer`.
     ///
     /// alias for `front`
-    #[must_use]
+    
     pub fn first(&self) -> Option<Token> {
         self.front()
     }
 
     /// Splits the `Pointer` into the first `Token` and a remainder `Pointer`.
-    #[must_use]
+    
     pub fn split_front(&self) -> Option<(Token, &Self)> {
         if self.is_root() {
             return None;
@@ -215,7 +215,7 @@ impl Pointer {
     /// assert_eq!(tail, Pointer::from_static("/bar/baz"));
     /// assert_eq!(ptr.split_at(3), None);
     /// ```
-    #[must_use]
+    
     pub fn split_at(&self, idx: usize) -> Option<(&Self, &Self)> {
         if self.0.as_bytes().get(idx).copied() != Some(b'/') {
             return None;
@@ -225,7 +225,7 @@ impl Pointer {
     }
 
     /// Splits the `Pointer` into the parent path and the last `Token`.
-    #[must_use]
+    
     pub fn split_back(&self) -> Option<(&Self, Token)> {
         self.0
             .rsplit_once('/')
@@ -233,7 +233,7 @@ impl Pointer {
     }
 
     /// A pointer to the parent of the current path.
-    #[must_use]
+    
     pub fn parent(&self) -> Option<&Self> {
         self.0.rsplit_once('/').map(|(front, _)| Self::new(front))
     }
@@ -258,7 +258,7 @@ impl Pointer {
     /// let ptr = Pointer::root();
     /// assert_eq!(ptr.get(0), None);
     /// ```
-    #[must_use]
+    
     pub fn get(&self, index: usize) -> Option<Token> {
         self.tokens().nth(index).clone()
     }
@@ -309,7 +309,7 @@ impl Pointer {
     }
 
     /// Finds the commonality between this and another `Pointer`.
-    #[must_use]
+    
     pub fn intersection<'a>(&'a self, other: &Self) -> &'a Self {
         if self.is_root() || other.is_root() {
             return Self::root();
@@ -587,7 +587,7 @@ pub struct PointerBuf(String);
 
 impl PointerBuf {
     /// Creates a new `PointerBuf` pointing to a document root.
-    #[must_use]
+    
     pub fn new() -> Self {
         Self(String::new())
     }
@@ -614,7 +614,7 @@ impl PointerBuf {
     }
 
     /// Coerces to a Pointer slice.
-    #[must_use]
+    
     pub fn as_ptr(&self) -> &Pointer {
         self
     }
