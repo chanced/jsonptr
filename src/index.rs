@@ -34,6 +34,7 @@
 //! ````
 
 use crate::{OutOfBoundsError, ParseIndexError, Token};
+use alloc::string::String;
 use core::fmt::Display;
 
 /// Represents an abstract index into an array.

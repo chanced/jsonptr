@@ -4,7 +4,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use core::{borrow::Borrow, cmp::Ordering, fmt, ops::Deref, slice, str::FromStr};
+use core::{borrow::Borrow, cmp::Ordering, ops::Deref, slice, str::FromStr};
 
 /*
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -91,7 +91,7 @@ impl Pointer {
     #[must_use]
     pub const fn from_static(s: &'static str) -> &'static Self {
         assert!(validate(s).is_ok(), "invalid json pointer");
-        unsafe { &*(std::ptr::from_ref::<str>(s) as *const Self) }
+        unsafe { &*(core::ptr::from_ref::<str>(s) as *const Self) }
     }
 
     /// The encoded string representation of this `Pointer`
@@ -427,7 +427,7 @@ impl<'de: 'p, 'p> serde::Deserialize<'de> for &'p Pointer {
         impl<'a> Visitor<'a> for PointerVisitor {
             type Value = &'a Pointer;
 
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
                 formatter.write_str("a borrowed Pointer")
             }
 

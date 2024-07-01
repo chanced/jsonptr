@@ -2,8 +2,8 @@ use crate::{index::Index, InvalidEncodingError, ParseIndexError};
 use alloc::{
     borrow::Cow,
     string::{String, ToString},
+    vec::Vec,
 };
-use serde::{Deserialize, Serialize};
 
 const ENCODED_TILDE: &[u8] = b"~0";
 const ENCODED_SLASH: &[u8] = b"~1";
@@ -250,7 +250,8 @@ impl<'a> Token<'a> {
     }
 }
 
-impl Serialize for Token<'_> {
+#[cfg(feature = "serde")]
+impl serde::Serialize for Token<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -259,7 +260,8 @@ impl Serialize for Token<'_> {
     }
 }
 
-impl<'de> Deserialize<'de> for Token<'de> {
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for Token<'de> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -311,8 +313,8 @@ impl<'a> From<&Token<'a>> for Token<'a> {
     }
 }
 
-impl core::fmt::Display for Token<'_> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+impl alloc::fmt::Display for Token<'_> {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         write!(f, "{}", self.decoded())
     }
 }

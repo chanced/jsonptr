@@ -8,10 +8,11 @@
     clippy::needless_pass_by_value,
     clippy::expect_fun_call
 )]
+
+#[macro_use]
 extern crate alloc;
 
 use core::{fmt, num::ParseIntError};
-
 pub mod prelude;
 
 #[cfg(feature = "assign")]

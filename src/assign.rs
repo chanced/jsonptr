@@ -202,9 +202,15 @@ enum Assigned<'v, V> {
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 */
 
+#[cfg(feature = "json")]
 mod json {
     use super::{Assign, AssignError, Assigned};
     use crate::{Pointer, Token};
+    use alloc::{
+        string::{String, ToString},
+        vec::Vec,
+    };
+
     use core::mem;
     use serde_json::{map::Entry, Map, Value};
 
@@ -374,6 +380,7 @@ mod json {
 mod toml {
     use super::{Assign, AssignError, Assigned};
     use crate::{Pointer, Token};
+    use alloc::{string::String, vec, vec::Vec};
     use core::mem;
     use toml::{map::Entry, map::Map, Value};
 
@@ -542,8 +549,8 @@ mod toml {
 mod tests {
     use super::{Assign, AssignError};
     use crate::{OutOfBoundsError, ParseIndexError, Pointer};
+    use alloc::str::FromStr;
     use core::fmt::{Debug, Display};
-    use std::str::FromStr;
 
     #[derive(Debug)]
     struct Test<V: Assign> {
@@ -592,6 +599,7 @@ mod tests {
     #[test]
     #[cfg(feature = "json")]
     fn test_assign_json() {
+        use alloc::vec;
         use serde_json::json;
         Test::all([
             Test {
@@ -750,8 +758,8 @@ mod tests {
     #[test]
     #[cfg(feature = "toml")]
     fn test_assign_toml() {
+        use alloc::vec;
         use toml::{toml, Table, Value};
-
         Test::all([
             Test {
                 data: Value::Table(toml::Table::new()),
