@@ -34,6 +34,7 @@
 //! ````
 
 use crate::{OutOfBoundsError, ParseIndexError, Token};
+use alloc::string::String;
 use core::fmt::Display;
 
 /// Represents an abstract index into an array.
@@ -127,7 +128,7 @@ impl Index {
     /// assert_eq!(Index::Num(42).for_len_unchecked(30), 42);
     /// assert_eq!(Index::Next.for_len_unchecked(30), 30);
     /// ````
-    #[must_use]
+
     pub fn for_len_unchecked(&self, length: usize) -> usize {
         match *self {
             Self::Num(idx) => idx,

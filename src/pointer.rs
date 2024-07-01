@@ -4,7 +4,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use core::{borrow::Borrow, cmp::Ordering, fmt, ops::Deref, slice, str::FromStr};
+use core::{borrow::Borrow, cmp::Ordering, ops::Deref, str::FromStr};
 
 /*
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -56,9 +56,12 @@ impl Pointer {
     }
 
     /// Constant reference to a root pointer
-    #[must_use]
     pub const fn root() -> &'static Self {
-        unsafe { &*(core::ptr::from_ref::<str>("") as *const Self) }
+        // unsafe { &*(core::ptr::from_ref::<str>("") as *const Self) }
+        #[allow(clippy::ref_as_ptr)]
+        unsafe {
+            &*("" as *const str as *const Self)
+        }
     }
 
     /// Attempts to parse a string into a `Pointer`.
@@ -88,26 +91,22 @@ impl Pointer {
     /// let bar = data.resolve(POINTER).unwrap();
     /// assert_eq!(bar, "baz");
     /// ````
-    #[must_use]
     pub const fn from_static(s: &'static str) -> &'static Self {
         assert!(validate(s).is_ok(), "invalid json pointer");
-        unsafe { &*(std::ptr::from_ref::<str>(s) as *const Self) }
+        unsafe { &*(core::ptr::from_ref::<str>(s) as *const Self) }
     }
 
     /// The encoded string representation of this `Pointer`
-    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
     /// Converts into an owned [`PointerBuf`]
-    #[must_use]
     pub fn to_buf(&self) -> PointerBuf {
         PointerBuf(self.0.to_string())
     }
 
     /// Returns an iterator of `Token`s in the `Pointer`.
-    #[must_use]
     pub fn tokens(&self) -> Tokens {
         let mut s = self.0.split('/');
         // skipping the first '/'
@@ -116,26 +115,22 @@ impl Pointer {
     }
 
     /// Returns the number of tokens in the `Pointer`.
-    #[must_use]
     pub fn count(&self) -> usize {
         self.tokens().count()
     }
 
     /// Returns `true` if the JSON Pointer equals `""`.
-    #[must_use]
     pub fn is_root(&self) -> bool {
         self.0.is_empty()
     }
 
     /// Returns a `serde_json::Value` representation of this `Pointer`
-    #[must_use]
     #[cfg(feature = "json")]
     pub fn to_json_value(&self) -> serde_json::Value {
         serde_json::Value::String(self.0.to_string())
     }
 
     /// Returns the last `Token` in the `Pointer`.
-    #[must_use]
     pub fn back(&self) -> Option<Token> {
         self.0
             .rsplit_once('/')
@@ -145,13 +140,11 @@ impl Pointer {
     /// Returns the last token in the `Pointer`.
     ///
     /// alias for `back`
-    #[must_use]
     pub fn last(&self) -> Option<Token> {
         self.back()
     }
 
     /// Returns the first `Token` in the `Pointer`.
-    #[must_use]
     pub fn front(&self) -> Option<Token> {
         if self.is_root() {
             return None;
@@ -168,26 +161,21 @@ impl Pointer {
     /// Returns the first `Token` in the `Pointer`.
     ///
     /// alias for `front`
-    #[must_use]
     pub fn first(&self) -> Option<Token> {
         self.front()
     }
 
     /// Splits the `Pointer` into the first `Token` and a remainder `Pointer`.
-    #[must_use]
     pub fn split_front(&self) -> Option<(Token, &Self)> {
         if self.is_root() {
             return None;
         }
         self.0[1..]
-            .split_once('/')
+            .find('/')
             .map_or_else(
                 || (Token::from_encoded_unchecked(&self.0[1..]), Self::root()),
-                |(front, back)| {
-                    // We want to include the delimiter character too!
-                    // SAFETY: if split was successful, then the delimiter
-                    // character exists before the start of the second `str`.
-                    let back = unsafe { extend_one_before(back) };
+                |idx| {
+                    let (front, back) = self.0[1..].split_at(idx);
                     (Token::from_encoded_unchecked(front), Self::new(back))
                 },
             )
@@ -215,7 +203,6 @@ impl Pointer {
     /// assert_eq!(tail, Pointer::from_static("/bar/baz"));
     /// assert_eq!(ptr.split_at(3), None);
     /// ```
-    #[must_use]
     pub fn split_at(&self, idx: usize) -> Option<(&Self, &Self)> {
         if self.0.as_bytes().get(idx).copied() != Some(b'/') {
             return None;
@@ -225,7 +212,6 @@ impl Pointer {
     }
 
     /// Splits the `Pointer` into the parent path and the last `Token`.
-    #[must_use]
     pub fn split_back(&self) -> Option<(&Self, Token)> {
         self.0
             .rsplit_once('/')
@@ -233,7 +219,6 @@ impl Pointer {
     }
 
     /// A pointer to the parent of the current path.
-    #[must_use]
     pub fn parent(&self) -> Option<&Self> {
         self.0.rsplit_once('/').map(|(front, _)| Self::new(front))
     }
@@ -258,7 +243,6 @@ impl Pointer {
     /// let ptr = Pointer::root();
     /// assert_eq!(ptr.get(0), None);
     /// ```
-    #[must_use]
     pub fn get(&self, index: usize) -> Option<Token> {
         self.tokens().nth(index).clone()
     }
@@ -309,7 +293,6 @@ impl Pointer {
     }
 
     /// Finds the commonality between this and another `Pointer`.
-    #[must_use]
     pub fn intersection<'a>(&'a self, other: &Self) -> &'a Self {
         if self.is_root() || other.is_root() {
             return Self::root();
@@ -427,7 +410,7 @@ impl<'de: 'p, 'p> serde::Deserialize<'de> for &'p Pointer {
         impl<'a> Visitor<'a> for PointerVisitor {
             type Value = &'a Pointer;
 
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
                 formatter.write_str("a borrowed Pointer")
             }
 
@@ -587,7 +570,6 @@ pub struct PointerBuf(String);
 
 impl PointerBuf {
     /// Creates a new `PointerBuf` pointing to a document root.
-    #[must_use]
     pub fn new() -> Self {
         Self(String::new())
     }
@@ -614,7 +596,6 @@ impl PointerBuf {
     }
 
     /// Coerces to a Pointer slice.
-    #[must_use]
     pub fn as_ptr(&self) -> &Pointer {
         self
     }
@@ -862,13 +843,6 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
         tok_offset += 1;
     }
     Ok(value)
-}
-
-unsafe fn extend_one_before(s: &str) -> &str {
-    let ptr = s.as_ptr().offset(-1);
-    let len = s.len() + 1;
-    let slice = slice::from_raw_parts(ptr, len);
-    core::str::from_utf8_unchecked(slice)
 }
 
 /*

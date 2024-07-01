@@ -156,7 +156,6 @@ pub enum ResolveError {
 impl ResolveError {
     /// Offset of the partial pointer starting with the token which caused the
     /// error.
-    #[must_use]
     pub fn offset(&self) -> usize {
         match self {
             Self::FailedToParseIndex { offset, .. }
@@ -168,28 +167,24 @@ impl ResolveError {
 
     /// Returns `true` if this error is `FailedToParseIndex`; otherwise returns
     /// `false`.
-    #[must_use]
     pub fn is_unreachable(&self) -> bool {
         matches!(self, Self::Unreachable { .. })
     }
 
     /// Returns `true` if this error is `FailedToParseIndex`; otherwise returns
     /// `false`.
-    #[must_use]
     pub fn is_not_found(&self) -> bool {
         matches!(self, Self::NotFound { .. })
     }
 
     /// Returns `true` if this error is `FailedToParseIndex`; otherwise returns
     /// `false`.
-    #[must_use]
     pub fn is_out_of_bounds(&self) -> bool {
         matches!(self, Self::OutOfBounds { .. })
     }
 
     /// Returns `true` if this error is `FailedToParseIndex`; otherwise returns
     /// `false`.
-    #[must_use]
     pub fn is_failed_to_parse_index(&self) -> bool {
         matches!(self, Self::FailedToParseIndex { .. })
     }

@@ -6,12 +6,14 @@
     clippy::module_name_repetitions,
     clippy::into_iter_without_iter,
     clippy::needless_pass_by_value,
-    clippy::expect_fun_call
+    clippy::expect_fun_call,
+    clippy::must_use_candidate
 )]
+
+#[cfg_attr(not(feature = "std"), macro_use)]
 extern crate alloc;
 
 use core::{fmt, num::ParseIntError};
-
 pub mod prelude;
 
 #[cfg(feature = "assign")]
@@ -88,14 +90,12 @@ impl fmt::Display for ParseError {
 impl ParseError {
     /// Returns `true` if this error is `NoLeadingBackslash`; otherwise returns
     /// `false`.
-    #[must_use]
     pub fn is_no_leading_backslash(&self) -> bool {
         matches!(self, Self::NoLeadingBackslash { .. })
     }
 
     /// Returns `true` if this error is `InvalidEncoding`; otherwise returns
     /// `false`.
-    #[must_use]
     pub fn is_invalid_encoding(&self) -> bool {
         matches!(self, Self::InvalidEncoding { .. })
     }
@@ -112,7 +112,6 @@ impl ParseError {
     /// let err = PointerBuf::parse("/foo/invalid~tilde/invalid").unwrap_err();
     /// assert_eq!(err.pointer_offset(), 4)
     /// ```
-    #[must_use]
     pub fn pointer_offset(&self) -> usize {
         match *self {
             Self::NoLeadingBackslash { .. } => 0,
@@ -132,7 +131,6 @@ impl ParseError {
     /// let err = PointerBuf::parse("/foo/invalid~tilde/invalid").unwrap_err();
     /// assert_eq!(err.source_offset(), 8)
     /// ```
-    #[must_use]
     pub fn source_offset(&self) -> usize {
         match self {
             Self::NoLeadingBackslash { .. } => 0,
@@ -151,7 +149,6 @@ impl ParseError {
     /// let err = PointerBuf::parse("/foo/invalid~tilde/invalid").unwrap_err();
     /// assert_eq!(err.pointer_offset(), 4)
     /// ```
-    #[must_use]
     pub fn complete_offset(&self) -> usize {
         self.source_offset() + self.pointer_offset()
     }
@@ -224,7 +221,6 @@ pub struct InvalidEncodingError {
 
 impl InvalidEncodingError {
     /// The byte offset of the first invalid `~`.
-    #[must_use]
     pub fn offset(&self) -> usize {
         self.offset
     }
@@ -241,25 +237,6 @@ impl fmt::Display for InvalidEncodingError {
 
 #[cfg(feature = "std")]
 impl std::error::Error for InvalidEncodingError {}
-
-/// Indicates that the `Token` could not be parsed as valid RFC 6901 index.
-#[derive(Debug, PartialEq, Eq)]
-pub struct IndexError {
-    source: ParseIntError,
-}
-
-impl core::fmt::Display for IndexError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "failed to parse token as an integer")
-    }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for IndexError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(&self.source)
-    }
-}
 
 /*
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░

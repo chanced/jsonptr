@@ -2,8 +2,8 @@ use crate::{index::Index, InvalidEncodingError, ParseIndexError};
 use alloc::{
     borrow::Cow,
     string::{String, ToString},
+    vec::Vec,
 };
-use serde::{Deserialize, Serialize};
 
 const ENCODED_TILDE: &[u8] = b"~0";
 const ENCODED_SLASH: &[u8] = b"~1";
@@ -143,7 +143,6 @@ impl<'a> Token<'a> {
     ///
     /// If the token is not already owned, this will clone the referenced string
     /// slice.
-    #[must_use]
     pub fn into_owned(self) -> Token<'static> {
         Token {
             inner: Cow::Owned(self.inner.into_owned()),
@@ -157,7 +156,6 @@ impl<'a> Token<'a> {
     ///
     /// This method is like [`Self::into_owned`], except it doesn't take
     /// ownership of the original `Token`.
-    #[must_use]
     pub fn to_owned(&self) -> Token<'static> {
         Token {
             inner: Cow::Owned(self.inner.clone().into_owned()),
@@ -172,7 +170,6 @@ impl<'a> Token<'a> {
     /// # use jsonptr::Token;
     /// assert_eq!(Token::new("~bar").encoded(), "~0bar");
     /// ```
-    #[must_use]
     pub fn encoded(&self) -> &str {
         &self.inner
     }
@@ -185,7 +182,6 @@ impl<'a> Token<'a> {
     /// # use jsonptr::Token;
     /// assert_eq!(Token::new("~bar").decoded(), "~bar");
     /// ```
-    #[must_use]
     pub fn decoded(&self) -> Cow<'_, str> {
         if let Some(i) = self.inner.bytes().position(|b| b == ENC_PREFIX) {
             let input = self.inner.as_bytes();
@@ -250,7 +246,8 @@ impl<'a> Token<'a> {
     }
 }
 
-impl Serialize for Token<'_> {
+#[cfg(feature = "serde")]
+impl serde::Serialize for Token<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -259,7 +256,8 @@ impl Serialize for Token<'_> {
     }
 }
 
-impl<'de> Deserialize<'de> for Token<'de> {
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for Token<'de> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -311,8 +309,8 @@ impl<'a> From<&Token<'a>> for Token<'a> {
     }
 }
 
-impl core::fmt::Display for Token<'_> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+impl alloc::fmt::Display for Token<'_> {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         write!(f, "{}", self.decoded())
     }
 }

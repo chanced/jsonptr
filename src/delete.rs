@@ -194,7 +194,7 @@ mod tests {
             let ptr = Pointer::from_static(ptr);
             let deleted = ptr.delete(&mut data);
             assert_eq!(
-                expected_data, 
+                expected_data,
                 data,
                 "\ntest delete #{i} failed:\ndata not as expected\n\nptr: \"{ptr}\"\n\nexpected data:\n{expected_data:#?}\n\nactual data:\n{data:#?}\n\n"
             );
@@ -215,20 +215,20 @@ mod tests {
     fn test_delete_json() {
         Test::all([
             // 0
-            Test { 
+            Test {
                 ptr: "/foo",
                 data: json!({"foo": "bar"}),
                 expected_data: json!({}),
                 expected_deleted: Some(json!("bar")),
             },
             // 1
-            Test { 
+            Test {
                 ptr: "/foo/bar",
                 data: json!({"foo": {"bar": "baz"}}),
                 expected_data: json!({"foo": {}}),
                 expected_deleted: Some(json!("baz")),
             },
-             // 2
+            // 2
             Test {
                 ptr: "/foo/bar",
                 data: json!({"foo": "bar"}),
@@ -236,13 +236,13 @@ mod tests {
                 expected_deleted: None,
             },
             // 3
-            Test { 
+            Test {
                 ptr: "/foo/bar",
                 data: json!({"foo": {"bar": "baz"}}),
                 expected_data: json!({"foo": {}}),
                 expected_deleted: Some(json!("baz")),
             },
-             // 4
+            // 4
             Test {
                 ptr: "/foo/bar/0",
                 data: json!({"foo": {"bar": ["baz", "qux"]}}),
@@ -250,27 +250,27 @@ mod tests {
                 expected_deleted: Some(json!("baz")),
             },
             // 5
-            Test { 
+            Test {
                 ptr: "/foo/0",
                 data: json!({"foo": "bar"}),
                 expected_data: json!({"foo": "bar"}),
                 expected_deleted: None,
             },
-             // 6
+            // 6
             Test {
                 ptr: "/foo/bar/0/baz",
                 data: json!({"foo": { "bar": [{"baz": "qux", "remaining": "field"}]}}),
                 expected_data: json!({"foo": { "bar": [{"remaining": "field"}]} }),
                 expected_deleted: Some(json!("qux")),
             },
-             // 7 
-             // issue #18 - unable to delete root token https://github.com/chanced/jsonptr/issues/18
-             Test {
+            // 7
+            // issue #18 - unable to delete root token https://github.com/chanced/jsonptr/issues/18
+            Test {
                 ptr: "/Example",
                 data: json!({"Example": 21, "test": "test"}),
                 expected_data: json!({"test": "test"}),
                 expected_deleted: Some(json!(21)),
-            }
+            },
         ]);
     }
     /*
@@ -281,66 +281,66 @@ mod tests {
     #[test]
     #[cfg(feature = "toml")]
     fn test_delete_toml() {
-        use toml::{Value,Table,toml};
+        use toml::{toml, Table, Value};
 
         Test::all([
             // 0
-            Test { 
-                data: toml!{"foo" = "bar"}.into(),
+            Test {
+                data: toml! {"foo" = "bar"}.into(),
                 ptr: "/foo",
                 expected_data: Value::Table(Table::new()),
                 expected_deleted: Some("bar".into()),
             },
             // 1
-            Test { 
-                data: toml!{"foo" = {"bar" = "baz"}}.into(),
+            Test {
+                data: toml! {"foo" = {"bar" = "baz"}}.into(),
                 ptr: "/foo/bar",
-                expected_data: toml!{"foo" = {}}.into(),
+                expected_data: toml! {"foo" = {}}.into(),
                 expected_deleted: Some("baz".into()),
             },
             // 2
-            Test { 
-                data: toml!{"foo" = "bar"}.into(),
+            Test {
+                data: toml! {"foo" = "bar"}.into(),
                 ptr: "/foo/bar",
-                expected_data: toml!{"foo" = "bar"}.into(),
+                expected_data: toml! {"foo" = "bar"}.into(),
                 expected_deleted: None,
             },
             // 3
-            Test { 
-                data: toml!{"foo" = {"bar" = "baz"}}.into(),
+            Test {
+                data: toml! {"foo" = {"bar" = "baz"}}.into(),
                 ptr: "/foo/bar",
-                expected_data: toml!{"foo" = {}}.into(),
+                expected_data: toml! {"foo" = {}}.into(),
                 expected_deleted: Some("baz".into()),
             },
-             // 4
+            // 4
             Test {
-                data: toml!{"foo" = {"bar" = ["baz", "qux"]}}.into(),
+                data: toml! {"foo" = {"bar" = ["baz", "qux"]}}.into(),
                 ptr: "/foo/bar/0",
-                expected_data: toml!{"foo" = {"bar" = ["qux"]}}.into(),
+                expected_data: toml! {"foo" = {"bar" = ["qux"]}}.into(),
                 expected_deleted: Some("baz".into()),
             },
             // 5
-            Test { 
-                data: toml!{"foo" = "bar"}.into(),
+            Test {
+                data: toml! {"foo" = "bar"}.into(),
                 ptr: "/foo/0",
-                expected_data: toml!{"foo" = "bar"}.into(),
+                expected_data: toml! {"foo" = "bar"}.into(),
                 expected_deleted: None,
             },
-             // 6
+            // 6
             Test {
-                data: toml!{"foo" = { "bar" = [{"baz" = "qux", "remaining" = "field"}]}}.into(),
+                data: toml! {"foo" = { "bar" = [{"baz" = "qux", "remaining" = "field"}]}}.into(),
                 ptr: "/foo/bar/0/baz",
-                expected_data: toml!{"foo" = { "bar" = [{"remaining" = "field"}]} }.into(),
+                expected_data: toml! {"foo" = { "bar" = [{"remaining" = "field"}]} }.into(),
                 expected_deleted: Some("qux".into()),
             },
-             // 7 
-             // issue #18 - unable to delete root token https://github.com/chanced/jsonptr/issues/18
+            // 7
+            // issue #18 - unable to delete root token https://github.com/chanced/jsonptr/issues/18
             Test {
-                data: toml!{"Example" = 21 "test" = "test"}.into(),
+                data: toml! {"Example" = 21 "test" = "test"}.into(),
                 ptr: "/Example",
-                expected_data: toml!{"test" = "test"}.into(),
+                expected_data: toml! {"test" = "test"}.into(),
                 expected_deleted: Some(21.into()),
-            }
+            },
         ]);
     }
 }
