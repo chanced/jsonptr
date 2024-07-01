@@ -8,6 +8,7 @@ keywords      = ["json-pointer", "rfc-6901", "6901"]
 license       = "MIT OR Apache-2.0"
 name          = "jsonptr"
 repository    = "https://github.com/chanced/jsonptr"
+rust-version  = "1.60"
 version       = "0.4.7"
 
 [dependencies]
