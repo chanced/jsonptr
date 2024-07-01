@@ -52,11 +52,7 @@ impl Pointer {
     ///
     /// This is a zero-copy constructor
     fn new<S: AsRef<str> + ?Sized>(s: &S) -> &Self {
-        // unsafe { &*(core::ptr::from_ref::<str>(s.as_ref()) as *const Self) }
-        #[allow(clippy::ref_as_ptr)]
-        unsafe {
-            &*(s.as_ref() as *const str as *const Self)
-        }
+        unsafe { &*(core::ptr::from_ref::<str>(s.as_ref()) as *const Self) }
     }
 
     /// Constant reference to a root pointer
@@ -97,11 +93,7 @@ impl Pointer {
     /// ````
     pub const fn from_static(s: &'static str) -> &'static Self {
         assert!(validate(s).is_ok(), "invalid json pointer");
-        // unsafe { &*(core::ptr::from_ref::<str>(s) as *const Self) }
-        #[allow(clippy::ref_as_ptr)]
-        unsafe {
-            &*(s as *const str as *const Self)
-        }
+        unsafe { &*(core::ptr::from_ref::<str>(s) as *const Self) }
     }
 
     /// The encoded string representation of this `Pointer`
