@@ -238,25 +238,6 @@ impl fmt::Display for InvalidEncodingError {
 #[cfg(feature = "std")]
 impl std::error::Error for InvalidEncodingError {}
 
-/// Indicates that the `Token` could not be parsed as valid RFC 6901 index.
-#[derive(Debug, PartialEq, Eq)]
-pub struct IndexError {
-    source: ParseIntError,
-}
-
-impl core::fmt::Display for IndexError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "failed to parse token as an integer")
-    }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for IndexError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(&self.source)
-    }
-}
-
 /*
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 ╔══════════════════════════════════════════════════════════════════════════════╗
