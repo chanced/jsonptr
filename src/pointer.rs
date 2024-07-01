@@ -4,7 +4,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use core::{borrow::Borrow, cmp::Ordering, ops::Deref, slice, str::FromStr};
+use core::{borrow::Borrow, cmp::Ordering, ops::Deref, str::FromStr};
 
 /*
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -171,14 +171,11 @@ impl Pointer {
             return None;
         }
         self.0[1..]
-            .split_once('/')
+            .find('/')
             .map_or_else(
                 || (Token::from_encoded_unchecked(&self.0[1..]), Self::root()),
-                |(front, back)| {
-                    // We want to include the delimiter character too!
-                    // SAFETY: if split was successful, then the delimiter
-                    // character exists before the start of the second `str`.
-                    let back = unsafe { extend_one_before(back) };
+                |idx| {
+                    let (front, back) = self.0[1..].split_at(idx);
                     (Token::from_encoded_unchecked(front), Self::new(back))
                 },
             )
@@ -846,13 +843,6 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
         tok_offset += 1;
     }
     Ok(value)
-}
-
-unsafe fn extend_one_before(s: &str) -> &str {
-    let ptr = s.as_ptr().offset(-1);
-    let len = s.len() + 1;
-    let slice = slice::from_raw_parts(ptr, len);
-    core::str::from_utf8_unchecked(slice)
 }
 
 /*
