@@ -16,6 +16,9 @@ serde      = { version = "1.0.203", optional = true, features = ["alloc"] }
 serde_json = { version = "1.0.119", optional = true, features = ["alloc"] }
 toml       = { version = "0.8", optional = true }
 
+[target.'cfg(any())'.dependencies] # hack
+serde = { version = "1.0.20", optional = true, features = ["alloc"] }
+
 [dev-dependencies]
 quickcheck        = "1.0.3"
 quickcheck_macros = "1.0.0"
