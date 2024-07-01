@@ -4,19 +4,19 @@ on:
     pull_request:
 
 jobs:
-    check:
+    hack:
         name: cargo hack
         runs-on: ubuntu-latest
         steps:
             - uses: taiki-e/install-action@cargo-hack
-            - run: cargo hack check --feature-powerset
+            - run: cargo hack check --feature-powerset --no-dev-deps
     test:
         name: cargo test
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
             - run: cargo test --all-features
-    clippy_lint:
+    clippy:
         name: cargo clippy
         runs-on: ubuntu-latest
         steps:
@@ -26,7 +26,7 @@ jobs:
             - uses: actions-rust-lang/setup-rust-toolchain@v1
             - run: cargo clippy --all-features -- -D warnings
         # check formatting with rustfmt
-    verify_format:
+    rustfmt:
         name: cargo fmt
         runs-on: ubuntu-latest
         steps:
