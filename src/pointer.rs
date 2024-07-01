@@ -60,7 +60,6 @@ impl Pointer {
     }
 
     /// Constant reference to a root pointer
-
     pub const fn root() -> &'static Self {
         // unsafe { &*(core::ptr::from_ref::<str>("") as *const Self) }
         #[allow(clippy::ref_as_ptr)]
@@ -96,7 +95,6 @@ impl Pointer {
     /// let bar = data.resolve(POINTER).unwrap();
     /// assert_eq!(bar, "baz");
     /// ````
-
     pub const fn from_static(s: &'static str) -> &'static Self {
         assert!(validate(s).is_ok(), "invalid json pointer");
         // unsafe { &*(core::ptr::from_ref::<str>(s) as *const Self) }
@@ -256,7 +254,6 @@ impl Pointer {
     /// let ptr = Pointer::root();
     /// assert_eq!(ptr.get(0), None);
     /// ```
-
     pub fn get(&self, index: usize) -> Option<Token> {
         self.tokens().nth(index).clone()
     }
@@ -584,7 +581,6 @@ pub struct PointerBuf(String);
 
 impl PointerBuf {
     /// Creates a new `PointerBuf` pointing to a document root.
-
     pub fn new() -> Self {
         Self(String::new())
     }
@@ -611,7 +607,6 @@ impl PointerBuf {
     }
 
     /// Coerces to a Pointer slice.
-
     pub fn as_ptr(&self) -> &Pointer {
         self
     }

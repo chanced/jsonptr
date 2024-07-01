@@ -143,7 +143,6 @@ impl<'a> Token<'a> {
     ///
     /// If the token is not already owned, this will clone the referenced string
     /// slice.
-    
     pub fn into_owned(self) -> Token<'static> {
         Token {
             inner: Cow::Owned(self.inner.into_owned()),
@@ -157,7 +156,6 @@ impl<'a> Token<'a> {
     ///
     /// This method is like [`Self::into_owned`], except it doesn't take
     /// ownership of the original `Token`.
-    
     pub fn to_owned(&self) -> Token<'static> {
         Token {
             inner: Cow::Owned(self.inner.clone().into_owned()),
@@ -172,7 +170,6 @@ impl<'a> Token<'a> {
     /// # use jsonptr::Token;
     /// assert_eq!(Token::new("~bar").encoded(), "~0bar");
     /// ```
-    
     pub fn encoded(&self) -> &str {
         &self.inner
     }
@@ -185,7 +182,6 @@ impl<'a> Token<'a> {
     /// # use jsonptr::Token;
     /// assert_eq!(Token::new("~bar").decoded(), "~bar");
     /// ```
-    
     pub fn decoded(&self) -> Cow<'_, str> {
         if let Some(i) = self.inner.bytes().position(|b| b == ENC_PREFIX) {
             let input = self.inner.as_bytes();

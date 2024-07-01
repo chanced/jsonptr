@@ -90,14 +90,12 @@ impl fmt::Display for ParseError {
 impl ParseError {
     /// Returns `true` if this error is `NoLeadingBackslash`; otherwise returns
     /// `false`.
-
     pub fn is_no_leading_backslash(&self) -> bool {
         matches!(self, Self::NoLeadingBackslash { .. })
     }
 
     /// Returns `true` if this error is `InvalidEncoding`; otherwise returns
     /// `false`.
-
     pub fn is_invalid_encoding(&self) -> bool {
         matches!(self, Self::InvalidEncoding { .. })
     }
@@ -114,7 +112,6 @@ impl ParseError {
     /// let err = PointerBuf::parse("/foo/invalid~tilde/invalid").unwrap_err();
     /// assert_eq!(err.pointer_offset(), 4)
     /// ```
-
     pub fn pointer_offset(&self) -> usize {
         match *self {
             Self::NoLeadingBackslash { .. } => 0,
@@ -134,7 +131,6 @@ impl ParseError {
     /// let err = PointerBuf::parse("/foo/invalid~tilde/invalid").unwrap_err();
     /// assert_eq!(err.source_offset(), 8)
     /// ```
-
     pub fn source_offset(&self) -> usize {
         match self {
             Self::NoLeadingBackslash { .. } => 0,
@@ -153,7 +149,6 @@ impl ParseError {
     /// let err = PointerBuf::parse("/foo/invalid~tilde/invalid").unwrap_err();
     /// assert_eq!(err.pointer_offset(), 4)
     /// ```
-
     pub fn complete_offset(&self) -> usize {
         self.source_offset() + self.pointer_offset()
     }
@@ -226,7 +221,6 @@ pub struct InvalidEncodingError {
 
 impl InvalidEncodingError {
     /// The byte offset of the first invalid `~`.
-
     pub fn offset(&self) -> usize {
         self.offset
     }
