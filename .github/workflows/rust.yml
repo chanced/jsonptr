@@ -8,7 +8,6 @@ jobs:
         name: cargo hack
         runs-on: ubuntu-latest
         steps:
-            - uses: actions-rust-lang/setup-rust-toolchain@v1
             - uses: taiki-e/install-action@cargo-hack
             - run: cargo hack check --feature-powerset --no-dev-deps
     test:
