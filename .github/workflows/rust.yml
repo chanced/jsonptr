@@ -9,7 +9,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: taiki-e/install-action@cargo-hack
-            - run: cargo hack check --feature-powerset --no-dev-deps
+            - run: cargo hack check --feature-powerset
     test:
         name: cargo test
         runs-on: ubuntu-latest
