@@ -332,3 +332,38 @@ impl fmt::Display for ReplaceTokenError {
 
 #[cfg(feature = "std")]
 impl std::error::Error for ReplaceTokenError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_error_display() {
+        assert_eq!(
+            ParseError::NoLeadingBackslash.to_string(),
+            "json pointer is malformed as it does not start with a backslash ('/')"
+        );
+    }
+
+    #[test]
+    fn parse_index_error_from_parse_int_error() {
+        assert_eq!(
+            Token::new("a").to_index().unwrap_err().to_string(),
+            "failed to parse token as an integer"
+        );
+    }
+
+    #[test]
+    fn invalid_encoding_error_display() {
+        assert_eq!(
+            Token::from_encoded("~").unwrap_err().to_string(),
+            "json pointer is malformed due to invalid encoding ('~' not followed by '0' or '1')"
+        );
+    }
+
+    #[test]
+    fn out_of_bounds_error_display() {
+        let error = Token::new("10").to_index().unwrap().for_len(5).unwrap_err();
+        assert_eq!(error.to_string(), "index 10 out of bounds (limit: 5)");
+    }
+}
