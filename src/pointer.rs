@@ -468,7 +468,6 @@ impl PartialEq<Pointer> for String {
     }
 }
 
-
 impl PartialEq<Pointer> for str {
     fn eq(&self, other: &Pointer) -> bool {
         self == &other.0
@@ -1455,19 +1454,18 @@ mod tests {
         let invalid = serde_json::from_str::<&Pointer>("\"foo/bar\"");
         assert!(invalid.is_err());
         assert_eq!(
-            invalid.unwrap_err().to_string(), 
+            invalid.unwrap_err().to_string(),
             "failed to parse json pointer\n\ncaused by:\njson pointer is malformed as it does not start with a backslash ('/') at line 1 column 9"
         );
     }
 
     #[test]
-    fn to_owned(){
+    fn to_owned() {
         let ptr = Pointer::from_static("/bread/crumbs");
         let buf = ptr.to_owned();
         assert_eq!(buf, "/bread/crumbs");
     }
 
-    
     #[test]
     #[allow(clippy::cmp_owned)]
     fn partial_eq() {
