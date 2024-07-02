@@ -14,7 +14,7 @@ coverage:
 # Test files aren't important for coverage
 ignore:
     - "tests"
-    - "src/arbitrary.rs"
+    - "**/arbitrary.rs"
 
 # Make comments less noisy
 comment:
