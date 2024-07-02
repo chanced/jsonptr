@@ -223,33 +223,33 @@ mod tests {
     }
 
     #[test]
-    fn test_index_try_from_token_num() {
+    fn index_try_from_token_num() {
         let token = Token::new("3");
         let index = Index::try_from(&token).unwrap();
         assert_eq!(index, Index::Num(3));
     }
 
     #[test]
-    fn test_index_try_from_token_next() {
+    fn index_try_from_token_next() {
         let token = Token::new("-");
         let index = Index::try_from(&token).unwrap();
         assert_eq!(index, Index::Next);
     }
 
     #[test]
-    fn test_index_try_from_str_num() {
+    fn index_try_from_str_num() {
         let index = Index::try_from("42").unwrap();
         assert_eq!(index, Index::Num(42));
     }
 
     #[test]
-    fn test_index_try_from_str_next() {
+    fn index_try_from_str_next() {
         let index = Index::try_from("-").unwrap();
         assert_eq!(index, Index::Next);
     }
 
     #[test]
-    fn test_index_try_from_string_num() {
+    fn index_try_from_string_num() {
         let index = Index::try_from(String::from("7")).unwrap();
         assert_eq!(index, Index::Num(7));
     }
@@ -261,30 +261,30 @@ mod tests {
     }
 
     #[test]
-    fn test_index_for_len_incl_valid() {
+    fn index_for_len_incl_valid() {
         assert_eq!(Index::Num(0).for_len_incl(1), Ok(0));
         assert_eq!(Index::Next.for_len_incl(2), Ok(2));
     }
 
     #[test]
-    fn test_index_for_len_incl_out_of_bounds() {
+    fn index_for_len_incl_out_of_bounds() {
         assert!(Index::Num(2).for_len_incl(1).is_err());
     }
 
     #[test]
-    fn test_index_for_len_unchecked() {
+    fn index_for_len_unchecked() {
         assert_eq!(Index::Num(10).for_len_unchecked(5), 10);
         assert_eq!(Index::Next.for_len_unchecked(3), 3);
     }
 
     #[test]
-    fn test_display_index_num() {
+    fn display_index_num() {
         let index = Index::Num(5);
         assert_eq!(index.to_string(), "5");
     }
 
     #[test]
-    fn test_display_index_next() {
+    fn display_index_next() {
         assert_eq!(Index::Next.to_string(), "-");
     }
 }

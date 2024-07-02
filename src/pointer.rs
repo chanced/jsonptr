@@ -445,12 +445,29 @@ impl PartialEq<&str> for Pointer {
         &&self.0 == other
     }
 }
-
+impl<'p> PartialEq<String> for &'p Pointer {
+    fn eq(&self, other: &String) -> bool {
+        self.0.eq(other)
+    }
+}
 impl PartialEq<str> for Pointer {
     fn eq(&self, other: &str) -> bool {
         &self.0 == other
     }
 }
+
+impl PartialEq<Pointer> for &str {
+    fn eq(&self, other: &Pointer) -> bool {
+        *self == (&other.0)
+    }
+}
+
+impl PartialEq<Pointer> for String {
+    fn eq(&self, other: &Pointer) -> bool {
+        self == &other.0
+    }
+}
+
 
 impl PartialEq<Pointer> for str {
     fn eq(&self, other: &Pointer) -> bool {
@@ -871,19 +888,19 @@ mod tests {
         let _ = Pointer::from_static("foo/bar");
     }
     #[test]
-    fn test_strip_suffix() {
+    fn strip_suffix() {
         let p = Pointer::new("/example/pointer/to/some/value");
         let stripped = p.strip_suffix(Pointer::new("/to/some/value")).unwrap();
         assert_eq!(stripped, "/example/pointer");
     }
     #[test]
-    fn test_strip_prefix() {
+    fn strip_prefix() {
         let p = Pointer::new("/example/pointer/to/some/value");
         let stripped = p.strip_prefix(Pointer::new("/example/pointer")).unwrap();
         assert_eq!(stripped, "/to/some/value");
     }
     #[test]
-    fn test_parse() {
+    fn parse() {
         let tests = [
             ("", Ok("")),
             ("/", Ok("/")),
@@ -932,7 +949,7 @@ mod tests {
     }
 
     #[test]
-    fn test_push_pop_back() {
+    fn push_pop_back() {
         let mut ptr = PointerBuf::default();
         assert_eq!(ptr, "", "default, root pointer should equal \"\"");
         assert_eq!(ptr.count(), 0, "default pointer should have 0 tokens");
@@ -963,7 +980,7 @@ mod tests {
     }
 
     #[test]
-    fn test_replace_token() {
+    fn replace_token() {
         let mut ptr = PointerBuf::try_from("/test/token").unwrap();
 
         let res = ptr.replace_token(0, "new".into());
@@ -979,7 +996,7 @@ mod tests {
     }
 
     #[test]
-    fn test_push_pop_front() {
+    fn push_pop_front() {
         let mut ptr = PointerBuf::default();
         assert_eq!(ptr, "");
         assert_eq!(ptr.count(), 0);
@@ -1051,7 +1068,7 @@ mod tests {
     }
 
     #[test]
-    fn test_formatting() {
+    fn formatting() {
         assert_eq!(PointerBuf::from_tokens(["foo", "bar"]), "/foo/bar");
         assert_eq!(
             PointerBuf::from_tokens(["~/foo", "~bar", "/baz"]),
@@ -1062,7 +1079,7 @@ mod tests {
     }
 
     #[test]
-    fn test_last() {
+    fn last() {
         let ptr = Pointer::from_static("/foo/bar");
 
         assert_eq!(ptr.last(), Some("bar".into()));
@@ -1081,7 +1098,7 @@ mod tests {
     }
 
     #[test]
-    fn test_first() {
+    fn first() {
         let ptr = Pointer::from_static("/foo/bar");
         assert_eq!(ptr.first(), Some("foo".into()));
 
@@ -1093,7 +1110,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pointerbuf_try_from() {
+    fn pointerbuf_try_from() {
         let ptr = PointerBuf::from_tokens(["foo", "bar", "~/"]);
 
         assert_eq!(PointerBuf::try_from("/foo/bar/~0~1").unwrap(), ptr);
@@ -1101,9 +1118,27 @@ mod tests {
         assert_eq!(ptr, into);
     }
 
+    #[test]
+    fn default() {
+        let ptr = PointerBuf::default();
+        assert_eq!(ptr, "");
+        assert_eq!(ptr.count(), 0);
+
+        let ptr = <&Pointer>::default();
+        assert_eq!(ptr, "");
+    }
+
+    #[test]
+    #[cfg(all(feature = "serde", feature = "json"))]
+    fn to_json_value() {
+        use serde_json::Value;
+        let ptr = Pointer::from_static("/foo/bar");
+        assert_eq!(ptr.to_json_value(), Value::String(String::from("/foo/bar")));
+    }
+
     #[cfg(all(feature = "resolve", feature = "json"))]
     #[test]
-    fn test_resolve() {
+    fn resolve() {
         // full tests in resolve.rs
         use serde_json::json;
         let value = json!({
@@ -1120,7 +1155,7 @@ mod tests {
 
     #[cfg(all(feature = "delete", feature = "json"))]
     #[test]
-    fn test_delete() {
+    fn delete() {
         use serde_json::json;
         let mut value = json!({
             "foo": {
@@ -1144,7 +1179,7 @@ mod tests {
 
     #[cfg(all(feature = "assign", feature = "json"))]
     #[test]
-    fn test_assign() {
+    fn assign() {
         use serde_json::json;
         let mut value = json!({});
         let ptr = Pointer::from_static("/foo/bar");
@@ -1161,7 +1196,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get() {
+    fn get() {
         let ptr = Pointer::from_static("/0/1/2/3/4/5/6/7/8/9");
         for i in 0..10 {
             assert_eq!(ptr.get(i).unwrap().decoded(), i.to_string());
@@ -1169,7 +1204,7 @@ mod tests {
     }
 
     #[test]
-    fn test_replace_token_success() {
+    fn replace_token_success() {
         let mut ptr = PointerBuf::from_tokens(["foo", "bar", "baz"]);
         assert!(ptr.replace_token(1, "qux".into()).is_ok());
         assert_eq!(ptr, PointerBuf::from_tokens(["foo", "qux", "baz"]));
@@ -1182,21 +1217,21 @@ mod tests {
     }
 
     #[test]
-    fn test_replace_token_out_of_bounds() {
+    fn replace_token_out_of_bounds() {
         let mut ptr = PointerBuf::from_tokens(["foo", "bar"]);
         assert!(ptr.replace_token(2, "baz".into()).is_err());
         assert_eq!(ptr, PointerBuf::from_tokens(["foo", "bar"])); // Ensure original pointer is unchanged
     }
 
     #[test]
-    fn test_replace_token_with_empty_string() {
+    fn replace_token_with_empty_string() {
         let mut ptr = PointerBuf::from_tokens(["foo", "bar", "baz"]);
         assert!(ptr.replace_token(1, "".into()).is_ok());
         assert_eq!(ptr, PointerBuf::from_tokens(["foo", "", "baz"]));
     }
 
     #[test]
-    fn test_replace_token_in_empty_pointer() {
+    fn replace_token_in_empty_pointer() {
         let mut ptr = PointerBuf::default();
         assert!(ptr.replace_token(0, "foo".into()).is_err());
         assert_eq!(ptr, PointerBuf::default()); // Ensure the pointer remains empty
@@ -1399,7 +1434,7 @@ mod tests {
 
     #[cfg(all(feature = "json", feature = "std", feature = "serde"))]
     #[test]
-    fn test_serde() {
+    fn serde() {
         use serde::Deserialize;
         let ptr = PointerBuf::from_tokens(["foo", "bar"]);
         let json = serde_json::to_string(&ptr).unwrap();
@@ -1416,10 +1451,36 @@ mod tests {
         assert_eq!(p, ptr);
         let s = serde_json::to_string(p).unwrap();
         assert_eq!(json, s);
+
+        let invalid = serde_json::from_str::<&Pointer>("\"foo/bar\"");
+        assert!(invalid.is_err());
+        assert_eq!(
+            invalid.unwrap_err().to_string(), 
+            "failed to parse json pointer\n\ncaused by:\njson pointer is malformed as it does not start with a backslash ('/') at line 1 column 9"
+        );
     }
 
     #[test]
-    fn test_intersection() {
+    fn to_owned(){
+        let ptr = Pointer::from_static("/bread/crumbs");
+        let buf = ptr.to_owned();
+        assert_eq!(buf, "/bread/crumbs");
+    }
+
+    
+    #[test]
+    #[allow(clippy::cmp_owned)]
+    fn partial_eq() {
+        let p = Pointer::from_static("/bread/crumbs");
+        assert!(p == "/bread/crumbs");
+        assert!(p == String::from("/bread/crumbs"));
+        assert!(p == p.to_owned());
+        assert!(p == Pointer::from_static("/bread/crumbs"));
+        assert!(p != Pointer::from_static("/not/bread/crumbs/"));
+    }
+
+    #[test]
+    fn intersection() {
         struct Test {
             base: &'static str,
             a_suffix: &'static str,

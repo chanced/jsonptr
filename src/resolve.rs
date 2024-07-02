@@ -454,7 +454,7 @@ mod tests {
 
     #[test]
     #[cfg(feature = "json")]
-    fn test_resolve_json() {
+    fn resolve_json() {
         use serde_json::json;
 
         let data = &json!({
@@ -476,7 +476,7 @@ mod tests {
             " ": 7,
             "m~n": 8
         });
-        // let data = &test_data;
+        // let data = &data;
 
         Test::all([
             // 0
@@ -567,7 +567,7 @@ mod tests {
     */
     #[test]
     #[cfg(feature = "toml")]
-    fn test_resolve_toml() {
+    fn resolve_toml() {
         use toml::{toml, Value};
 
         let data = &Value::Table(toml! {
@@ -588,7 +588,7 @@ mod tests {
             " " = 7
             "m~n" = 8
         });
-        // let data = &test_data;
+        // let data = &data;
 
         Test::all([
             // 0

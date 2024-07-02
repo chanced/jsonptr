@@ -598,7 +598,7 @@ mod tests {
 
     #[test]
     #[cfg(feature = "json")]
-    fn test_assign_json() {
+    fn assign_json() {
         use alloc::vec;
         use serde_json::json;
         Test::all([
@@ -757,7 +757,7 @@ mod tests {
 
     #[test]
     #[cfg(feature = "toml")]
-    fn test_assign_toml() {
+    fn assign_toml() {
         use alloc::vec;
         use toml::{toml, Table, Value};
         Test::all([

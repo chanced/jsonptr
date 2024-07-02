@@ -331,13 +331,13 @@ mod tests {
     use quickcheck_macros::quickcheck;
 
     #[test]
-    fn test_from() {
+    fn from() {
         assert_eq!(Token::from("/").encoded(), "~1");
         assert_eq!(Token::from("~/").encoded(), "~0~1");
     }
 
     #[test]
-    fn test_to_index() {
+    fn to_index() {
         assert_eq!(Token::new("-").to_index(), Ok(Index::Next));
         assert_eq!(Token::new("0").to_index(), Ok(Index::Num(0)));
         assert_eq!(Token::new("2").to_index(), Ok(Index::Num(2)));
@@ -346,13 +346,13 @@ mod tests {
     }
 
     #[test]
-    fn test_new() {
+    fn new() {
         assert_eq!(Token::new("~1").encoded(), "~01");
         assert_eq!(Token::new("a/b").encoded(), "a~1b");
     }
 
     #[test]
-    fn test_serde() {
+    fn serde() {
         let token = Token::from_encoded("foo~0").unwrap();
         let json = serde_json::to_string(&token).unwrap();
         assert_eq!(json, "\"foo~\"");
@@ -361,7 +361,7 @@ mod tests {
     }
 
     #[test]
-    fn test_from_encoded() {
+    fn from_encoded() {
         assert_eq!(Token::from_encoded("~1").unwrap().encoded(), "~1");
         assert_eq!(Token::from_encoded("~0~1").unwrap().encoded(), "~0~1");
         let t = Token::from_encoded("a~1b").unwrap();

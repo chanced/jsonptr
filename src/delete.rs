@@ -212,7 +212,7 @@ mod tests {
     */
     #[test]
     #[cfg(feature = "json")]
-    fn test_delete_json() {
+    fn delete_json() {
         Test::all([
             // 0
             Test {
@@ -280,7 +280,7 @@ mod tests {
     */
     #[test]
     #[cfg(feature = "toml")]
-    fn test_delete_toml() {
+    fn delete_toml() {
         use toml::{toml, Table, Value};
 
         Test::all([
