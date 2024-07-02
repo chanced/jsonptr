@@ -129,7 +129,7 @@ impl Index {
     /// assert_eq!(Index::Next.for_len_unchecked(30), 30);
     ///
     /// // no bounds checks
-    /// assert_eq!(Index::Num(34).for_len_unchecked(40), 40);
+    /// assert_eq!(Index::Num(40).for_len_unchecked(34), 40);
     /// assert_eq!(Index::Next.for_len_unchecked(34), 34);
     /// ````
     pub fn for_len_unchecked(&self, length: usize) -> usize {
