@@ -347,7 +347,7 @@ mod tests {
 
     #[test]
     fn test_new() {
-        assert_eq!(Token::new("~1").encoded(), "~0~1");
+        assert_eq!(Token::new("~1").encoded(), "~01");
         assert_eq!(Token::new("a/b").encoded(), "~1a~1b");
     }
 
