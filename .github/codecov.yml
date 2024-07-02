@@ -1,6 +1,6 @@
 # ref: https://docs.codecov.com/docs/codecovyml-reference
 coverage:
-    language: rust,
+    language: rust
     # Hold ourselves to a high bar
     range: 85..100
     round: down
