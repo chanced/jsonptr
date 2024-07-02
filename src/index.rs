@@ -35,7 +35,7 @@
 
 use crate::{OutOfBoundsError, ParseIndexError, Token};
 use alloc::string::String;
-use core::fmt::Display;
+use core::{fmt::Display, str::FromStr};
 
 /// Represents an abstract index into an array.
 ///
@@ -140,6 +140,18 @@ impl Index {
     }
 }
 
+impl FromStr for Index {
+    type Err = ParseIndexError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == "-" {
+            Ok(Index::Next)
+        } else {
+            Ok(s.parse::<usize>().map(Index::Num)?)
+        }
+    }
+}
+
 impl Display for Index {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
@@ -172,11 +184,7 @@ impl TryFrom<&str> for Index {
     type Error = ParseIndexError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        if value == "-" {
-            Ok(Index::Next)
-        } else {
-            Ok(value.parse::<usize>().map(Index::Num)?)
-        }
+        Index::from_str(value)
     }
 }
 
@@ -187,11 +195,96 @@ macro_rules! derive_try_from {
                 type Error = ParseIndexError;
 
                 fn try_from(value: $t) -> Result<Self, Self::Error> {
-                    value.try_into()
+                    Index::from_str(&value)
                 }
             }
         )*
     }
 }
 
-derive_try_from!(Token<'_>, String, &String);
+impl TryFrom<Token<'_>> for Index {
+    type Error = ParseIndexError;
+
+    fn try_from(tok: Token) -> Result<Self, Self::Error> {
+        Index::from_str(tok.encoded())
+    }
+}
+derive_try_from!(String, &String);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Token;
+
+    #[test]
+    fn index_from_usize() {
+        let index = Index::from(5usize);
+        assert_eq!(index, Index::Num(5));
+    }
+
+    #[test]
+    fn test_index_try_from_token_num() {
+        let token = Token::new("3");
+        let index = Index::try_from(&token).unwrap();
+        assert_eq!(index, Index::Num(3));
+    }
+
+    #[test]
+    fn test_index_try_from_token_next() {
+        let token = Token::new("-");
+        let index = Index::try_from(&token).unwrap();
+        assert_eq!(index, Index::Next);
+    }
+
+    #[test]
+    fn test_index_try_from_str_num() {
+        let index = Index::try_from("42").unwrap();
+        assert_eq!(index, Index::Num(42));
+    }
+
+    #[test]
+    fn test_index_try_from_str_next() {
+        let index = Index::try_from("-").unwrap();
+        assert_eq!(index, Index::Next);
+    }
+
+    #[test]
+    fn test_index_try_from_string_num() {
+        let index = Index::try_from(String::from("7")).unwrap();
+        assert_eq!(index, Index::Num(7));
+    }
+
+    #[test]
+    fn testindex_try_from_string_next() {
+        let index = Index::try_from(String::from("-")).unwrap();
+        assert_eq!(index, Index::Next);
+    }
+
+    #[test]
+    fn test_index_for_len_incl_valid() {
+        assert_eq!(Index::Num(0).for_len_incl(1), Ok(0));
+        assert_eq!(Index::Next.for_len_incl(2), Ok(2));
+    }
+
+    #[test]
+    fn test_index_for_len_incl_out_of_bounds() {
+        assert!(Index::Num(2).for_len_incl(1).is_err());
+    }
+
+    #[test]
+    fn test_index_for_len_unchecked() {
+        assert_eq!(Index::Num(10).for_len_unchecked(5), 10);
+        assert_eq!(Index::Next.for_len_unchecked(3), 3);
+    }
+
+    #[test]
+    fn test_display_index_num() {
+        let index = Index::Num(5);
+        assert_eq!(index.to_string(), "5");
+    }
+
+    #[test]
+    fn test_display_index_next() {
+        assert_eq!(Index::Next.to_string(), "-");
+    }
+}
