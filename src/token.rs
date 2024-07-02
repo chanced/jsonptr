@@ -337,6 +337,30 @@ mod tests {
     }
 
     #[test]
+    fn test_to_index() {
+        assert_eq!(Token::new("-").to_index(), Ok(Index::Next));
+        assert_eq!(Token::new("0").to_index(), Ok(Index::Num(0)));
+        assert_eq!(Token::new("2").to_index(), Ok(Index::Num(2)));
+        assert!(Token::new("a").to_index().is_err());
+        assert!(Token::new("-1").to_index().is_err());
+    }
+
+    #[test]
+    fn test_new() {
+        assert_eq!(Token::new("~1").encoded(), "~0~1");
+        assert_eq!(Token::new("a/b").encoded(), "~1a~1b");
+    }
+
+    #[test]
+    fn test_serde() {
+        let token = Token::from_encoded("foo~0").unwrap();
+        let json = serde_json::to_string(&token).unwrap();
+        assert_eq!(json, "\"foo~\"");
+        let deserialized: Token = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, token);
+    }
+
+    #[test]
     fn test_from_encoded() {
         assert_eq!(Token::from_encoded("~1").unwrap().encoded(), "~1");
         assert_eq!(Token::from_encoded("~0~1").unwrap().encoded(), "~0~1");
