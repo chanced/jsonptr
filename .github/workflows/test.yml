@@ -131,24 +131,21 @@ jobs:
         # for lots of more discussion
         runs-on: ubuntu-latest
         name: ubuntu / stable / coverage
-        container:
-            image: xd009642/tarpaulin:develop-nightly
-            options: --security-opt seccomp=unconfined
         steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
+            - uses: actions/checkout@v4
               with:
                   submodules: true
             - name: Install stable
               uses: dtolnay/rust-toolchain@stable
               with:
                   components: llvm-tools-preview
+            - name: cargo install cargo-llvm-cov
+              uses: taiki-e/install-action@cargo-llvm-cov
             - name: cargo generate-lockfile
               if: hashFiles('Cargo.lock') == ''
               run: cargo generate-lockfile
-            - name: Generate code coverage
-              run: |
-                  cargo +nightly tarpaulin --verbose --all-features --workspace --timeout 120 --out xml
+            - name: cargo llvm-cov
+              run: cargo llvm-cov --locked --all-features --lcov --output-path lcov.info
             - name: Record Rust version
               run: echo "RUST=$(rustc --version)" >> "$GITHUB_ENV"
             - name: Upload to codecov.io
