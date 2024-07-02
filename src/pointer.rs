@@ -670,7 +670,7 @@ impl PointerBuf {
             });
         }
         let mut tokens = self.tokens().collect::<Vec<_>>();
-        if index > tokens.len() {
+        if index >= tokens.len() {
             return Err(ReplaceTokenError {
                 count: tokens.len(),
                 index,
@@ -1167,6 +1167,41 @@ mod tests {
             assert_eq!(ptr.get(i).unwrap().decoded(), i.to_string());
         }
     }
+
+    #[test]
+    fn test_replace_token_success() {
+        let mut ptr = PointerBuf::from_tokens(["foo", "bar", "baz"]);
+        assert!(ptr.replace_token(1, "qux".into()).is_ok());
+        assert_eq!(ptr, PointerBuf::from_tokens(["foo", "qux", "baz"]));
+
+        assert!(ptr.replace_token(0, "norf".into()).is_ok());
+        assert_eq!(ptr, PointerBuf::from_tokens(["norf", "qux", "baz"]));
+
+        assert!(ptr.replace_token(2, "quux".into()).is_ok());
+        assert_eq!(ptr, PointerBuf::from_tokens(["norf", "qux", "quux"]));
+    }
+
+    #[test]
+    fn test_replace_token_out_of_bounds() {
+        let mut ptr = PointerBuf::from_tokens(["foo", "bar"]);
+        assert!(ptr.replace_token(2, "baz".into()).is_err());
+        assert_eq!(ptr, PointerBuf::from_tokens(["foo", "bar"])); // Ensure original pointer is unchanged
+    }
+
+    #[test]
+    fn test_replace_token_with_empty_string() {
+        let mut ptr = PointerBuf::from_tokens(["foo", "bar", "baz"]);
+        assert!(ptr.replace_token(1, "".into()).is_ok());
+        assert_eq!(ptr, PointerBuf::from_tokens(["foo", "", "baz"]));
+    }
+
+    #[test]
+    fn test_replace_token_in_empty_pointer() {
+        let mut ptr = PointerBuf::default();
+        assert!(ptr.replace_token(0, "foo".into()).is_err());
+        assert_eq!(ptr, PointerBuf::default()); // Ensure the pointer remains empty
+    }
+
     #[test]
     fn pop_back_works_with_empty_strings() {
         {
