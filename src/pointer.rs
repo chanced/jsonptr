@@ -228,6 +228,10 @@ impl Pointer {
         self.0.strip_suffix(&suffix.0).map(Self::new)
     }
 
+    /// Returns the pointer stripped of the given prefix.
+    pub fn strip_prefix<'a>(&'a self, prefix: &Self) -> Option<&'a Self> {
+        self.0.strip_prefix(&prefix.0).map(Self::new)
+    }
     /// Attempts to get a `Token` by the index. Returns `None` if the index is
     /// out of bounds.
     ///
@@ -866,7 +870,18 @@ mod tests {
     fn from_const_validates() {
         let _ = Pointer::from_static("foo/bar");
     }
-
+    #[test]
+    fn test_strip_suffix() {
+        let p = Pointer::new("/example/pointer/to/some/value");
+        let stripped = p.strip_suffix(Pointer::new("/to/some/value")).unwrap();
+        assert_eq!(stripped, "/example/pointer");
+    }
+    #[test]
+    fn test_strip_prefix() {
+        let p = Pointer::new("/example/pointer/to/some/value");
+        let stripped = p.strip_prefix(Pointer::new("/example/pointer")).unwrap();
+        assert_eq!(stripped, "/to/some/value");
+    }
     #[test]
     fn test_parse() {
         let tests = [
@@ -1086,6 +1101,72 @@ mod tests {
         assert_eq!(ptr, into);
     }
 
+    #[cfg(all(feature = "resolve", feature = "json"))]
+    #[test]
+    fn test_resolve() {
+        // full tests in resolve.rs
+        use serde_json::json;
+        let value = json!({
+            "foo": {
+                "bar": {
+                    "baz": "qux"
+                }
+            }
+        });
+        let ptr = Pointer::from_static("/foo/bar/baz");
+        let resolved = ptr.resolve(&value).unwrap();
+        assert_eq!(resolved, &json!("qux"));
+    }
+
+    #[cfg(all(feature = "delete", feature = "json"))]
+    #[test]
+    fn test_delete() {
+        use serde_json::json;
+        let mut value = json!({
+            "foo": {
+                "bar": {
+                    "baz": "qux"
+                }
+            }
+        });
+        let ptr = Pointer::from_static("/foo/bar/baz");
+        let deleted = ptr.delete(&mut value).unwrap();
+        assert_eq!(deleted, json!("qux"));
+        assert_eq!(
+            value,
+            json!({
+                "foo": {
+                    "bar": {}
+                }
+            })
+        );
+    }
+
+    #[cfg(all(feature = "assign", feature = "json"))]
+    #[test]
+    fn test_assign() {
+        use serde_json::json;
+        let mut value = json!({});
+        let ptr = Pointer::from_static("/foo/bar");
+        let replaced = ptr.assign(&mut value, json!("baz")).unwrap();
+        assert_eq!(replaced, None);
+        assert_eq!(
+            value,
+            json!({
+                "foo": {
+                    "bar": "baz"
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn test_get() {
+        let ptr = Pointer::from_static("/0/1/2/3/4/5/6/7/8/9");
+        for i in 0..10 {
+            assert_eq!(ptr.get(i).unwrap().decoded(), i.to_string());
+        }
+    }
     #[test]
     fn pop_back_works_with_empty_strings() {
         {
@@ -1281,6 +1362,27 @@ mod tests {
         TestResult::from_bool(isect == base)
     }
 
+    #[cfg(all(feature = "json", feature = "std", feature = "serde"))]
+    #[test]
+    fn test_serde() {
+        use serde::Deserialize;
+        let ptr = PointerBuf::from_tokens(["foo", "bar"]);
+        let json = serde_json::to_string(&ptr).unwrap();
+        assert_eq!(json, "\"/foo/bar\"");
+        let deserialized: PointerBuf = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, ptr);
+
+        let ptr = Pointer::from_static("/foo/bar");
+        let json = serde_json::to_string(&ptr).unwrap();
+        assert_eq!(json, "\"/foo/bar\"");
+
+        let mut de = serde_json::Deserializer::from_str("\"/foo/bar\"");
+        let p = <&Pointer>::deserialize(&mut de).unwrap();
+        assert_eq!(p, ptr);
+        let s = serde_json::to_string(p).unwrap();
+        assert_eq!(json, s);
+    }
+
     #[test]
     fn test_intersection() {
         struct Test {
@@ -1294,6 +1396,11 @@ mod tests {
                 base: "",
                 a_suffix: "/",
                 b_suffix: "/a/b/c",
+            },
+            Test {
+                base: "",
+                a_suffix: "",
+                b_suffix: "",
             },
             Test {
                 base: "/a",
