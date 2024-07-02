@@ -1713,5 +1713,4 @@ mod tests {
             "json pointer is malformed as it does not start with a backslash ('/')"
         );
     }
-
 }
