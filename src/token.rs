@@ -1,6 +1,7 @@
-use crate::{index::Index, InvalidEncodingError, ParseIndexError};
+use crate::index::{Index, ParseIndexError};
 use alloc::{
     borrow::Cow,
+    fmt,
     string::{String, ToString},
     vec::Vec,
 };
@@ -314,6 +315,43 @@ impl alloc::fmt::Display for Token<'_> {
         write!(f, "{}", self.decoded())
     }
 }
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                             InvalidEncodingError                             ║
+║                            ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯                            ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
+
+/// A token within a json pointer contained invalid encoding (`~` not followed
+/// by `0` or `1`).
+///
+#[derive(Debug, PartialEq, Eq)]
+pub struct InvalidEncodingError {
+    /// offset of the erroneous `~` from within the `Token`
+    pub offset: usize,
+}
+
+impl InvalidEncodingError {
+    /// The byte offset of the first invalid `~`.
+    pub fn offset(&self) -> usize {
+        self.offset
+    }
+}
+
+impl fmt::Display for InvalidEncodingError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "json pointer is malformed due to invalid encoding ('~' not followed by '0' or '1')"
+        )
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for InvalidEncodingError {}
 
 /*
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -374,5 +412,13 @@ mod tests {
         let token = Token::new(s);
         let decoded = Token::from_encoded(token.encoded()).unwrap();
         token == decoded
+    }
+
+    #[test]
+    fn invalid_encoding_error_display() {
+        assert_eq!(
+            Token::from_encoded("~").unwrap_err().to_string(),
+            "json pointer is malformed due to invalid encoding ('~' not followed by '0' or '1')"
+        );
     }
 }

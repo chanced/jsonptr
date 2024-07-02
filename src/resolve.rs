@@ -15,7 +15,10 @@
 //! | TOML  |    `toml::Value`    |   `"toml"`   |         |
 //!
 //!
-use crate::{OutOfBoundsError, ParseIndexError, Pointer, Token};
+use crate::{
+    index::{OutOfBoundsError, ParseIndexError},
+    Pointer, Token,
+};
 
 /*
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░

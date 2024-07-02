@@ -36,7 +36,10 @@
 //! assert_eq!(data, json!({"foo": "baz"}));
 //! ```
 
-use crate::{OutOfBoundsError, ParseIndexError, Pointer};
+use crate::{
+    index::{OutOfBoundsError, ParseIndexError},
+    Pointer,
+};
 use core::fmt::{self, Debug};
 
 /*
@@ -548,7 +551,10 @@ mod toml {
 #[allow(clippy::too_many_lines)]
 mod tests {
     use super::{Assign, AssignError};
-    use crate::{OutOfBoundsError, ParseIndexError, Pointer};
+    use crate::{
+        index::{OutOfBoundsError, ParseIndexError},
+        Pointer,
+    };
     use alloc::str::FromStr;
     use core::fmt::{Debug, Display};
 

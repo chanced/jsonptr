@@ -33,9 +33,13 @@
 //! assert_eq!(Index::Next.for_len_unchecked(30), 30);
 //! ````
 
-use crate::{OutOfBoundsError, ParseIndexError, Token};
+use crate::Token;
 use alloc::string::String;
-use core::{fmt::Display, str::FromStr};
+use core::{
+    fmt::{self, Display},
+    num::ParseIntError,
+    str::FromStr,
+};
 
 /// Represents an abstract index into an array.
 ///
@@ -210,6 +214,91 @@ impl TryFrom<Token<'_>> for Index {
     }
 }
 derive_try_from!(String, &String);
+
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                               OutOfBoundsError                               ║
+║                              ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
+
+/// Indicates that an `Index` is not within the given bounds.
+#[derive(Debug, PartialEq, Eq)]
+pub struct OutOfBoundsError {
+    /// The provided array length.
+    ///
+    /// If the range is inclusive, the resolved numerical index will be strictly
+    /// less than this value, otherwise it could be equal to it.
+    pub length: usize,
+
+    /// The resolved numerical index.
+    ///
+    /// Note that [`Index::Next`] always resolves to the given array length,
+    /// so it is only valid when the range is inclusive.
+    pub index: usize,
+}
+
+impl fmt::Display for OutOfBoundsError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "index {} out of bounds (limit: {})",
+            self.index, self.length
+        )
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for OutOfBoundsError {}
+
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                               ParseIndexError                                ║
+║                              ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯                               ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
+
+/// Indicates that the `Token` could not be parsed as valid RFC 6901 index.
+#[derive(Debug, PartialEq, Eq)]
+pub struct ParseIndexError {
+    /// The source `ParseIntError`
+    pub source: ParseIntError,
+}
+
+impl From<ParseIntError> for ParseIndexError {
+    fn from(source: ParseIntError) -> Self {
+        Self { source }
+    }
+}
+
+impl fmt::Display for ParseIndexError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "failed to parse token as an integer")
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for ParseIndexError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.source)
+    }
+}
+
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                                    Tests                                     ║
+║                                   ¯¯¯¯¯¯¯                                    ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
 
 #[cfg(test)]
 mod tests {
