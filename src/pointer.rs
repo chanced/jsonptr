@@ -477,7 +477,6 @@ impl PartialEq<Pointer> for str {
 
 impl PartialEq<String> for Pointer {
     fn eq(&self, other: &String) -> bool {
-        println!("inside partial eq");
         &self.0 == other
     }
 }
@@ -1220,7 +1219,10 @@ mod tests {
         let err = Pointer::parse("/foo/invalid~encoding").unwrap_err();
         assert!(err.source().is_some());
         let source = err.source().unwrap();
-        println!("{source}");
+        assert!(source.is::<InvalidEncodingError>());
+
+        let err = Pointer::parse("no-leading/slash").unwrap_err();
+        assert!(err.source().is_none());
     }
 
     #[test]
@@ -1750,9 +1752,6 @@ mod tests {
         let mut b = base.clone();
         b.append(&suffix_1);
         let isect = a.intersection(&b);
-        if isect != base {
-            println!("\nintersection failed\nbase: {base:?}\nisect: {isect:?}\nsuffix_0: {suffix_0:?}\nsuffix_1: {suffix_1:?}\n");
-        }
         TestResult::from_bool(isect == base)
     }
 
