@@ -851,17 +851,11 @@ mod tests {
 
             // testing Resolve
             let res = data.resolve(ptr).cloned();
-            assert_eq!(
-                &res, &expected_result,
-                "test #{i} failed:\n\nexpected\n{expected_result:#?}\n\nactual:\n{res:#?}",
-            );
+            assert_eq!(&res, &expected_result);
 
             // testing ResolveMut
             let res = data.resolve_mut(ptr).cloned();
-            assert_eq!(
-                &res, &expected_result,
-                "test #{i} failed:\n\nexpected\n{expected_result:#?}\n\nactual:\n{res:#?}",
-            );
+            assert_eq!(&res, &expected_result);
         }
     }
 }

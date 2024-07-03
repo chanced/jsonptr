@@ -741,6 +741,13 @@ mod tests {
                 expected_data: json!([]),
             },
             Test {
+                ptr: "/0",
+                data: json!(["foo"]),
+                assign: json!("bar"),
+                expected_result: Ok(Some(json!("foo"))),
+                expected_data: json!(["bar"]),
+            },
+            Test {
                 ptr: "/a",
                 data: json!([]),
                 assign: json!("foo"),

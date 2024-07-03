@@ -183,7 +183,7 @@ mod tests {
         fn all(tests: impl IntoIterator<Item = Test<V>>) {
             tests.into_iter().enumerate().for_each(|(i, t)| t.run(i));
         }
-        fn run(self, i: usize) {
+        fn run(self, _i: usize) {
             let Test {
                 mut data,
                 ptr,
@@ -193,16 +193,8 @@ mod tests {
 
             let ptr = Pointer::from_static(ptr);
             let deleted = ptr.delete(&mut data);
-            assert_eq!(
-                expected_data,
-                data,
-                "\ntest delete #{i} failed:\ndata not as expected\n\nptr: \"{ptr}\"\n\nexpected data:\n{expected_data:#?}\n\nactual data:\n{data:#?}\n\n"
-            );
-            assert_eq!(
-                expected_deleted,
-                deleted,
-                "\ntest delete #{i} failed:\n\ndeleted value not as expected\nexpected deleted:{expected_data:#?}\n\nactual deleted:{deleted:#?}\n\n",
-            );
+            assert_eq!(expected_data, data);
+            assert_eq!(expected_deleted, deleted);
         }
     }
     /*
@@ -270,6 +262,12 @@ mod tests {
                 data: json!({"Example": 21, "test": "test"}),
                 expected_data: json!({"test": "test"}),
                 expected_deleted: Some(json!(21)),
+            },
+            Test {
+                ptr: "",
+                data: json!({"Example": 21, "test": "test"}),
+                expected_data: json!(null),
+                expected_deleted: Some(json!({"Example": 21, "test": "test"})),
             },
         ]);
     }
