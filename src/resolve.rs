@@ -398,55 +398,198 @@ mod toml {
 #[cfg(test)]
 mod tests {
     use super::{Resolve, ResolveError, ResolveMut};
-    use crate::Pointer;
+    use crate::{
+        index::{OutOfBoundsError, ParseIndexError},
+        Pointer,
+    };
     use core::fmt;
 
-    struct Test<'v, V> {
-        ptr: &'static str,
-        expected_result: Result<&'v V, ResolveError>,
-        data: &'v V,
+    #[cfg(feature = "std")]
+    #[test]
+    fn resolve_error_source() {
+        use std::error::Error;
+        let err = ResolveError::FailedToParseIndex {
+            offset: 0,
+            source: ParseIndexError {
+                source: "invalid".parse::<usize>().unwrap_err(),
+            },
+        };
+        assert!(err.source().is_some());
+
+        let err = ResolveError::OutOfBounds {
+            offset: 0,
+            source: OutOfBoundsError {
+                index: 1,
+                length: 0,
+            },
+        };
+        assert!(err.source().is_some());
+
+        let err = ResolveError::NotFound { offset: 0 };
+        assert!(err.source().is_none());
+
+        let err = ResolveError::Unreachable { offset: 0 };
+        assert!(err.source().is_none());
     }
 
-    impl<'v, V> Test<'v, V>
-    where
-        V: Resolve<Value = V, Error = ResolveError>
-            + ResolveMut<Value = V, Error = ResolveError>
-            + Clone
-            + PartialEq
-            + fmt::Display
-            + fmt::Debug,
-    {
-        fn all(tests: impl IntoIterator<Item = Test<'v, V>>) {
-            tests.into_iter().enumerate().for_each(|(i, t)| t.run(i));
-        }
+    #[test]
+    fn resolve_error_display() {
+        let err = ResolveError::FailedToParseIndex {
+            offset: 0,
+            source: ParseIndexError {
+                source: "invalid".parse::<usize>().unwrap_err(),
+            },
+        };
+        assert_eq!(format!("{err}"), "failed to parse index at offset 0");
 
-        fn run(self, i: usize) {
-            _ = self;
-            let Test {
-                ptr,
-                data,
-                expected_result,
-            } = self;
-            let ptr = Pointer::from_static(ptr);
+        let err = ResolveError::OutOfBounds {
+            offset: 0,
+            source: OutOfBoundsError {
+                index: 1,
+                length: 0,
+            },
+        };
+        assert_eq!(format!("{err}"), "index at offset 0 out of bounds");
 
-            // cloning the data & expected_result to make comparison easier
-            let mut data = data.clone();
-            let expected_result = expected_result.cloned();
+        let err = ResolveError::NotFound { offset: 0 };
 
-            // testing Resolve
-            let res = data.resolve(ptr).cloned();
-            assert_eq!(
-                &res, &expected_result,
-                "test #{i} failed:\n\nexpected\n{expected_result:#?}\n\nactual:\n{res:#?}",
-            );
+        assert_eq!(format!("{err}"), "pointer starting at offset 0 not found");
 
-            // testing ResolveMut
-            let res = data.resolve_mut(ptr).cloned();
-            assert_eq!(
-                &res, &expected_result,
-                "test #{i} failed:\n\nexpected\n{expected_result:#?}\n\nactual:\n{res:#?}",
-            );
-        }
+        let err = ResolveError::Unreachable { offset: 0 };
+        assert_eq!(
+            format!("{err}"),
+            "pointer starting at offset 0 is unreachable"
+        );
+    }
+
+    #[test]
+    fn resolve_error_offset() {
+        let err = ResolveError::FailedToParseIndex {
+            offset: 0,
+            source: ParseIndexError {
+                source: "invalid".parse::<usize>().unwrap_err(),
+            },
+        };
+        assert_eq!(err.offset(), 0);
+
+        let err = ResolveError::OutOfBounds {
+            offset: 0,
+            source: OutOfBoundsError {
+                index: 1,
+                length: 0,
+            },
+        };
+        assert_eq!(err.offset(), 0);
+
+        let err = ResolveError::NotFound { offset: 0 };
+        assert_eq!(err.offset(), 0);
+
+        let err = ResolveError::Unreachable { offset: 0 };
+        assert_eq!(err.offset(), 0);
+    }
+
+    #[test]
+    fn resolve_error_is_unreachable() {
+        let err = ResolveError::FailedToParseIndex {
+            offset: 0,
+            source: ParseIndexError {
+                source: "invalid".parse::<usize>().unwrap_err(),
+            },
+        };
+        assert!(!err.is_unreachable());
+
+        let err = ResolveError::OutOfBounds {
+            offset: 0,
+            source: OutOfBoundsError {
+                index: 1,
+                length: 0,
+            },
+        };
+        assert!(!err.is_unreachable());
+
+        let err = ResolveError::NotFound { offset: 0 };
+        assert!(!err.is_unreachable());
+
+        let err = ResolveError::Unreachable { offset: 0 };
+        assert!(err.is_unreachable());
+    }
+
+    #[test]
+    fn reolve_error_is_not_found() {
+        let err = ResolveError::FailedToParseIndex {
+            offset: 0,
+            source: ParseIndexError {
+                source: "invalid".parse::<usize>().unwrap_err(),
+            },
+        };
+        assert!(!err.is_not_found());
+
+        let err = ResolveError::OutOfBounds {
+            offset: 0,
+            source: OutOfBoundsError {
+                index: 1,
+                length: 0,
+            },
+        };
+        assert!(!err.is_not_found());
+
+        let err = ResolveError::NotFound { offset: 0 };
+        assert!(err.is_not_found());
+
+        let err = ResolveError::Unreachable { offset: 0 };
+        assert!(!err.is_not_found());
+    }
+
+    #[test]
+    fn resolve_error_is_out_of_bounds() {
+        let err = ResolveError::FailedToParseIndex {
+            offset: 0,
+            source: ParseIndexError {
+                source: "invalid".parse::<usize>().unwrap_err(),
+            },
+        };
+        assert!(!err.is_out_of_bounds());
+
+        let err = ResolveError::OutOfBounds {
+            offset: 0,
+            source: OutOfBoundsError {
+                index: 1,
+                length: 0,
+            },
+        };
+        assert!(err.is_out_of_bounds());
+
+        let err = ResolveError::NotFound { offset: 0 };
+        assert!(!err.is_out_of_bounds());
+
+        let err = ResolveError::Unreachable { offset: 0 };
+        assert!(!err.is_out_of_bounds());
+    }
+
+    #[test]
+    fn resolve_error_is_failed_to_parse_index() {
+        let err = ResolveError::FailedToParseIndex {
+            offset: 0,
+            source: ParseIndexError {
+                source: "invalid".parse::<usize>().unwrap_err(),
+            },
+        };
+        assert!(err.is_failed_to_parse_index());
+
+        let err = ResolveError::OutOfBounds {
+            offset: 0,
+            source: OutOfBoundsError {
+                index: 1,
+                length: 0,
+            },
+        };
+        assert!(!err.is_failed_to_parse_index());
+
+        let err = ResolveError::NotFound { offset: 0 };
+        assert!(!err.is_failed_to_parse_index());
+
+        let err = ResolveError::Unreachable { offset: 0 };
+        assert!(!err.is_failed_to_parse_index());
     }
 
     /*
@@ -673,5 +816,52 @@ mod tests {
                 expected_result: Err(ResolveError::NotFound { offset: 7 }),
             },
         ]);
+    }
+    struct Test<'v, V> {
+        ptr: &'static str,
+        expected_result: Result<&'v V, ResolveError>,
+        data: &'v V,
+    }
+
+    impl<'v, V> Test<'v, V>
+    where
+        V: Resolve<Value = V, Error = ResolveError>
+            + ResolveMut<Value = V, Error = ResolveError>
+            + Clone
+            + PartialEq
+            + fmt::Display
+            + fmt::Debug,
+    {
+        fn all(tests: impl IntoIterator<Item = Test<'v, V>>) {
+            tests.into_iter().enumerate().for_each(|(i, t)| t.run(i));
+        }
+
+        fn run(self, i: usize) {
+            _ = self;
+            let Test {
+                ptr,
+                data,
+                expected_result,
+            } = self;
+            let ptr = Pointer::from_static(ptr);
+
+            // cloning the data & expected_result to make comparison easier
+            let mut data = data.clone();
+            let expected_result = expected_result.cloned();
+
+            // testing Resolve
+            let res = data.resolve(ptr).cloned();
+            assert_eq!(
+                &res, &expected_result,
+                "test #{i} failed:\n\nexpected\n{expected_result:#?}\n\nactual:\n{res:#?}",
+            );
+
+            // testing ResolveMut
+            let res = data.resolve_mut(ptr).cloned();
+            assert_eq!(
+                &res, &expected_result,
+                "test #{i} failed:\n\nexpected\n{expected_result:#?}\n\nactual:\n{res:#?}",
+            );
+        }
     }
 }

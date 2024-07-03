@@ -376,4 +376,50 @@ mod tests {
     fn display_index_next() {
         assert_eq!(Index::Next.to_string(), "-");
     }
+
+    #[test]
+    fn for_len() {
+        assert_eq!(Index::Num(0).for_len(1), Ok(0));
+        assert!(Index::Num(1).for_len(1).is_err());
+        assert!(Index::Next.for_len(1).is_err());
+    }
+
+    #[test]
+    fn out_of_bounds_error_display() {
+        let err = OutOfBoundsError {
+            length: 5,
+            index: 10,
+        };
+        assert_eq!(err.to_string(), "index 10 out of bounds (limit: 5)");
+    }
+
+    #[test]
+    fn parse_index_error_display() {
+        let err = ParseIndexError {
+            source: "not a number".parse::<usize>().unwrap_err(),
+        };
+        assert_eq!(err.to_string(), "failed to parse token as an integer");
+    }
+
+    #[test]
+    #[cfg(feature = "std")]
+    fn parse_index_error_source() {
+        use std::error::Error;
+        let source = "not a number".parse::<usize>().unwrap_err();
+        let err = ParseIndexError { source };
+        assert_eq!(
+            err.source().unwrap().to_string(),
+            "not a number".parse::<usize>().unwrap_err().to_string()
+        );
+    }
+
+    #[test]
+    fn try_from_token() {
+        let token = Token::new("3");
+        let index = <Index as TryFrom<Token>>::try_from(token).unwrap();
+        assert_eq!(index, Index::Num(3));
+        let token = Token::new("-");
+        let index = Index::try_from(&token).unwrap();
+        assert_eq!(index, Index::Next);
+    }
 }

@@ -365,6 +365,8 @@ impl std::error::Error for InvalidEncodingError {}
 
 #[cfg(test)]
 mod tests {
+    use crate::{assign::AssignError, index::OutOfBoundsError};
+
     use super::*;
     use quickcheck_macros::quickcheck;
 
@@ -399,12 +401,84 @@ mod tests {
     }
 
     #[test]
+    fn assign_error_display() {
+        let err = AssignError::FailedToParseIndex {
+            offset: 3,
+            source: ParseIndexError {
+                source: "a".parse::<usize>().unwrap_err(),
+            },
+        };
+        assert_eq!(
+            err.to_string(),
+            "assignment failed due to an invalid index at offset 3"
+        );
+
+        let err = AssignError::OutOfBounds {
+            offset: 3,
+            source: OutOfBoundsError {
+                index: 3,
+                length: 2,
+            },
+        };
+
+        assert_eq!(
+            err.to_string(),
+            "assignment failed due to index at offset 3 being out of bounds"
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "std")]
+    fn assign_error_source() {
+        use std::error::Error;
+        let err = AssignError::FailedToParseIndex {
+            offset: 3,
+            source: ParseIndexError {
+                source: "a".parse::<usize>().unwrap_err(),
+            },
+        };
+        assert!(err.source().is_some());
+        assert!(err.source().unwrap().is::<ParseIndexError>());
+
+        let err = AssignError::OutOfBounds {
+            offset: 3,
+            source: OutOfBoundsError {
+                index: 3,
+                length: 2,
+            },
+        };
+
+        assert!(err.source().unwrap().is::<OutOfBoundsError>());
+    }
+
+    #[test]
     fn from_encoded() {
         assert_eq!(Token::from_encoded("~1").unwrap().encoded(), "~1");
         assert_eq!(Token::from_encoded("~0~1").unwrap().encoded(), "~0~1");
         let t = Token::from_encoded("a~1b").unwrap();
         assert_eq!(t.decoded(), "a/b");
-        let _ = Token::from_encoded("a/b").unwrap_err();
+        assert!(Token::from_encoded("a/b").is_err());
+        assert!(Token::from_encoded("a~a").is_err());
+    }
+
+    #[test]
+    fn test_from() {
+        assert_eq!(Token::from(34u32).encoded(), "34");
+        assert_eq!(Token::from(34u64).encoded(), "34");
+        assert_eq!(Token::from(String::from("foo")).encoded(), "foo");
+        assert_eq!(Token::from(&Token::new("foo")).encoded(), "foo");
+    }
+
+    #[test]
+    fn test_invalid_encoding_offset() {
+        let err = InvalidEncodingError { offset: 3 };
+        assert_eq!(err.offset(), 3);
+    }
+
+    #[test]
+    fn into_owned() {
+        let token = Token::from_encoded("foo~0").unwrap().into_owned();
+        assert_eq!(token.encoded(), "foo~0");
     }
 
     #[quickcheck]

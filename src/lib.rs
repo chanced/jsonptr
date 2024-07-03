@@ -7,7 +7,8 @@
     clippy::into_iter_without_iter,
     clippy::needless_pass_by_value,
     clippy::expect_fun_call,
-    clippy::must_use_candidate
+    clippy::must_use_candidate,
+    clippy::similar_names
 )]
 
 #[cfg_attr(not(feature = "std"), macro_use)]

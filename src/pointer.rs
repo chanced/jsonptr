@@ -477,6 +477,7 @@ impl PartialEq<Pointer> for str {
 
 impl PartialEq<String> for Pointer {
     fn eq(&self, other: &String) -> bool {
+        println!("inside partial eq");
         &self.0 == other
     }
 }
@@ -502,6 +503,18 @@ impl PartialEq<String> for PointerBuf {
         &self.0 == other
     }
 }
+
+impl PartialEq<PointerBuf> for str {
+    fn eq(&self, other: &PointerBuf) -> bool {
+        self == other.0
+    }
+}
+impl PartialEq<PointerBuf> for &str {
+    fn eq(&self, other: &PointerBuf) -> bool {
+        *self == other.0
+    }
+}
+
 impl AsRef<Pointer> for Pointer {
     fn as_ref(&self) -> &Pointer {
         self
@@ -550,6 +563,62 @@ impl AsRef<[u8]> for Pointer {
     }
 }
 
+impl PartialOrd<PointerBuf> for Pointer {
+    fn partial_cmp(&self, other: &PointerBuf) -> Option<Ordering> {
+        self.0.partial_cmp(other.0.as_str())
+    }
+}
+
+impl PartialOrd<Pointer> for PointerBuf {
+    fn partial_cmp(&self, other: &Pointer) -> Option<Ordering> {
+        self.0.as_str().partial_cmp(&other.0)
+    }
+}
+impl PartialOrd<&Pointer> for PointerBuf {
+    fn partial_cmp(&self, other: &&Pointer) -> Option<Ordering> {
+        self.0.as_str().partial_cmp(&other.0)
+    }
+}
+
+impl PartialOrd<Pointer> for String {
+    fn partial_cmp(&self, other: &Pointer) -> Option<Ordering> {
+        self.as_str().partial_cmp(&other.0)
+    }
+}
+impl PartialOrd<String> for &Pointer {
+    fn partial_cmp(&self, other: &String) -> Option<Ordering> {
+        self.0.partial_cmp(other.as_str())
+    }
+}
+
+impl PartialOrd<PointerBuf> for String {
+    fn partial_cmp(&self, other: &PointerBuf) -> Option<Ordering> {
+        self.as_str().partial_cmp(other.0.as_str())
+    }
+}
+
+impl PartialOrd<Pointer> for str {
+    fn partial_cmp(&self, other: &Pointer) -> Option<Ordering> {
+        self.partial_cmp(&other.0)
+    }
+}
+
+impl PartialOrd<PointerBuf> for str {
+    fn partial_cmp(&self, other: &PointerBuf) -> Option<Ordering> {
+        self.partial_cmp(other.0.as_str())
+    }
+}
+impl PartialOrd<PointerBuf> for &str {
+    fn partial_cmp(&self, other: &PointerBuf) -> Option<Ordering> {
+        (*self).partial_cmp(other.0.as_str())
+    }
+}
+impl PartialOrd<Pointer> for &str {
+    fn partial_cmp(&self, other: &Pointer) -> Option<Ordering> {
+        (*self).partial_cmp(&other.0)
+    }
+}
+
 impl PartialOrd<&str> for &Pointer {
     fn partial_cmp(&self, other: &&str) -> Option<Ordering> {
         PartialOrd::partial_cmp(&self.0[..], &other[..])
@@ -559,6 +628,24 @@ impl PartialOrd<&str> for &Pointer {
 impl PartialOrd<String> for Pointer {
     fn partial_cmp(&self, other: &String) -> Option<Ordering> {
         self.0.partial_cmp(other.as_str())
+    }
+}
+
+impl PartialOrd<&str> for PointerBuf {
+    fn partial_cmp(&self, other: &&str) -> Option<Ordering> {
+        PartialOrd::partial_cmp(&self.0[..], &other[..])
+    }
+}
+
+impl<'p> PartialOrd<PointerBuf> for &'p Pointer {
+    fn partial_cmp(&self, other: &PointerBuf) -> Option<Ordering> {
+        self.0.partial_cmp(other.0.as_str())
+    }
+}
+
+impl PartialOrd<String> for PointerBuf {
+    fn partial_cmp(&self, other: &String) -> Option<Ordering> {
+        self.0.partial_cmp(other)
     }
 }
 
@@ -598,7 +685,7 @@ impl PointerBuf {
     /// Attempts to parse a string into a `PointerBuf`.
     ///
     /// ## Errors
-    /// Returns a `ParseError` if the string is not a valid JSON Pointer.
+    /// Returns a [`ParseError`] if the string is not a valid JSON Pointer.
     pub fn parse<S: AsRef<str> + ?Sized>(s: &S) -> Result<Self, ParseError> {
         Pointer::parse(&s).map(Pointer::to_buf)
     }
@@ -988,33 +1075,6 @@ impl std::error::Error for ParseError {
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                                                                              ║
-║                                NotFoundError                                 ║
-║                               ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯                                ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-*/
-
-/// An error that indicates a [`Pointer`]'s path was not found in the data.
-#[derive(Debug, PartialEq, Eq)]
-pub struct NotFoundError {
-    /// The starting offset of the [`Token`] within the [`Pointer`] which could not
-    /// be resolved.
-    pub offset: usize,
-}
-
-impl fmt::Display for NotFoundError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "path starting at offset {} not found", self.offset)
-    }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for NotFoundError {}
-
-/*
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
 ║                              ReplaceTokenError                               ║
 ║                             ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
@@ -1052,6 +1112,8 @@ impl std::error::Error for ReplaceTokenError {}
 
 #[cfg(test)]
 mod tests {
+    use std::error::Error;
+
     use super::*;
     use quickcheck::TestResult;
     use quickcheck_macros::quickcheck;
@@ -1061,18 +1123,38 @@ mod tests {
     fn from_const_validates() {
         let _ = Pointer::from_static("foo/bar");
     }
+
     #[test]
     fn strip_suffix() {
         let p = Pointer::new("/example/pointer/to/some/value");
         let stripped = p.strip_suffix(Pointer::new("/to/some/value")).unwrap();
         assert_eq!(stripped, "/example/pointer");
     }
+
     #[test]
     fn strip_prefix() {
         let p = Pointer::new("/example/pointer/to/some/value");
         let stripped = p.strip_prefix(Pointer::new("/example/pointer")).unwrap();
         assert_eq!(stripped, "/to/some/value");
     }
+
+    #[test]
+    fn parse_error_is_no_leading_backslash() {
+        let err = ParseError::NoLeadingBackslash;
+        assert!(err.is_no_leading_backslash());
+        assert!(!err.is_invalid_encoding());
+    }
+
+    #[test]
+    fn parse_error_is_invalid_encoding() {
+        let err = ParseError::InvalidEncoding {
+            offset: 0,
+            source: InvalidEncodingError { offset: 1 },
+        };
+        assert!(!err.is_no_leading_backslash());
+        assert!(err.is_invalid_encoding());
+    }
+
     #[test]
     fn parse() {
         let tests = [
@@ -1112,14 +1194,47 @@ mod tests {
         ];
         for (input, expected) in tests {
             let actual = Pointer::parse(input).map(Pointer::as_str);
-            assert_eq!(
-                actual, expected,
-                "pointer parsing failed to meet expectations
-                \ninput: {input}
-                \nexpected:\n{expected:#?}
-                \nactual:\n{actual:#?}",
-            );
+            assert_eq!(actual, expected);
         }
+    }
+
+    #[test]
+    fn parse_error_offsets() {
+        let err = Pointer::parse("/foo/invalid~encoding").unwrap_err();
+        assert_eq!(err.pointer_offset(), 4);
+        assert_eq!(err.source_offset(), 8);
+        assert_eq!(err.complete_offset(), 12);
+
+        let err = Pointer::parse("invalid~encoding").unwrap_err();
+        assert_eq!(err.pointer_offset(), 0);
+        assert_eq!(err.source_offset(), 0);
+
+        let err = Pointer::parse("no-leading/slash").unwrap_err();
+        assert!(err.source().is_none());
+    }
+
+    #[test]
+    #[cfg(feature = "std")]
+    fn parse_error_source() {
+        use std::error::Error;
+        let err = Pointer::parse("/foo/invalid~encoding").unwrap_err();
+        assert!(err.source().is_some());
+        let source = err.source().unwrap();
+        println!("{source}");
+    }
+
+    #[test]
+    fn as_pointer() {
+        let ptr = Pointer::from_static("/foo/bar");
+        let ptr_buf = ptr.to_buf();
+        assert_eq!(ptr_buf.as_ptr(), ptr);
+    }
+
+    #[test]
+    fn pointer_buf_clear() {
+        let mut ptr = PointerBuf::from_tokens(["foo", "bar"]);
+        ptr.clear();
+        assert_eq!(ptr, "");
     }
 
     #[test]
@@ -1132,24 +1247,14 @@ mod tests {
         assert_eq!(ptr, "/foo", "pointer should equal \"/foo\" after push_back");
 
         ptr.push_back("bar".into());
-        assert_eq!(
-            ptr, "/foo/bar",
-            "pointer should equal \"/foo/bar\" after push_back"
-        );
+        assert_eq!(ptr, "/foo/bar");
         ptr.push_back("/baz".into());
-        assert_eq!(
-            ptr, "/foo/bar/~1baz",
-            "pointer should equal \"/foo/bar/~1baz\" after push_back"
-        );
+        assert_eq!(ptr, "/foo/bar/~1baz");
 
         let mut ptr = PointerBuf::from_tokens(["foo", "bar"]);
         assert_eq!(ptr.pop_back(), Some("bar".into()));
         assert_eq!(ptr, "/foo", "pointer should equal \"/foo\" after pop_back");
-        assert_eq!(
-            ptr.pop_back(),
-            Some("foo".into()),
-            "\"foo\" should have been popped from the back"
-        );
+        assert_eq!(ptr.pop_back(), Some("foo".into()));
         assert_eq!(ptr, "", "pointer should equal \"\" after pop_back");
     }
 
@@ -1159,10 +1264,7 @@ mod tests {
 
         let res = ptr.replace_token(0, "new".into());
         assert!(res.is_ok());
-        assert_eq!(
-            ptr, "/new/token",
-            "pointer should equal \"/new/token\" after replace_token"
-        );
+        assert_eq!(ptr, "/new/token");
 
         let res = ptr.replace_token(3, "invalid".into());
 
@@ -1195,6 +1297,12 @@ mod tests {
         assert_eq!(ptr.count(), 1);
         assert_eq!(ptr.pop_front(), Some("foo".into()));
         assert_eq!(ptr, "");
+    }
+
+    #[test]
+    fn display_replace_token_error() {
+        let err = ReplaceTokenError { index: 3, count: 2 };
+        assert_eq!(format!("{err}"), "index 3 is out of bounds (2)");
     }
 
     #[test]
@@ -1250,6 +1358,9 @@ mod tests {
         );
         assert_eq!(PointerBuf::from_tokens(["field", "", "baz"]), "/field//baz");
         assert_eq!(PointerBuf::default(), "");
+
+        let ptr = PointerBuf::from_tokens(["foo", "bar", "baz"]);
+        assert_eq!(ptr.to_string(), "/foo/bar/baz");
     }
 
     #[test]
@@ -1456,6 +1567,45 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::useless_asref)]
+    fn as_ref() {
+        let ptr_str = "/foo/bar";
+        let ptr = Pointer::from_static(ptr_str);
+        let ptr_buf = ptr.to_buf();
+        assert_eq!(ptr_buf.as_ref(), ptr);
+        let r: &Pointer = ptr.as_ref();
+        assert_eq!(ptr, r);
+
+        let s: &str = ptr.as_ref();
+        assert_eq!(s, ptr_str);
+
+        let b: &[u8] = ptr.as_ref();
+        assert_eq!(b, ptr_str.as_bytes());
+    }
+
+    #[test]
+    fn from_tokens() {
+        let ptr = PointerBuf::from_tokens(["foo", "bar", "baz"]);
+        assert_eq!(ptr, "/foo/bar/baz");
+    }
+
+    #[test]
+    fn pointer_borrow() {
+        let ptr = Pointer::from_static("/foo/bar");
+        let borrowed: &str = ptr.borrow();
+        assert_eq!(borrowed, "/foo/bar");
+    }
+
+    #[test]
+    #[cfg(feature = "json")]
+    fn into_value() {
+        use serde_json::Value;
+        let ptr = Pointer::from_static("/foo/bar");
+        let value: Value = ptr.into();
+        assert_eq!(value, Value::String("/foo/bar".to_string()));
+    }
+
+    #[test]
     fn intersect() {
         let base = Pointer::from_static("/foo/bar");
         let a = Pointer::from_static("/foo/bar/qux");
@@ -1642,14 +1792,89 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::cmp_owned)]
+    #[allow(clippy::cmp_owned, unused_must_use)]
     fn partial_eq() {
-        let p = Pointer::from_static("/bread/crumbs");
-        assert!(p == "/bread/crumbs");
-        assert!(p == String::from("/bread/crumbs"));
-        assert!(p == p.to_owned());
-        assert!(p == Pointer::from_static("/bread/crumbs"));
-        assert!(p != Pointer::from_static("/not/bread/crumbs/"));
+        let ptr_string = String::from("/bread/crumbs");
+        let ptr_str = "/bread/crumbs";
+        let ptr = Pointer::from_static(ptr_str);
+        let ptr_buf = ptr.to_buf();
+        <&Pointer as PartialEq<&Pointer>>::eq(&ptr, &ptr);
+        <Pointer as PartialEq<&str>>::eq(ptr, &ptr_str);
+        <&Pointer as PartialEq<String>>::eq(&ptr, &ptr_string);
+        <Pointer as PartialEq<String>>::eq(ptr, &ptr_string);
+        <Pointer as PartialEq<PointerBuf>>::eq(ptr, &ptr_buf);
+        <&str as PartialEq<Pointer>>::eq(&ptr_str, ptr);
+        <String as PartialEq<Pointer>>::eq(&ptr_string, ptr);
+        <str as PartialEq<Pointer>>::eq(ptr_str, ptr);
+        <PointerBuf as PartialEq<str>>::eq(&ptr_buf, ptr_str);
+        <PointerBuf as PartialEq<PointerBuf>>::eq(&ptr_buf, &ptr_buf);
+        <PointerBuf as PartialEq<Pointer>>::eq(&ptr_buf, ptr);
+        <Pointer as PartialEq<PointerBuf>>::eq(ptr, &ptr_buf);
+        <PointerBuf as PartialEq<&Pointer>>::eq(&ptr_buf, &ptr);
+        <PointerBuf as PartialEq<&str>>::eq(&ptr_buf, &ptr_str);
+        <PointerBuf as PartialEq<String>>::eq(&ptr_buf, &ptr_string);
+        <&Pointer as PartialEq<PointerBuf>>::eq(&ptr, &ptr_buf);
+        <str as PartialEq<PointerBuf>>::eq(ptr_str, &ptr_buf);
+        <&str as PartialEq<PointerBuf>>::eq(&ptr_str, &ptr_buf);
+        <String as PartialEq<PointerBuf>>::eq(&ptr_string, &ptr_buf);
+    }
+
+    #[test]
+    fn partial_ord() {
+        let a_str = "/foo/bar";
+        let a_string = a_str.to_string();
+        let a_ptr = Pointer::from_static(a_str);
+        let a_buf = a_ptr.to_buf();
+        let b_str = "/foo/bar";
+        let b_string = b_str.to_string();
+        let b_ptr = Pointer::from_static(b_str);
+        let b_buf = b_ptr.to_buf();
+        let c_str = "/foo/bar/baz";
+        let c_string = c_str.to_string();
+        let c_ptr = Pointer::from_static(c_str);
+        let c_buf = c_ptr.to_buf();
+
+        assert!(<Pointer as PartialOrd<PointerBuf>>::lt(a_ptr, &c_buf));
+        assert!(<PointerBuf as PartialOrd<Pointer>>::lt(&a_buf, c_ptr));
+        assert!(<String as PartialOrd<Pointer>>::lt(&a_string, c_ptr));
+        assert!(<str as PartialOrd<Pointer>>::lt(a_str, c_ptr));
+        assert!(<str as PartialOrd<PointerBuf>>::lt(a_str, &c_buf));
+        assert!(<&str as PartialOrd<Pointer>>::lt(&a_str, c_ptr));
+        assert!(<&str as PartialOrd<PointerBuf>>::lt(&a_str, &c_buf));
+        assert!(<&Pointer as PartialOrd<PointerBuf>>::lt(&a_ptr, &c_buf));
+        assert!(<&Pointer as PartialOrd<&str>>::lt(&b_ptr, &c_str));
+        assert!(<Pointer as PartialOrd<String>>::lt(a_ptr, &c_string));
+        assert!(<PointerBuf as PartialOrd<&str>>::lt(&a_buf, &c_str));
+        assert!(<PointerBuf as PartialOrd<String>>::lt(&a_buf, &c_string));
+        assert!(a_ptr < c_buf);
+        assert!(c_buf > a_ptr);
+        assert!(a_buf < c_ptr);
+        assert!(a_ptr < c_buf);
+        assert!(a_ptr < c_ptr);
+        assert!(a_ptr <= c_ptr);
+        assert!(c_ptr > a_ptr);
+        assert!(c_ptr >= a_ptr);
+        assert!(a_ptr == b_ptr);
+        assert!(a_ptr <= b_ptr);
+        assert!(a_ptr >= b_ptr);
+        assert!(a_string < c_buf);
+        assert!(a_string <= c_buf);
+        assert!(c_string > a_buf);
+        assert!(c_string >= a_buf);
+        assert!(a_string == b_buf);
+        assert!(a_ptr < c_buf);
+        assert!(a_ptr <= c_buf);
+        assert!(c_ptr > a_buf);
+        assert!(c_ptr >= a_buf);
+        assert!(a_ptr == b_buf);
+        assert!(a_ptr <= b_buf);
+        assert!(a_ptr >= b_buf);
+        assert!(a_ptr < c_buf);
+        assert!(c_ptr > b_string);
+        // couldnt inline this
+        #[allow(clippy::nonminimal_bool)]
+        let not = !(a_ptr > c_buf);
+        assert!(not);
     }
 
     #[test]
@@ -1700,10 +1925,7 @@ mod tests {
             a.append(&PointerBuf::parse(a_suffix).unwrap());
             b.append(&PointerBuf::parse(b_suffix).unwrap());
             let intersection = a.intersection(&b);
-            assert_eq!(
-                intersection, base,
-                "\nintersection failed\n\nbase:{base}\na_suffix:{a_suffix}\nb_suffix:{b_suffix} expected: \"{base}\"\n   actual: \"{intersection}\"\n"
-            );
+            assert_eq!(intersection, base);
         }
     }
     #[test]
@@ -1712,5 +1934,44 @@ mod tests {
             ParseError::NoLeadingBackslash.to_string(),
             "json pointer is malformed as it does not start with a backslash ('/')"
         );
+    }
+
+    #[test]
+    fn into_iter() {
+        use core::iter::IntoIterator;
+
+        let ptr = PointerBuf::from_tokens(["foo", "bar", "baz"]);
+        let tokens: Vec<Token> = ptr.into_iter().collect();
+        let from_tokens = PointerBuf::from_tokens(tokens);
+        assert_eq!(ptr, from_tokens);
+
+        let ptr = Pointer::from_static("/foo/bar/baz");
+        let tokens: Vec<_> = ptr.into_iter().collect();
+        assert_eq!(ptr, PointerBuf::from_tokens(tokens));
+    }
+
+    #[test]
+    fn from_str() {
+        let p = PointerBuf::from_str("/foo/bar").unwrap();
+        assert_eq!(p, "/foo/bar");
+    }
+
+    #[test]
+    fn from_token() {
+        let p = PointerBuf::from(Token::new("foo"));
+        assert_eq!(p, "/foo");
+    }
+
+    #[test]
+    fn from_usize() {
+        let p = PointerBuf::from(0);
+        assert_eq!(p, "/0");
+    }
+
+    #[test]
+    fn borrow() {
+        let ptr = PointerBuf::from_tokens(["foo", "bar"]);
+        let borrowed: &Pointer = ptr.borrow();
+        assert_eq!(borrowed, "/foo/bar");
     }
 }
