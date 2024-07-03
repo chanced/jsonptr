@@ -6,12 +6,18 @@
 [<img alt="build status" src="https://img.shields.io/github/actions/workflow/status/chanced/jsonptr/test.yml?branch=main&style=for-the-badge" height="21">](https://github.com/chanced/jsonptr/actions?query=branch%3Amain)
 [<img alt="code coverage" src="https://img.shields.io/codecov/c/github/chanced/jsonptr?style=for-the-badge&color=CBB88D" height="21">](https://codecov.io/gh/chanced/jsonptr)
 
-Data structures and logic for resolving, assigning, and deleting by JSON Pointers ([RFC
-6901](https://datatracker.ietf.org/doc/html/rfc6901)).
+Data structures and logic for resolving, assigning, and deleting by JSON
+Pointers ([RFC 6901](https://datatracker.ietf.org/doc/html/rfc6901)).
 
-## Usage
-
-JSON Pointers can be created either with a slice of strings or directly from a properly encoded string representing a JSON Pointer.
+## Feature Flags
+|    Flag     | Description                                                                                                                                                              | Enables                            | Default |
+| :---------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------- | :-----: |
+|   `"std"`   | Implements `std::error::Error` for error types                                                                                                                           | `"serde/std"`, `"serde_json?/std"` |    ✓    |
+|  `"json"`   | Implements [`Resolve`], [`Assign`], [`Delete`] for [`serde_json::Value`] + a helper methods on `Pointer`                                                                 | `serde_json`                       |    ✓    |
+|  `"toml"`   | Implements [`Resolve`], [`Assign`], [`Delete`] for [`toml::Value`]                                                                                                       | `"std"`, `toml`                    |         |
+| `"assign"`  | Enables the [`Assign`] trait and [`Pointer::assign`] for assigning values based on the location specified by a JSON Pointer                                              |                                    |    ✓    |
+| `"resolve"` | Enables the [`Resolve`] & [`ResolveMut`] trait and [`Pointer::resolve`], [`Pointer::resolve_mut`] for resolving values based on the location specified by a JSON Pointer |                                    |    ✓    |
+| `"delete"`  | Enables the [`Delete`] trait and [`Pointer::delete`] for deleting values based on the location specified by a JSON Pointer                                               | `"resolve"`                        |    ✓    |
 
 ### Resolve values
 

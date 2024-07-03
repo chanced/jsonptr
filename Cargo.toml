@@ -29,7 +29,6 @@ syn = { version = "1.0.109", optional = true }
 assign  = []
 default = ["std", "serde", "json", "resolve", "assign", "delete"]
 delete  = ["resolve"]
-impl    = []
 json    = ["dep:serde_json", "serde"]
 resolve = []
 std     = ["serde/std", "serde_json?/std"]
