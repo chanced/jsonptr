@@ -1,3 +1,5 @@
+use core::str::Split;
+
 use crate::index::{Index, ParseIndexError};
 use alloc::{
     borrow::Cow,
@@ -23,7 +25,7 @@ const SLASH_ENC: u8 = b'1';
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 */
 
-/// A `Token` is a segment of a JSON Pointer, seperated by `'/'` (`%x2F`). It can
+/// A `Token` is a segment of a JSON Pointer, preceded by `'/'` (`%x2F`). It can
 /// represent a key in a JSON object or an index in a JSON array.
 ///
 /// - Indexes should not contain leading zeros.
@@ -315,6 +317,46 @@ impl alloc::fmt::Display for Token<'_> {
         write!(f, "{}", self.decoded())
     }
 }
+
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                                    Tokens                                    ║
+║                                   ¯¯¯¯¯¯¯¯                                   ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
+
+/// An iterator over the tokens in a Pointer.
+#[derive(Debug)]
+pub struct Tokens<'a> {
+    pub(crate) has_sent: bool,
+    inner: Split<'a, char>,
+}
+
+impl<'a> Iterator for Tokens<'a> {
+    type Item = Token<'a>;
+    fn next(&mut self) -> Option<Self::Item> {
+        if !self.has_sent {
+            self.has_sent = true;
+        }
+        self.inner.next().map(Token::from_encoded_unchecked)
+    }
+}
+impl<'t> Tokens<'t> {
+    pub(crate) fn new(inner: Split<'t, char>) -> Self {
+        Self {
+            inner,
+            has_sent: false,
+        }
+    }
+
+    pub fn into_components(self) -> crate::Components<'t> {
+        crate::Components::new(self)
+    }
+}
+
 /*
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 ╔══════════════════════════════════════════════════════════════════════════════╗
@@ -365,7 +407,7 @@ impl std::error::Error for InvalidEncodingError {}
 
 #[cfg(test)]
 mod tests {
-    use crate::{assign::AssignError, index::OutOfBoundsError};
+    use crate::{assign::AssignError, index::OutOfBoundsError, Pointer};
 
     use super::*;
     use quickcheck_macros::quickcheck;
@@ -374,6 +416,10 @@ mod tests {
     fn from() {
         assert_eq!(Token::from("/").encoded(), "~1");
         assert_eq!(Token::from("~/").encoded(), "~0~1");
+        assert_eq!(Token::from(34u32).encoded(), "34");
+        assert_eq!(Token::from(34u64).encoded(), "34");
+        assert_eq!(Token::from(String::from("foo")).encoded(), "foo");
+        assert_eq!(Token::from(&Token::new("foo")).encoded(), "foo");
     }
 
     #[test]
@@ -462,15 +508,7 @@ mod tests {
     }
 
     #[test]
-    fn test_from() {
-        assert_eq!(Token::from(34u32).encoded(), "34");
-        assert_eq!(Token::from(34u64).encoded(), "34");
-        assert_eq!(Token::from(String::from("foo")).encoded(), "foo");
-        assert_eq!(Token::from(&Token::new("foo")).encoded(), "foo");
-    }
-
-    #[test]
-    fn test_invalid_encoding_offset() {
+    fn invalid_encoding_offset() {
         let err = InvalidEncodingError { offset: 3 };
         assert_eq!(err.offset(), 3);
     }
@@ -493,6 +531,20 @@ mod tests {
         assert_eq!(
             Token::from_encoded("~").unwrap_err().to_string(),
             "json pointer is malformed due to invalid encoding ('~' not followed by '0' or '1')"
+        );
+    }
+
+    #[test]
+    fn tokens() {
+        let pointer = Pointer::from_static("/a/b/c");
+        let tokens: Vec<Token> = pointer.tokens().collect();
+        assert_eq!(
+            tokens,
+            vec![
+                Token::from_encoded_unchecked("a"),
+                Token::from_encoded_unchecked("b"),
+                Token::from_encoded_unchecked("c")
+            ]
         );
     }
 }

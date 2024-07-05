@@ -1,4 +1,4 @@
-use crate::{InvalidEncodingError, Token, Tokens};
+use crate::{token::InvalidEncodingError, Components, Token, Tokens};
 use alloc::{
     borrow::ToOwned,
     fmt,
@@ -265,7 +265,7 @@ impl Pointer {
     ///   of the path)
     /// - The path is not found (e.g. a key in an object or an index in an array
     ///   does not exist)
-    /// - An [`Token`] cannot be parsed as an array
+    /// - A [`Token`](crate::Token) cannot be parsed as an array
     ///   [`Index`](crate::index::Index)
     /// - An array [`Index`](crate::index::Index) is out of bounds
     #[cfg(feature = "resolve")]
@@ -286,7 +286,7 @@ impl Pointer {
     ///   of the path)
     /// - The path is not found (e.g. a key in an object or an index in an array
     ///   does not exist)
-    /// - An [`Token`] cannot be parsed as an array
+    /// - A [`Token`](crate::Token) cannot be parsed as an array
     ///   [`Index`](crate::index::Index)
     /// - An array [`Index`](crate::index::Index) is out of bounds
     #[cfg(feature = "resolve")]
@@ -389,6 +389,24 @@ impl Pointer {
         V: Into<D::Value>,
     {
         dest.assign(self, src)
+    }
+
+    /// Returns [`Components`] of this JSON Pointer.
+    ///
+    /// A [`Component`](crate::Component) is either [`Token`] or the root
+    /// location of a document.
+    /// ## Example
+    /// ```
+    /// # use jsonptr::{Component, Pointer};
+    /// let ptr = Pointer::parse("/a/b").unwrap();
+    /// let mut components = ptr.components();
+    /// assert_eq!(components.next(), Some(Component::Root));
+    /// assert_eq!(components.next(), Some(Component::Token("a".into())));
+    /// assert_eq!(components.next(), Some(Component::Token("b".into())));
+    /// assert_eq!(components.next(), None);
+    /// ```
+    pub fn components(&self) -> Components {
+        self.tokens().into_components()
     }
 }
 
