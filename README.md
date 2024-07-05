@@ -1,4 +1,4 @@
-<!-- TODO: this will become the doc comments -->
+<!-- TODO: this will become the doc comments and be replaced with more generic verbage -->
 
 # jsonptr - JSON Pointers (RFC 6901)
 
