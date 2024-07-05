@@ -1,5 +1,6 @@
 use crate::{Pointer, Token, Tokens};
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Component<'t> {
     /// The document root
     Root,
@@ -12,6 +13,7 @@ impl<'t> From<Token<'t>> for Component<'t> {
     }
 }
 
+#[derive(Debug)]
 pub struct Components<'t> {
     tokens: Tokens<'t>,
 }
