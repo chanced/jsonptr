@@ -1,51 +1,46 @@
-use crate::Token;
+//! Abstract index representation for RFC 6901.
+//!
+//! [RFC 6901](https://datatracker.ietf.org/doc/html/rfc6901) defines two valid
+//! ways to represent array indices as Pointer tokens: non-negative integers,
+//! and the character `-`, which stands for the index after the last existing
+//! array member. While attempting to use `-` to access an array is an error,
+//! the token can be useful when paired with [RFC
+//! 6902](https://datatracker.ietf.org/∑doc/html/rfc6902) as a way to express
+//! where to put the new element when extending an array.
+//!
+//! While this crate doesn't implement RFC 6902, it still must consider
+//! non-numerical indices as valid, and provide a mechanism for manipulating
+//! them. This is what this module provides.
+//!
+//! The main use of the `Index` type is when resolving a [`Token`] instance as a
+//! concrete index for a given array length:
+//!
+//! ```
+//! # use jsonptr::{Index, Token};
+//! assert_eq!(Token::new("1").to_index(), Ok(Index::Num(1)));
+//! assert_eq!(Token::new("-").to_index(), Ok(Index::Next));
+//! assert!(Token::new("a").to_index().is_err());
+//!
+//! assert_eq!(Index::Num(0).for_len(1), Ok(0));
+//! assert!(Index::Num(1).for_len(1).is_err());
+//! assert!(Index::Next.for_len(1).is_err());
+//!
+//! assert_eq!(Index::Num(1).for_len_incl(1), Ok(1));
+//! assert_eq!(Index::Next.for_len_incl(1), Ok(1));
+//! assert!(Index::Num(2).for_len_incl(1).is_err());
+//!
+//! assert_eq!(Index::Num(42).for_len_unchecked(30), 42);
+//! assert_eq!(Index::Next.for_len_unchecked(30), 30);
+//! ````
+
+use crate::{OutOfBoundsError, ParseIndexError, Token};
 use alloc::string::String;
-use core::{
-    fmt::{self, Display},
-    num::ParseIntError,
-    str::FromStr,
-};
+use core::fmt::Display;
 
 /// Represents an abstract index into an array.
 ///
 /// If provided an upper bound with [`Self::for_len`] or [`Self::for_len_incl`],
 /// will produce a concrete numerical index.
-///
-/// [RFC 6901](https://datatracker.ietf.org/doc/html/rfc6901) defines two valid
-/// ways to represent array indices as Pointer tokens: non-negative integers,
-/// and the character `-`, which stands for the index after the last existing
-/// array member. While attempting to use `-` to access an array is an error,
-/// the token can be useful when paired with [RFC
-/// 6902](https://datatracker.ietf.org/∑doc/html/rfc6902) as a way to express
-/// where to put the new element when extending an array.
-///
-/// While this crate doesn't implement RFC 6902, it still must consider
-/// non-numerical indices as valid, and provide a mechanism for manipulating
-/// them. This is what this module provides.
-///
-/// The main use of the `Index` type is when resolving a [`Token`] instance as a
-/// concrete index for a given array length:
-///
-/// ## Example
-/// ```
-/// # use jsonptr::{Index, Token};
-/// assert_eq!(Token::new("1").to_index(), Ok(Index::Num(1)));
-/// assert_eq!(Token::new("-").to_index(), Ok(Index::Next));
-/// assert!(Token::new("a").to_index().is_err());
-///
-/// assert_eq!(Index::Num(0).for_len(1), Ok(0));
-/// assert!(Index::Num(1).for_len(1).is_err());
-/// assert!(Index::Next.for_len(1).is_err());
-///
-/// assert_eq!(Index::Num(1).for_len_incl(1), Ok(1));
-/// assert_eq!(Index::Next.for_len_incl(1), Ok(1));
-/// assert!(Index::Num(2).for_len_incl(1).is_err());
-///
-/// assert_eq!(Index::Num(42).for_len_unchecked(30), 42);
-/// assert_eq!(Index::Next.for_len_unchecked(30), 30);
-/// ```
-///
-///
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Index {
     /// A non-negative integer value
@@ -134,25 +129,13 @@ impl Index {
     /// assert_eq!(Index::Next.for_len_unchecked(30), 30);
     ///
     /// // no bounds checks
-    /// assert_eq!(Index::Num(40).for_len_unchecked(34), 40);
+    /// assert_eq!(Index::Num(34).for_len_unchecked(40), 40);
     /// assert_eq!(Index::Next.for_len_unchecked(34), 34);
     /// ````
     pub fn for_len_unchecked(&self, length: usize) -> usize {
         match *self {
             Self::Num(idx) => idx,
             Self::Next => length,
-        }
-    }
-}
-
-impl FromStr for Index {
-    type Err = ParseIndexError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s == "-" {
-            Ok(Index::Next)
-        } else {
-            Ok(s.parse::<usize>().map(Index::Num)?)
         }
     }
 }
@@ -189,7 +172,11 @@ impl TryFrom<&str> for Index {
     type Error = ParseIndexError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        Index::from_str(value)
+        if value == "-" {
+            Ok(Index::Next)
+        } else {
+            Ok(value.parse::<usize>().map(Index::Num)?)
+        }
     }
 }
 
@@ -200,21 +187,14 @@ macro_rules! derive_try_from {
                 type Error = ParseIndexError;
 
                 fn try_from(value: $t) -> Result<Self, Self::Error> {
-                    Index::from_str(&value)
+                    value.try_into()
                 }
             }
         )*
     }
 }
 
-impl TryFrom<Token<'_>> for Index {
-    type Error = ParseIndexError;
-
-    fn try_from(tok: Token) -> Result<Self, Self::Error> {
-        Index::from_str(tok.encoded())
-    }
-}
-derive_try_from!(String, &String);
+derive_try_from!(Token<'_>, String, &String);
 
 /*
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
