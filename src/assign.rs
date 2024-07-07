@@ -566,7 +566,7 @@ mod tests {
         ptr: &'static str,
         assign: V,
         expected_data: V,
-        expected_result: Result<Option<V>, V::Error>,
+        expected: Result<Option<V>, V::Error>,
     }
 
     impl<V> Test<V>
@@ -585,7 +585,7 @@ mod tests {
                 mut data,
                 assign,
                 expected_data,
-                expected_result,
+                expected,
                 ..
             } = self;
             let ptr = Pointer::from_static(ptr);
@@ -594,7 +594,7 @@ mod tests {
                 &expected_data, &data,
                 "test #{i}:\n\ndata: \n{data:#?}\n\nexpected_data\n{expected_data:#?}"
             );
-            assert_eq!(&expected_result, &replaced);
+            assert_eq!(&expected, &replaced);
         }
     }
 
@@ -615,90 +615,90 @@ mod tests {
                 data: json!({}),
                 assign: json!("bar"),
                 expected_data: json!({"foo": "bar"}),
-                expected_result: Ok(None),
+                expected: Ok(None),
             },
             Test {
                 ptr: "",
                 data: json!({"foo": "bar"}),
                 assign: json!("baz"),
                 expected_data: json!("baz"),
-                expected_result: Ok(Some(json!({"foo": "bar"}))),
+                expected: Ok(Some(json!({"foo": "bar"}))),
             },
             Test {
                 ptr: "/foo",
                 data: json!({"foo": "bar"}),
                 assign: json!("baz"),
                 expected_data: json!({"foo": "baz"}),
-                expected_result: Ok(Some(json!("bar"))),
+                expected: Ok(Some(json!("bar"))),
             },
             Test {
                 ptr: "/foo/bar",
                 data: json!({"foo": "bar"}),
                 assign: json!("baz"),
                 expected_data: json!({"foo": {"bar": "baz"}}),
-                expected_result: Ok(Some(json!("bar"))),
+                expected: Ok(Some(json!("bar"))),
             },
             Test {
                 ptr: "/foo/bar",
                 data: json!({}),
                 assign: json!("baz"),
                 expected_data: json!({"foo": {"bar": "baz"}}),
-                expected_result: Ok(None),
+                expected: Ok(None),
             },
             Test {
                 ptr: "/",
                 data: json!({}),
                 assign: json!("foo"),
                 expected_data: json!({"": "foo"}),
-                expected_result: Ok(None),
+                expected: Ok(None),
             },
             Test {
                 ptr: "/-",
                 data: json!({}),
                 assign: json!("foo"),
                 expected_data: json!({"-": "foo"}),
-                expected_result: Ok(None),
+                expected: Ok(None),
             },
             Test {
                 ptr: "/-",
                 data: json!(null),
                 assign: json!(34),
                 expected_data: json!([34]),
-                expected_result: Ok(Some(json!(null))),
+                expected: Ok(Some(json!(null))),
             },
             Test {
                 ptr: "/foo/-",
                 data: json!({"foo": "bar"}),
                 assign: json!("baz"),
                 expected_data: json!({"foo": ["baz"]}),
-                expected_result: Ok(Some(json!("bar"))),
+                expected: Ok(Some(json!("bar"))),
             },
             Test {
                 ptr: "/foo/-/bar",
                 assign: "baz".into(),
                 data: json!({}),
-                expected_result: Ok(None),
+                expected: Ok(None),
                 expected_data: json!({"foo":[{"bar": "baz"}]}),
             },
             Test {
                 ptr: "/foo/-/bar",
                 assign: "qux".into(),
                 data: json!({"foo":[{"bar":"baz" }]}),
-                expected_result: Ok(None),
+                expected: Ok(None),
                 expected_data: json!({"foo":[{"bar":"baz"},{"bar":"qux"}]}),
             },
             Test {
                 ptr: "/foo/-/bar",
                 data: json!({"foo":[{"bar":"baz"},{"bar":"qux"}]}),
                 assign: "quux".into(),
-                expected_result: Ok(None),
+                expected: Ok(None),
                 expected_data: json!({"foo":[{"bar":"baz"},{"bar":"qux"},{"bar":"quux"}]}),
             },
             Test {
                 ptr: "/foo/0/bar",
                 data: json!({"foo":[{"bar":"baz"},{"bar":"qux"},{"bar":"quux"}]}),
                 assign: "grault".into(),
-                expected_result: Ok(Some("baz".into())),
+                expected: Ok(Some("baz".into())),
                 expected_data: json!({"foo":[{"bar":"grault"},{"bar":"qux"},{"bar":"quux"}]}),
             },
             Test {
@@ -706,34 +706,34 @@ mod tests {
                 data: json!({}),
                 assign: json!("foo"),
                 expected_data: json!({"0": "foo"}),
-                expected_result: Ok(None),
+                expected: Ok(None),
             },
             Test {
                 ptr: "/1",
                 data: json!(null),
                 assign: json!("foo"),
                 expected_data: json!({"1": "foo"}),
-                expected_result: Ok(Some(json!(null))),
+                expected: Ok(Some(json!(null))),
             },
             Test {
                 ptr: "/0",
                 data: json!([]),
                 expected_data: json!(["foo"]),
                 assign: json!("foo"),
-                expected_result: Ok(None),
+                expected: Ok(None),
             },
             Test {
                 ptr: "///bar",
                 data: json!({"":{"":{"bar": 42}}}),
                 assign: json!(34),
                 expected_data: json!({"":{"":{"bar":34}}}),
-                expected_result: Ok(Some(json!(42))),
+                expected: Ok(Some(json!(42))),
             },
             Test {
                 ptr: "/1",
                 data: json!([]),
                 assign: json!("foo"),
-                expected_result: Err(AssignError::OutOfBounds {
+                expected: Err(AssignError::OutOfBounds {
                     offset: 0,
                     source: OutOfBoundsError {
                         index: 1,
@@ -746,14 +746,14 @@ mod tests {
                 ptr: "/0",
                 data: json!(["foo"]),
                 assign: json!("bar"),
-                expected_result: Ok(Some(json!("foo"))),
+                expected: Ok(Some(json!("foo"))),
                 expected_data: json!(["bar"]),
             },
             Test {
                 ptr: "/a",
                 data: json!([]),
                 assign: json!("foo"),
-                expected_result: Err(AssignError::FailedToParseIndex {
+                expected: Err(AssignError::FailedToParseIndex {
                     offset: 0,
                     source: ParseIndexError {
                         source: usize::from_str("foo").unwrap_err(),
@@ -781,97 +781,97 @@ mod tests {
                 ptr: "/foo",
                 assign: "bar".into(),
                 expected_data: toml! { "foo" = "bar" }.into(),
-                expected_result: Ok(None),
+                expected: Ok(None),
             },
             Test {
                 data: toml! {foo =  "bar"}.into(),
                 ptr: "",
                 assign: "baz".into(),
                 expected_data: "baz".into(),
-                expected_result: Ok(Some(toml! {foo =  "bar"}.into())),
+                expected: Ok(Some(toml! {foo =  "bar"}.into())),
             },
             Test {
                 data: toml! { foo = "bar"}.into(),
                 ptr: "/foo",
                 assign: "baz".into(),
                 expected_data: toml! {foo = "baz"}.into(),
-                expected_result: Ok(Some("bar".into())),
+                expected: Ok(Some("bar".into())),
             },
             Test {
                 data: toml! { foo = "bar"}.into(),
                 ptr: "/foo/bar",
                 assign: "baz".into(),
                 expected_data: toml! {foo = { bar = "baz"}}.into(),
-                expected_result: Ok(Some("bar".into())),
+                expected: Ok(Some("bar".into())),
             },
             Test {
                 data: Table::new().into(),
                 ptr: "/",
                 assign: "foo".into(),
                 expected_data: toml! {"" =  "foo"}.into(),
-                expected_result: Ok(None),
+                expected: Ok(None),
             },
             Test {
                 data: Table::new().into(),
                 ptr: "/-",
                 assign: "foo".into(),
                 expected_data: toml! {"-" = "foo"}.into(),
-                expected_result: Ok(None),
+                expected: Ok(None),
             },
             Test {
                 data: "data".into(),
                 ptr: "/-",
                 assign: 34.into(),
                 expected_data: Value::Array(vec![34.into()]),
-                expected_result: Ok(Some("data".into())),
+                expected: Ok(Some("data".into())),
             },
             Test {
                 data: toml! {foo = "bar"}.into(),
                 ptr: "/foo/-",
                 assign: "baz".into(),
                 expected_data: toml! {foo =  ["baz"]}.into(),
-                expected_result: Ok(Some("bar".into())),
+                expected: Ok(Some("bar".into())),
             },
             Test {
                 data: Table::new().into(),
                 ptr: "/0",
                 assign: "foo".into(),
                 expected_data: toml! {"0" = "foo"}.into(),
-                expected_result: Ok(None),
+                expected: Ok(None),
             },
             Test {
                 data: 21.into(),
                 ptr: "/1",
                 assign: "foo".into(),
                 expected_data: toml! {"1" = "foo"}.into(),
-                expected_result: Ok(Some(21.into())),
+                expected: Ok(Some(21.into())),
             },
             Test {
                 data: Value::Array(vec![]),
                 ptr: "/0",
                 expected_data: vec![Value::from("foo")].into(),
                 assign: "foo".into(),
-                expected_result: Ok(None),
+                expected: Ok(None),
             },
             Test {
                 ptr: "/foo/-/bar",
                 assign: "baz".into(),
                 data: Table::new().into(),
-                expected_result: Ok(None),
+                expected: Ok(None),
                 expected_data: toml! { "foo" = [{"bar" = "baz"}] }.into(),
             },
             Test {
                 ptr: "/foo/-/bar",
                 assign: "qux".into(),
                 data: toml! {"foo" = [{"bar" = "baz"}] }.into(),
-                expected_result: Ok(None),
+                expected: Ok(None),
                 expected_data: toml! {"foo" = [{"bar" = "baz"}, {"bar" = "qux"}]}.into(),
             },
             Test {
                 ptr: "/foo/-/bar",
                 data: toml! {"foo" = [{"bar" = "baz"}, {"bar" = "qux"}]}.into(),
                 assign: "quux".into(),
-                expected_result: Ok(None),
+                expected: Ok(None),
                 expected_data: toml! {"foo" = [{"bar" = "baz"}, {"bar" = "qux"}, {"bar" = "quux"}]}
                     .into(),
             },
@@ -879,7 +879,7 @@ mod tests {
                 ptr: "/foo/0/bar",
                 data: toml! {"foo" = [{"bar" = "baz"}, {"bar" = "qux"}, {"bar" = "quux"}]}.into(),
                 assign: "grault".into(),
-                expected_result: Ok(Some("baz".into())),
+                expected: Ok(Some("baz".into())),
                 expected_data:
                     toml! {"foo" = [{"bar" = "grault"}, {"bar" = "qux"}, {"bar" = "quux"}]}.into(),
             },
@@ -887,14 +887,14 @@ mod tests {
                 data: Value::Array(vec![]),
                 ptr: "/-",
                 assign: "foo".into(),
-                expected_result: Ok(None),
+                expected: Ok(None),
                 expected_data: vec!["foo"].into(),
             },
             Test {
                 data: Value::Array(vec![]),
                 ptr: "/1",
                 assign: "foo".into(),
-                expected_result: Err(AssignError::OutOfBounds {
+                expected: Err(AssignError::OutOfBounds {
                     offset: 0,
                     source: OutOfBoundsError {
                         index: 1,
@@ -907,7 +907,7 @@ mod tests {
                 data: Value::Array(vec![]),
                 ptr: "/a",
                 assign: "foo".into(),
-                expected_result: Err(AssignError::FailedToParseIndex {
+                expected: Err(AssignError::FailedToParseIndex {
                     offset: 0,
                     source: ParseIndexError {
                         source: usize::from_str("foo").unwrap_err(),

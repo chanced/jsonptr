@@ -758,67 +758,67 @@ mod tests {
             Test {
                 ptr: "",
                 data,
-                expected_result: Ok(data),
+                expected: Ok(data),
             },
             Test {
                 ptr: "/array",
                 data,
-                expected_result: Ok(data.get("array").unwrap()), // ["bar", "baz"]
+                expected: Ok(data.get("array").unwrap()), // ["bar", "baz"]
             },
             Test {
                 ptr: "/array/0",
                 data,
-                expected_result: Ok(data.get("array").unwrap().get(0).unwrap()), // "bar"
+                expected: Ok(data.get("array").unwrap().get(0).unwrap()), // "bar"
             },
             Test {
                 ptr: "/a~1b",
                 data,
-                expected_result: Ok(data.get("a/b").unwrap()), // 1
+                expected: Ok(data.get("a/b").unwrap()), // 1
             },
             Test {
                 ptr: "/c%d",
                 data,
-                expected_result: Ok(data.get("c%d").unwrap()), // 2
+                expected: Ok(data.get("c%d").unwrap()), // 2
             },
             Test {
                 ptr: "/e^f",
                 data,
-                expected_result: Ok(data.get("e^f").unwrap()), // 3
+                expected: Ok(data.get("e^f").unwrap()), // 3
             },
             Test {
                 ptr: "/g|h",
                 data,
-                expected_result: Ok(data.get("g|h").unwrap()), // 4
+                expected: Ok(data.get("g|h").unwrap()), // 4
             },
             Test {
                 ptr: "/i\\j",
                 data,
-                expected_result: Ok(data.get("i\\j").unwrap()), // 5
+                expected: Ok(data.get("i\\j").unwrap()), // 5
             },
             Test {
                 ptr: "/k\"l",
                 data,
-                expected_result: Ok(data.get("k\"l").unwrap()), // 6
+                expected: Ok(data.get("k\"l").unwrap()), // 6
             },
             Test {
                 ptr: "/ ",
                 data,
-                expected_result: Ok(data.get(" ").unwrap()), // 7
+                expected: Ok(data.get(" ").unwrap()), // 7
             },
             Test {
                 ptr: "/m~0n",
                 data,
-                expected_result: Ok(data.get("m~n").unwrap()), // 8
+                expected: Ok(data.get("m~n").unwrap()), // 8
             },
             Test {
                 ptr: "/object/bool/unresolvable",
                 data,
-                expected_result: Err(ResolveError::Unreachable { offset: 12 }),
+                expected: Err(ResolveError::Unreachable { offset: 12 }),
             },
             Test {
                 ptr: "/object/not_found",
                 data,
-                expected_result: Err(ResolveError::NotFound { offset: 7 }),
+                expected: Err(ResolveError::NotFound { offset: 7 }),
             },
         ]);
     }
@@ -850,7 +850,7 @@ mod tests {
             } = self;
             let ptr = Pointer::from_static(ptr);
 
-            // cloning the data & expected_result to make comparison easier
+            // cloning the data & expected to make comparison easier
             let mut data = data.clone();
             let expected = expected.cloned();
 
