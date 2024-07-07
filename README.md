@@ -1,5 +1,3 @@
-<!-- TODO: this will become the doc comments and be replaced with more generic verbiage -->
-
 # jsonptr - JSON Pointers (RFC 6901)
 
 [<img alt="github" src="https://img.shields.io/badge/github-chanced/jsonptr-62D1FC?style=for-the-badge&labelColor=777&logo=github" height="21">](https://github.com/chanced/jsonptr)
@@ -15,16 +13,16 @@ abstractly.
 
 A [`Pointer`] is composed of zero or more [`Token`]s, single segments which
 represent a field of an object or an [`Index`] of an array, and are bounded by
-either `'/'` or the end of the string. [`Token`]s are lightly encoded, where
+either `'/'` or the end of the string. [`Token`]s are lightly encoded,
 `'~'` is encoded as `"~0"` and `'/'` is encoded as `"~1"`. Combined, the
 [`Pointer`] is able to identify a specific location within a JSON, or similar,
 document.
 
 [`Token`]s can be iterated over using either [`Tokens`], returned from the
 [`tokens`](`Pointer::tokens`) method of a pointer or [`Components`], returned
-from the [`components`](`Pointer::components`). The difference being that
-[`Tokens`] iterates over each [`Token`] in the pointer, while a [`Component`]
-can represent the [`Root`](Component::Root) document or a single
+from the [`components`](`Pointer::components`) method. The difference being that
+[`Tokens`] iterates over each [`Token`] in the [`Pointer`], while a
+[`Component`] can represent the [`Root`](Component::Root) document or a single
 [`Token`](Component::Token).
 
 Operations [`resolve`], [`assign`] and [`delete`] are provided as traits with
@@ -45,40 +43,33 @@ for [`serde_json::Value`] and [`toml::Value`](https://docs.rs/toml/0.8).
 
 ## Usage
 
-### Resolving a value
+### Resolving a Value
 
-Using the `resolve` method, you can resolve a pointer against a value type that
-implements [`Resolve`].
+See [`resolve`] for more information.
 
 ```rust
 # use jsonptr::{Pointer};
+# use serde_json::json;
+
 let ptr = Pointer::parse("/foo/bar").unwrap();
-let bar = ptr.resolve(&json!({"foo": {"bar": 34}})).unwrap();
-assert_eq!(bar, &json!(34));
+let data = json!({"foo": { "bar": 34 }});
+let bar = ptr.resolve().unwrap();
+assert_eq!(bar, json!(34));
 ```
 
-### Resolve
+### Assigning a Value
+
+see [`assign`] for more information.
 
 ```rust
-use jsonptr::Pointer;
-use serde_json::json;
+# use jsonptr::{Pointer};
+# use serde_json::json;
 
-let ptr = Pointer::parse("/foo/bar").unwrap();
-let bar = ptr.resolve(&json!({"foo": {"bar": 34}})).unwrap();
-assert_eq!(bar, &json!(34));
-```
-
-### Assign
-
-```rust
-use jsonptr::Pointer;
-use serde_json::json;
-
-let ptr = Pointer::parse("/foo/bar").unwrap();
-let mut data = json!({});
-let res = ptr.assign(&mut data, json!({"baz": 34}));
-assert_eq!(res, Ok(None));
-assert_eq!(data, json!({"foo": {"bar": {"baz": 34}}}));
+let ptr = Pointer::parse("/secret/universe").unwrap();
+let mut data = json!({"secret": { "universe": 42 }});
+let replaced = ptr.assign(&mut data, json!(34)).unwrap();
+assert_eq!(replaced, json!(42));
+assert_eq!(data, json!({"secret": { "universe": 34 }}));
 ```
 
 ## Contributions / Issues
