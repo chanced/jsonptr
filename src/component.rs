@@ -40,3 +40,36 @@ impl<'t> From<&'t Pointer> for Components<'t> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn components() {
+        let ptr = Pointer::from_static("");
+        let components: Vec<_> = Components::from(ptr).collect();
+        assert_eq!(components, vec![Component::Root]);
+
+        let ptr = Pointer::from_static("/foo");
+        let components = ptr.components().collect::<Vec<_>>();
+        assert_eq!(
+            components,
+            vec![Component::Root, Component::Token("foo".into())]
+        );
+
+        let ptr = Pointer::from_static("/foo/bar/-/0/baz");
+        let components = ptr.components().collect::<Vec<_>>();
+        assert_eq!(
+            components,
+            vec![
+                Component::Root,
+                Component::from(Token::from("foo")),
+                Component::Token("bar".into()),
+                Component::Token("-".into()),
+                Component::Token("0".into()),
+                Component::Token("baz".into())
+            ]
+        );
+    }
+}
