@@ -33,9 +33,9 @@
 //! assert_eq!(Index::Next.for_len_unchecked(30), 30);
 //! ````
 
-use crate::{OutOfBoundsError, ParseIndexError, Token};
+use crate::Token;
 use alloc::string::String;
-use core::fmt::Display;
+use core::{fmt, num::ParseIntError};
 
 /// Represents an abstract index into an array.
 ///
@@ -140,7 +140,7 @@ impl Index {
     }
 }
 
-impl Display for Index {
+impl fmt::Display for Index {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Self::Num(index) => write!(f, "{index}"),

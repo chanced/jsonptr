@@ -35,7 +35,7 @@ pub use pointer::{ParseError, Pointer, PointerBuf, ReplaceTokenError};
 mod token;
 pub use token::{InvalidEncodingError, Token, Tokens};
 
-mod index;
+pub mod index;
 pub use index::{Index, OutOfBoundsError, ParseIndexError};
 
 mod component;
