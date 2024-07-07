@@ -18,7 +18,7 @@
 //! concrete index for a given array length:
 //!
 //! ```
-//! # use jsonptr::{Index, Token};
+//! # use jsonptr::{index::Index, Token};
 //! assert_eq!(Token::new("1").to_index(), Ok(Index::Num(1)));
 //! assert_eq!(Token::new("-").to_index(), Ok(Index::Next));
 //! assert!(Token::new("a").to_index().is_err());

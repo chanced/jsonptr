@@ -235,7 +235,7 @@ impl<'a> Token<'a> {
     /// ## Examples
     ///
     /// ```
-    /// # use jsonptr::{Index, Token};
+    /// # use jsonptr::{index::Index, Token};
     /// assert_eq!(Token::new("-").to_index(), Ok(Index::Next));
     /// assert_eq!(Token::new("0").to_index(), Ok(Index::Num(0)));
     /// assert_eq!(Token::new("2").to_index(), Ok(Index::Num(2)));
