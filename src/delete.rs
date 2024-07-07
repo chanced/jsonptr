@@ -13,18 +13,10 @@
 //!     - `"json"` - `serde_json::Value::Null`
 //!     - `"toml"` - `toml::Value::Table::Default`
 //!
-//! ## Feature Flag
-//! This module is enabled by default with the `"resolve"` feature flag.
+//! This module is enabled by default with the `"delete"` feature flag.
 //!
-//! ## Provided implementations
-//!
-//! | Lang  |     value type      | feature flag | Default |
-//! | ----- |: ----------------- :|: ---------- :| ------- |
-//! | JSON  | `serde_json::Value` |   `"json"`   |   ✓     |
-//! | TOML  |    `toml::Value`    |   `"toml"`   |         |
-//!
-//! ## Examples
-//! ### Deleting a resolved pointer:
+//! ## Usage
+//!  Deleting a resolved pointer:
 //! ```rust
 //! use jsonptr::{Pointer, delete::Delete};
 //! use serde_json::json;
@@ -34,7 +26,7 @@
 //! assert_eq!(data.delete(&ptr), Some("qux".into()));
 //! assert_eq!(data, json!({ "foo": { "bar": {} } }));
 //! ```
-//! ### Deleting a non-existent Pointer returns `None`:
+//! Deleting a non-existent Pointer returns `None`:
 //! ```rust
 //! use jsonptr::{ Pointer, delete::Delete };
 //! use serde_json::json;
@@ -44,7 +36,7 @@
 //! assert_eq!(ptr.delete(&mut data), None);
 //! assert_eq!(data, json!({}));
 //! ```
-//! ### Deleting a root pointer replaces the value with `Value::Null`:
+//! Deleting a root pointer replaces the value with `Value::Null`:
 //! ```rust
 //! use jsonptr::{Pointer, delete::Delete};
 //! use serde_json::json;
@@ -54,6 +46,14 @@
 //! assert_eq!(data.delete(&ptr), Some(json!({ "foo": { "bar": "baz" } })));
 //! assert!(data.is_null());
 //! ```
+//!
+//! ## Provided implementations
+//!
+//! | Lang  |     value type      | feature flag | Default |
+//! | ----- |: ----------------- :|: ---------- :| ------- |
+//! | JSON  | `serde_json::Value` |   `"json"`   |   ✓     |
+//! | TOML  |    `toml::Value`    |   `"toml"`   |         |
+
 use crate::Pointer;
 
 /*

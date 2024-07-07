@@ -4,8 +4,26 @@
 //! implemented by types that can internally resolve a value based on a JSON
 //! Pointer.
 //!
-//! ## Feature Flag
 //! This module is enabled by default with the `"resolve"` feature flag.
+//!
+//! ## Usage
+//! [`Resolve`] and [`ResolveMut`] can be used directly or through the
+//! [`resolve`](Pointer::resolve) and [`resolve_mut`](Pointer::resolve_mut)
+//! methods on [`Pointer`] and [`PointerBuf`](crate::PointerBuf).
+//! ```rust
+//! use jsonptr::{Pointer, Resolve, ResolveMut};
+//! use serde_json::json;
+//!
+//! let ptr = Pointer::from_static("/foo/1");
+//! let mut data = json!({"foo": ["bar", "baz"]});
+//!
+//! let value = ptr.resolve(&data).unwrap();
+//! assert_eq!(value, &json!("baz"));
+//!
+//! let value = data.resolve_mut(ptr).unwrap();
+//! assert_eq!(value, &json!("baz"));
+//!
+//! ```
 //!
 //! ## Provided implementations
 //!

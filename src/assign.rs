@@ -3,15 +3,7 @@
 //! This module provides the [`Assign`] trait which allows for the assignment of
 //! values based on a JSON Pointer.
 //!
-//! ## Feature Flag
 //! This module is enabled by default with the `"assign"` feature flag.
-//!
-//! ## Provided implementations
-//!
-//! | Lang  |     value type      | feature flag | Default |
-//! | ----- |: ----------------- :|: ---------- :| ------- |
-//! | JSON  | `serde_json::Value` |   `"json"`   |   ✓     |
-//! | TOML  |    `toml::Value`    |   `"toml"`   |         |
 //!
 //! # Expansion
 //! The path will automatically be expanded if the [`Pointer`] is not fully
@@ -25,7 +17,10 @@
 //!
 //!
 //!
-//! ## Example
+//! ## Usage
+//! [`Assign`] can be used directly or through the [`assign`](Pointer::assign)
+//! method of [`Pointer`].
+//!
 //! ```rust
 //! # use jsonptr::Pointer;
 //! # use serde_json::json;
@@ -35,6 +30,13 @@
 //! assert_eq!(replaced, Some(json!("bar")));
 //! assert_eq!(data, json!({"foo": "baz"}));
 //! ```
+//! ## Provided implementations
+//!
+//! | Lang  |     value type      | feature flag | Default |
+//! | ----- |: ----------------- :|: ---------- :| ------- |
+//! | JSON  | `serde_json::Value` |   `"json"`   |   ✓     |
+//! | TOML  |    `toml::Value`    |   `"toml"`   |         |
+//!
 
 use crate::{
     index::{OutOfBoundsError, ParseIndexError},
