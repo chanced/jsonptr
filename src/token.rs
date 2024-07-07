@@ -328,32 +328,21 @@ impl alloc::fmt::Display for Token<'_> {
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 */
 
-/// An iterator over the tokens in a Pointer.
+/// An iterator over the [`Token`]s of a [`Pointer`](crate::Pointer).
 #[derive(Debug)]
 pub struct Tokens<'a> {
-    pub(crate) has_sent: bool,
     inner: Split<'a, char>,
 }
 
 impl<'a> Iterator for Tokens<'a> {
     type Item = Token<'a>;
     fn next(&mut self) -> Option<Self::Item> {
-        if !self.has_sent {
-            self.has_sent = true;
-        }
         self.inner.next().map(Token::from_encoded_unchecked)
     }
 }
 impl<'t> Tokens<'t> {
     pub(crate) fn new(inner: Split<'t, char>) -> Self {
-        Self {
-            inner,
-            has_sent: false,
-        }
-    }
-
-    pub fn into_components(self) -> crate::Components<'t> {
-        crate::Components::new(self)
+        Self { inner }
     }
 }
 

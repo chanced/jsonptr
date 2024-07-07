@@ -406,7 +406,7 @@ impl Pointer {
     /// assert_eq!(components.next(), None);
     /// ```
     pub fn components(&self) -> Components {
-        self.tokens().into_components()
+        self.into()
     }
 }
 
