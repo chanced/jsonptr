@@ -68,7 +68,7 @@ impl Index {
     /// # Examples
     ///
     /// ```
-    /// # use jsonptr::Index;
+    /// # use jsonptr::index::Index;
     /// assert_eq!(Index::Num(0).for_len(1), Ok(0));
     /// assert!(Index::Num(1).for_len(1).is_err());
     /// assert!(Index::Next.for_len(1).is_err());
@@ -100,7 +100,7 @@ impl Index {
     /// # Examples
     ///
     /// ```
-    /// # use jsonptr::Index;
+    /// # use jsonptr::index::Index;
     /// assert_eq!(Index::Num(1).for_len_incl(1), Ok(1));
     /// assert_eq!(Index::Next.for_len_incl(1), Ok(1));
     /// assert!(Index::Num(2).for_len_incl(1).is_err());
@@ -126,7 +126,7 @@ impl Index {
     /// # Examples
     ///
     /// ```
-    /// # use jsonptr::Index;
+    /// # use jsonptr::index::Index;
     /// assert_eq!(Index::Num(42).for_len_unchecked(30), 42);
     /// assert_eq!(Index::Next.for_len_unchecked(30), 30);
     ///
