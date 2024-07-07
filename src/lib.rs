@@ -36,7 +36,6 @@ mod token;
 pub use token::{InvalidEncodingError, Token, Tokens};
 
 pub mod index;
-pub use index::{Index, OutOfBoundsError, ParseIndexError};
 
 mod component;
 pub use component::{Component, Components};

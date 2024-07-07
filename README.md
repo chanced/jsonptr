@@ -14,7 +14,7 @@ document. This crate provides two types, [`Pointer`] and [`PointerBuf`] (akin to
 A [`Pointer`] is composed of zero or more [`Token`]s, single segments which
 represent a field of an object or an [`index`] of an array, and are bounded by
 either `'/'` or the end of the string. [`Token`]s are lightly encoded, where
-`'~'` is encoded as `"~0"` and `'/'` as `"~1"`. Combined, the [`Pointer`] forms
+`'~'` is escaped as `"~0"` and `'/'` as `"~1"`. Combined, the [`Pointer`] forms
 a path to a specific location within a JSON, or similar, document.
 
 [`Token`]s can be iterated over using either [`Tokens`], returned from the
@@ -31,87 +31,66 @@ operations are enabled by default but are gated by [feature flags](#feature-flag
 
 ## Usage
 
-### Basic usage
+To parse a pointer from a string, use the [`parse`](Pointer::parse) method.
+[`PointerBuf`] can use either the [`parse`](PointerBuf::parse) or
+[`from_tokens`](PointerBuf::from_tokens) construct from an iterator of
+[`Token`]s:
 
-To parse a pointer from a string, use the [`parse`](Pointer::parse) method or construct
-from an iterator of [`Token`]s:
+```rust
+use jsonptr::{Pointer, PointerBuf};
+use serde_json::json;
+
+let ptr = Pointer::parse("/examples/0/name").unwrap();
+
+let buf = PointerBuf::from_tokens(["examples", "0", "name"]);
+assert_eq!(ptr, &buf);
+
+let parent = ptr.parent().unwrap();
+assert_eq!(parent, Pointer::parse("/examples/0").unwrap());
+
+let (front, remaining) = ptr.split_front().unwrap();
+assert_eq!(front.decoded(), "examples");
+assert_eq!(remaining, Pointer::parse("/0/name").unwrap());
+```
+
+Values can be resolved by `Pointer`s using either [`Resolve`] or [`ResolveMut`]
+traits. See the [`resolve`] mod for more information.
 
 ```rust
 use jsonptr::Pointer;
 use serde_json::json;
 
-let ptr = Pointer::parse("/examples/0/name").unwrap();
-
-let from_tokens = Pointer::from_tokens(["examples", "0", "name"]).unwrap();
-assert_eq!(ptr, from_tokens);
-
-let parent = ptr.parent();
-assert_eq!(parent, Pointer::parse("/examples/0").unwrap());
-
-let (front, remaining) = ptr.split_front();
-assert_eq!(front, "examples");
-assert_eq!(remaining, Pointer::parse("/0/name").unwrap());
-
-
-
-```
-
-### Assigning a Value
-
-see [`assign`] for more information.
-
-```rust
-# use jsonptr::{Pointer};
-# use serde_json::json;
-
-let ptr = Pointer::parse("/secret/universe").unwrap();
-let mut data = json!({"secret": { "universe": 42 }});
-let replaced = ptr.assign(&mut data, json!(34)).unwrap();
-assert_eq!(replaced, json!(42));
-assert_eq!(data, json!({"secret": { "universe": 34 }}));
-```
-
-### Resolving a Value
-
-See [`resolve`] for more information.
-
-```rust
-# use jsonptr::{Pointer};
-# use serde_json::json;
-
 let ptr = Pointer::parse("/foo/bar").unwrap();
 let data = json!({"foo": { "bar": 34 }});
-let bar = ptr.resolve().unwrap();
-assert_eq!(bar, json!(34));
+let bar = ptr.resolve(&data).unwrap();
+assert_eq!(*bar, json!(34));
 ```
 
-### Assigning a Value
-
-see [`assign`] for more information.
+Values can be assigned using the [`Assign`] trait. See [`assign`] for more
+information.
 
 ```rust
-# use jsonptr::{Pointer};
-# use serde_json::json;
+use jsonptr::Pointer;
+use serde_json::json;
 
 let ptr = Pointer::parse("/secret/universe").unwrap();
 let mut data = json!({"secret": { "universe": 42 }});
 let replaced = ptr.assign(&mut data, json!(34)).unwrap();
-assert_eq!(replaced, json!(42));
+assert_eq!(replaced, Some(json!(42)));
 assert_eq!(data, json!({"secret": { "universe": 34 }}));
 ```
 
-### Assigning a Value
-
-see [`assign`] for more information.
+Values can be deleted with the [`Delete`] trait. See [`delete`] for more
+information.
 
 ```rust
-# use jsonptr::{Pointer};
-# use serde_json::json;
+use jsonptr::Pointer;
+use serde_json::json;
 
 let ptr = Pointer::parse("/secret/universe").unwrap();
 let mut data = json!({"secret": { "universe": 42 }});
 let replaced = ptr.assign(&mut data, json!(34)).unwrap();
-assert_eq!(replaced, json!(42));
+assert_eq!(replaced, Some(json!(42)));
 assert_eq!(data, json!({"secret": { "universe": 34 }}));
 ```
 
