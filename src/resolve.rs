@@ -647,79 +647,79 @@ mod tests {
             Test {
                 ptr: "",
                 data,
-                expected_result: Ok(data),
+                expected: Ok(data),
             },
             // 1
             Test {
                 ptr: "/array",
                 data,
-                expected_result: Ok(data.get("array").unwrap()), // ["bar", "baz"]
+                expected: Ok(data.get("array").unwrap()), // ["bar", "baz"]
             },
             // 2
             Test {
                 ptr: "/array/0",
                 data,
-                expected_result: Ok(data.get("array").unwrap().get(0).unwrap()), // "bar"
+                expected: Ok(data.get("array").unwrap().get(0).unwrap()), // "bar"
             },
             // 3
             Test {
                 ptr: "/a~1b",
                 data,
-                expected_result: Ok(data.get("a/b").unwrap()), // 1
+                expected: Ok(data.get("a/b").unwrap()), // 1
             },
             // 4
             Test {
                 ptr: "/c%d",
                 data,
-                expected_result: Ok(data.get("c%d").unwrap()), // 2
+                expected: Ok(data.get("c%d").unwrap()), // 2
             },
             // 5
             Test {
                 ptr: "/e^f",
                 data,
-                expected_result: Ok(data.get("e^f").unwrap()), // 3
+                expected: Ok(data.get("e^f").unwrap()), // 3
             },
             // 6
             Test {
                 ptr: "/g|h",
                 data,
-                expected_result: Ok(data.get("g|h").unwrap()), // 4
+                expected: Ok(data.get("g|h").unwrap()), // 4
             },
             // 7
             Test {
                 ptr: "/i\\j",
                 data,
-                expected_result: Ok(data.get("i\\j").unwrap()), // 5
+                expected: Ok(data.get("i\\j").unwrap()), // 5
             },
             // 8
             Test {
                 ptr: "/k\"l",
                 data,
-                expected_result: Ok(data.get("k\"l").unwrap()), // 6
+                expected: Ok(data.get("k\"l").unwrap()), // 6
             },
             // 9
             Test {
                 ptr: "/ ",
                 data,
-                expected_result: Ok(data.get(" ").unwrap()), // 7
+                expected: Ok(data.get(" ").unwrap()), // 7
             },
             // 10
             Test {
                 ptr: "/m~0n",
                 data,
-                expected_result: Ok(data.get("m~n").unwrap()), // 8
+                expected: Ok(data.get("m~n").unwrap()), // 8
             },
             // 11
             Test {
                 ptr: "/object/bool/unresolvable",
                 data,
-                expected_result: Err(ResolveError::Unreachable { offset: 12 }),
+                expected: Err(ResolveError::Unreachable { offset: 12 }),
             },
             // 12
             Test {
                 ptr: "/object/not_found",
                 data,
-                expected_result: Err(ResolveError::NotFound { offset: 7 }),
+                expected: Err(ResolveError::NotFound { offset: 7 }),
             },
         ]);
     }
@@ -824,7 +824,7 @@ mod tests {
     }
     struct Test<'v, V> {
         ptr: &'static str,
-        expected_result: Result<&'v V, ResolveError>,
+        expected: Result<&'v V, ResolveError>,
         data: &'v V,
     }
 
@@ -846,21 +846,21 @@ mod tests {
             let Test {
                 ptr,
                 data,
-                expected_result,
+                expected,
             } = self;
             let ptr = Pointer::from_static(ptr);
 
             // cloning the data & expected_result to make comparison easier
             let mut data = data.clone();
-            let expected_result = expected_result.cloned();
+            let expected = expected.cloned();
 
             // testing Resolve
             let res = data.resolve(ptr).cloned();
-            assert_eq!(&res, &expected_result);
+            assert_eq!(&res, &expected);
 
             // testing ResolveMut
             let res = data.resolve_mut(ptr).cloned();
-            assert_eq!(&res, &expected_result);
+            assert_eq!(&res, &expected);
         }
     }
 }
