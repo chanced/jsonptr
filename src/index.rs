@@ -3,10 +3,12 @@
 //! [RFC 6901](https://datatracker.ietf.org/doc/html/rfc6901) defines two valid
 //! ways to represent array indices as Pointer tokens: non-negative integers,
 //! and the character `-`, which stands for the index after the last existing
-//! array member. While attempting to use `-` to access an array is an error,
-//! the token can be useful when paired with [RFC
-//! 6902](https://datatracker.ietf.org/∑doc/html/rfc6902) as a way to express
-//! where to put the new element when extending an array.
+//! array member. While attempting to use `-` to resolve an array value will
+//! always be out of bounds, the token can be useful when paired with utilities
+//! which can mutate a value, such as this crate's [`assign`](crate::assign)
+//! functionality or JSON Patch [RFC
+//! 6902](https://datatracker.ietf.org/doc/html/rfc6902), as it provides a way
+//! to express where to put the new element when extending an array.
 //!
 //! While this crate doesn't implement RFC 6902, it still must consider
 //! non-numerical indices as valid, and provide a mechanism for manipulating
@@ -35,7 +37,7 @@
 
 use crate::Token;
 use alloc::string::String;
-use core::{fmt, num::ParseIntError};
+use core::{fmt, num::ParseIntError, str::FromStr};
 
 /// Represents an abstract index into an array.
 ///
@@ -155,16 +157,23 @@ impl From<usize> for Index {
     }
 }
 
+impl FromStr for Index {
+    type Err = ParseIndexError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == "-" {
+            Ok(Index::Next)
+        } else {
+            Ok(s.parse::<usize>().map(Index::Num)?)
+        }
+    }
+}
+
 impl TryFrom<&Token<'_>> for Index {
     type Error = ParseIndexError;
 
     fn try_from(value: &Token) -> Result<Self, Self::Error> {
-        // we don't need to decode because it's a single char
-        if value.encoded() == "-" {
-            Ok(Index::Next)
-        } else {
-            Ok(value.decoded().parse::<usize>().map(Index::Num)?)
-        }
+        Index::from_str(value.encoded())
     }
 }
 
@@ -172,11 +181,15 @@ impl TryFrom<&str> for Index {
     type Error = ParseIndexError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        if value == "-" {
-            Ok(Index::Next)
-        } else {
-            Ok(value.parse::<usize>().map(Index::Num)?)
-        }
+        Index::from_str(value)
+    }
+}
+
+impl TryFrom<Token<'_>> for Index {
+    type Error = ParseIndexError;
+
+    fn try_from(value: Token) -> Result<Self, Self::Error> {
+        Index::from_str(value.encoded())
     }
 }
 
@@ -187,14 +200,14 @@ macro_rules! derive_try_from {
                 type Error = ParseIndexError;
 
                 fn try_from(value: $t) -> Result<Self, Self::Error> {
-                    value.try_into()
+                    Index::from_str(&value)
                 }
             }
         )*
     }
 }
 
-derive_try_from!(Token<'_>, String, &String);
+derive_try_from!(String, &String);
 
 /*
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
