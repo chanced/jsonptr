@@ -22,7 +22,6 @@
 //!
 //! let value = data.resolve_mut(ptr).unwrap();
 //! assert_eq!(value, &json!("baz"));
-//!
 //! ```
 //!
 //! ## Provided implementations
