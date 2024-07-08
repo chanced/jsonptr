@@ -155,5 +155,6 @@ dual licensed as above, without any additional terms or conditions.
 [`Delete`]: https://docs.rs/jsonptr/latest/jsonptr/delete/trait.Delete.html
 [`serde`]: https://docs.rs/serde/1.0.120/serde/index
 [`serde_json::Value`]: https://docs.rs/serde_json/1.0.120/serde_json/enum.Value.html
+[`toml::Value`]: https://docs.rs/toml/0.8/toml/enum.Value.html
 [`str`]: https://doc.rust-lang.org/std/primitive.str.html
 [`String`]: https://doc.rust-lang.org/std/string/struct.String.html
