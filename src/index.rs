@@ -338,7 +338,7 @@ mod tests {
     }
 
     #[test]
-    fn testindex_try_from_string_next() {
+    fn index_try_from_string_next() {
         let index = Index::try_from(String::from("-")).unwrap();
         assert_eq!(index, Index::Next);
     }
@@ -351,7 +351,7 @@ mod tests {
 
     #[test]
     fn index_for_len_incl_out_of_bounds() {
-        assert!(Index::Num(2).for_len_incl(1).is_err());
+        Index::Num(2).for_len_incl(1).unwrap_err();
     }
 
     #[test]

@@ -183,7 +183,7 @@ impl Pointer {
             .into()
     }
     /// Splits the `Pointer` at the given index if the character at the index is
-    /// a seperator backslash (`'/'`), returning `Some((head, tail))`. Otherwise,
+    /// a separator backslash (`'/'`), returning `Some((head, tail))`. Otherwise,
     /// returns `None`.
     ///
     /// For the following JSON Pointer, the following splits are possible (0, 4, 8):
@@ -930,7 +930,7 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
     if bytes[0] != b'/' {
         return Err(ParseError::NoLeadingBackslash);
     }
-    let mut ptr_offset = 0; // offset within the pointer of the most recent '/' seperator
+    let mut ptr_offset = 0; // offset within the pointer of the most recent '/' separator
     let mut tok_offset = 0; // offset within the current token
 
     let bytes = value.as_bytes();
@@ -938,7 +938,7 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
     while i < bytes.len() {
         match bytes[i] {
             b'/' => {
-                // backslashes ('/') seperate tokens
+                // backslashes ('/') separate tokens
                 // we increment the ptr_offset to point to this character
                 ptr_offset = i;
                 // and reset the token offset
@@ -951,7 +951,7 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
                     // the pointer is not properly encoded
                     //
                     // we use the pointer offset, which points to the last
-                    // encountered seperator, as the offset of the error.
+                    // encountered separator, as the offset of the error.
                     // The source `InvalidEncodingError` then uses the token
                     // offset.
                     //
@@ -975,7 +975,7 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
             _ => {}
         }
         i += 1;
-        // not a seperator so we increment the token offset
+        // not a separator so we increment the token offset
         tok_offset += 1;
     }
     Ok(value)
@@ -1023,25 +1023,23 @@ impl fmt::Display for ParseError {
 }
 
 impl ParseError {
-    /// Returns `true` if this error is `NoLeadingBackslash`; otherwise returns
-    /// `false`.
+    /// Returns `true` if this error is `NoLeadingBackslash`
     pub fn is_no_leading_backslash(&self) -> bool {
         matches!(self, Self::NoLeadingBackslash { .. })
     }
 
-    /// Returns `true` if this error is `InvalidEncoding`; otherwise returns
-    /// `false`.
+    /// Returns `true` if this error is `InvalidEncoding`    
     pub fn is_invalid_encoding(&self) -> bool {
         matches!(self, Self::InvalidEncoding { .. })
     }
 
-    /// Offset of the partial pointer starting with the token which caused the
-    /// error.
+    /// Offset of the partial pointer starting with the token which caused the error.
+    ///
     /// ```text
     /// "/foo/invalid~tilde/invalid"
     ///      ↑
-    ///      4
     /// ```
+    ///
     /// ```
     /// # use jsonptr::PointerBuf;
     /// let err = PointerBuf::parse("/foo/invalid~tilde/invalid").unwrap_err();
@@ -1056,6 +1054,7 @@ impl ParseError {
 
     /// Offset of the character index from within the first token of
     /// [`Self::pointer_offset`])
+    ///
     /// ```text
     /// "/foo/invalid~tilde/invalid"
     ///              ↑
@@ -1080,9 +1079,9 @@ impl ParseError {
     ///             12
     /// ```
     /// ```
-    /// # use jsonptr::PointerBuf;
+    /// use jsonptr::PointerBuf;
     /// let err = PointerBuf::parse("/foo/invalid~tilde/invalid").unwrap_err();
-    /// assert_eq!(err.pointer_offset(), 4)
+    /// assert_eq!(err.complete_offset(), 12)
     /// ```
     pub fn complete_offset(&self) -> usize {
         self.source_offset() + self.pointer_offset()
@@ -1255,10 +1254,9 @@ mod tests {
     }
 
     #[test]
-    fn as_pointer() {
-        let ptr = Pointer::from_static("/foo/bar");
-        let ptr_buf = ptr.to_buf();
-        assert_eq!(ptr_buf.as_ptr(), ptr);
+    fn pointerbuf_as_pointer_returns_pointer() {
+        let ptr = PointerBuf::parse("/foo/bar").unwrap();
+        assert_eq!(ptr.as_ptr(), ptr);
     }
 
     #[test]
@@ -1525,11 +1523,11 @@ mod tests {
         assert!(ptr.replace_token(1, "qux".into()).is_ok());
         assert_eq!(ptr, PointerBuf::from_tokens(["foo", "qux", "baz"]));
 
-        assert!(ptr.replace_token(0, "norf".into()).is_ok());
-        assert_eq!(ptr, PointerBuf::from_tokens(["norf", "qux", "baz"]));
+        assert!(ptr.replace_token(0, "corge".into()).is_ok());
+        assert_eq!(ptr, PointerBuf::from_tokens(["corge", "qux", "baz"]));
 
         assert!(ptr.replace_token(2, "quux".into()).is_ok());
-        assert_eq!(ptr, PointerBuf::from_tokens(["norf", "qux", "quux"]));
+        assert_eq!(ptr, PointerBuf::from_tokens(["corge", "qux", "quux"]));
     }
 
     #[test]
@@ -1598,8 +1596,11 @@ mod tests {
     }
 
     #[test]
+    // `clippy::useless_asref` is tripping here because the `as_ref` is being
+    // called on the same type (`&Pointer`). This is just to ensure that the
+    // `as_ref` method is implemented correctly and stays that way.
     #[allow(clippy::useless_asref)]
-    fn as_ref() {
+    fn pointerbuf_as_ref_returns_pointer() {
         let ptr_str = "/foo/bar";
         let ptr = Pointer::from_static(ptr_str);
         let ptr_buf = ptr.to_buf();
@@ -1899,7 +1900,7 @@ mod tests {
         assert!(a_ptr >= b_buf);
         assert!(a_ptr < c_buf);
         assert!(c_ptr > b_string);
-        // couldnt inline this
+        // couldn't inline this
         #[allow(clippy::nonminimal_bool)]
         let not = !(a_ptr > c_buf);
         assert!(not);

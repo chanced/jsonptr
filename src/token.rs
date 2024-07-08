@@ -25,8 +25,9 @@ const SLASH_ENC: u8 = b'1';
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 */
 
-/// A `Token` is a segment of a JSON Pointer, preceded by `'/'` (`%x2F`). It can
-/// represent a key in a JSON object or an index in a JSON array.
+/// A `Token` is a segment of a JSON [`Pointer`](crate::Token), preceded by `'/'` (`%x2F`).
+///
+/// `Token`s can represent a key in a JSON object or an index in an array.
 ///
 /// - Indexes should not contain leading zeros.
 /// - When dealing with arrays or path expansion for assignment, `"-"` represent
