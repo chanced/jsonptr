@@ -7,15 +7,14 @@
 [<img alt="code coverage" src="https://img.shields.io/codecov/c/github/chanced/jsonptr?style=for-the-badge&color=CBB88D" height="21">](https://codecov.io/gh/chanced/jsonptr)
 
 JSON Pointers ([RFC 6901](https://datatracker.ietf.org/doc/html/rfc6901))
-defines a string syntax for identifying a specific location within a JSON
-document. This crate provides two types, [`Pointer`] and [`PointerBuf`] (akin to
-[`str`] and [`String`]), for working with them abstractly.
+defines a string syntax for identifying a specific location within a JSON, or
+similar, document. This crate provides two types, [`Pointer`] and [`PointerBuf`]
+(akin to [`str`] and [`String`]), for working with them abstractly.
 
 A [`Pointer`] is composed of zero or more [`Token`]s, single segments which
 represent a field of an object or an [`index`] of an array, and are bounded by
 either `'/'` or the end of the string. [`Token`]s are lightly encoded, where
-`'~'` is escaped as `"~0"` and `'/'` as `"~1"`. Combined, the [`Pointer`] forms
-a path to a specific location within a JSON, or similar, document.
+`'~'` is escaped as `"~0"` and `'/'` as `"~1"`.
 
 [`Token`]s can be iterated over using either [`Tokens`], returned from the
 [`tokens`](`Pointer::tokens`) method of a pointer or [`Components`], returned
@@ -63,7 +62,7 @@ use serde_json::json;
 let ptr = Pointer::parse("/foo/bar").unwrap();
 let data = json!({"foo": { "bar": 34 }});
 let bar = ptr.resolve(&data).unwrap();
-assert_eq!(*bar, json!(34));
+assert_eq!(bar, &json!(34));
 ```
 
 Values can be assigned using the [`Assign`] trait. See [`assign`] for more
