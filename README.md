@@ -13,23 +13,26 @@
 JSON Pointers ([RFC 6901](https://datatracker.ietf.org/doc/html/rfc6901))
 defines a string syntax for identifying a specific location within a JSON, or
 similar, document. This crate provides two types, [`Pointer`] and [`PointerBuf`]
-(akin to [`str`] and [`String`]), for working with them abstractly.
+(akin to [`Path`] and [`PathBuf`]), for working with them abstractly.
 
-A [`Pointer`] is composed of zero or more [`Token`]s, single segments which
+A pointer is composed of zero or more [`Token`]s, single segments which
 represent a field of an object or an [`index`] of an array, and are bounded by
-either `'/'` or the end of the string. [`Token`]s are lightly encoded, where
-`'~'` is escaped as `"~0"` and `'/'` as `"~1"`.
+either `'/'` or the end of the string. `Token`s are lightly encoded, where `'~'`
+is escaped as `"~0"` due to it signaling encoding and `'/'` is escaped as `"~1"`
+because `'/'` separates tokens and would split the token into two otherwise.
 
-[`Token`]s can be iterated over using either [`Tokens`], returned from the
+`Token`s can be iterated over using either [`Tokens`], returned from the
 [`tokens`] method of a pointer or [`Components`], returned from the
-[`components`] method. The difference being that [`Tokens`] iterates over each
-[`Token`] in the [`Pointer`], while a [`Component`] can represent the
-[`Root`] document or a single [`Token`](Component::Token).
+[`components`] method. The difference being that `Tokens` iterates over each
+token in the pointer, while `Components` iterates over [`Component`]s, which can
+represent the root of the document or a single token along with its `offset` of
+the token from within the pointer.
 
 Operations [`resolve`], [`assign`] and [`delete`] are provided as traits with
-corresponding methods on [`Pointer`]. Implementations of each trait are provided
-for [`serde_json::Value`] and [`toml::Value`]. All
-operations are enabled by default but are gated by [feature flags](#feature-flags).
+corresponding methods on pointer types. Implementations of each trait are
+provided for value types of the crates [`serde_json`] and [`toml`]. All
+operations are enabled by default but are gated by [feature
+flags](#feature-flags).
 
 ## Usage
 
@@ -109,6 +112,7 @@ assert_eq!(data, json!({"secret": { "universe": 34 }}));
 | `"delete"`  | Enables the [`delete`] module and related pointer methods, providing a means to delete a value at a specific location within a document   | `"resolve"`     |    ✓    |
 
 <div class="rustdoc-hidden">
+
 ## License
 
 Licensed under either of
@@ -118,7 +122,7 @@ Licensed under either of
 -   MIT license
     ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
 
-at your option.
+at your convenience.
 
 ## Contribution
 
@@ -154,7 +158,7 @@ dual licensed as above, without any additional terms or conditions.
 [`Assign`]: https://docs.rs/jsonptr/latest/jsonptr/assign/trait.Assign.html
 [`Delete`]: https://docs.rs/jsonptr/latest/jsonptr/delete/trait.Delete.html
 [`serde`]: https://docs.rs/serde/1.0.120/serde/index
-[`serde_json::Value`]: https://docs.rs/serde_json/1.0.120/serde_json/enum.Value.html
-[`toml::Value`]: https://docs.rs/toml/0.8/toml/enum.Value.html
-[`str`]: https://doc.rust-lang.org/std/primitive.str.html
-[`String`]: https://doc.rust-lang.org/std/string/struct.String.html
+[`serde_json`]: https://docs.rs/serde_json/1.0.120/serde_json/enum.Value.html
+[`toml`]: https://docs.rs/toml/0.8/toml/enum.Value.html
+[`Path`]: https://doc.rust-lang.org/std/path/struct.Path.html
+[`PathBuf`]: https://doc.rust-lang.org/std/path/struct.PathBuf.html
