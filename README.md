@@ -1,4 +1,8 @@
-# jsonptr - JSON Pointers (RFC 6901)
+<div class="rustdoc-hidden">
+
+# jsonptr - JSON Pointers (RFC 6901) for Rust
+
+</div>
 
 [<img alt="github" src="https://img.shields.io/badge/github-chanced/jsonptr-62D1FC?style=for-the-badge&labelColor=777&logo=github" height="21">](https://github.com/chanced/jsonptr)
 [<img alt="crates.io" src="https://img.shields.io/crates/v/jsonptr.svg?style=for-the-badge&color=fc8d62&logo=rust" height="21">](https://crates.io/crates/jsonptr)
@@ -17,15 +21,14 @@ either `'/'` or the end of the string. [`Token`]s are lightly encoded, where
 `'~'` is escaped as `"~0"` and `'/'` as `"~1"`.
 
 [`Token`]s can be iterated over using either [`Tokens`], returned from the
-[`tokens`](`Pointer::tokens`) method of a pointer or [`Components`], returned
-from the [`components`](`Pointer::components`) method. The difference being that
-[`Tokens`] iterates over each [`Token`] in the [`Pointer`], while a
-[`Component`] can represent the [`Root`](Component::Root) document or a single
-[`Token`](Component::Token).
+[`tokens`] method of a pointer or [`Components`], returned from the
+[`components`] method. The difference being that [`Tokens`] iterates over each
+[`Token`] in the [`Pointer`], while a [`Component`] can represent the
+[`Root`](Component::Root) document or a single [`Token`](Component::Token).
 
 Operations [`resolve`], [`assign`] and [`delete`] are provided as traits with
 corresponding methods on [`Pointer`]. Implementations of each trait are provided
-for [`serde_json::Value`] and [`toml::Value`](https://docs.rs/toml/0.8). All
+for [`serde_json::Value`] and [`toml::Value`]. All
 operations are enabled by default but are gated by [feature flags](#feature-flags).
 
 ## Usage
@@ -100,17 +103,57 @@ assert_eq!(data, json!({"secret": { "universe": 34 }}));
 |   `"std"`   | Implements `std::error::Error` for error types                                                                                            |                 |    ✓    |
 |  `"serde"`  | Enables [`serde`] support for types                                                                                                       |                 |    ✓    |
 |  `"json"`   | Implements ops for [`serde_json::Value`]                                                                                                  | `"serde"`       |    ✓    |
-|  `"toml"`   | Implements ops for [`toml::Value`](https://docs.rs/toml/0.8)                                                                              | `"std"`, `toml` |         |
+|  `"toml"`   | Implements ops for [`toml::Value`]                                                                                                        | `"std"`, `toml` |         |
 | `"assign"`  | Enables the [`assign`] module and related pointer methods, providing a means to assign a value to a specific location within a document   |                 |    ✓    |
 | `"resolve"` | Enables the [`resolve`] module and related pointer methods, providing a means to resolve a value at a specific location within a document |                 |    ✓    |
 | `"delete"`  | Enables the [`delete`] module and related pointer methods, providing a means to delete a value at a specific location within a document   | `"resolve"`     |    ✓    |
 
-## Contributions / Issues
-
-Contributions and feedback are always welcome and appreciated.
-
-If you find an issue, please open a ticket or a pull request.
-
+<div class="rustdoc-hidden">
 ## License
 
-MIT or Apache 2.0.
+Licensed under either of
+
+-   Apache License, Version 2.0
+    ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+-   MIT license
+    ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+
+at your option.
+
+## Contribution
+
+Contributions and feedback are always welcome and appreciated. If you find an
+issue, please open a ticket or a pull request.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.
+
+[LICENSE-APACHE]: LICENSE-APACHE
+[LICENSE-MIT]: LICENSE-MIT
+
+</div>
+
+[`Pointer::components`]: (https://docs.rs/jsonptr/latest/jsonptrstruct.Pointer.html#method.components)
+[`Pointer::tokens`]: (https://docs.rs/jsonptr/latest/jsonptrstruct.Pointer.html#method.tokens)
+[`Pointer`]: https://docs.rs/jsonptr/latest/jsonptr/struct.Pointer.html
+[`PointerBuf`]: https://docs.rs/jsonptr/latest/jsonptr/struct.PointerBuf.html
+[`Token`]: https://docs.rs/jsonptr/latest/jsonptr/struct.Token.html
+[`Tokens`]: https://docs.rs/jsonptr/latest/jsonptr/struct.Tokens.html
+[`Components`]: https://docs.rs/jsonptr/latest/jsonptr/struct.Components.html
+[`Component`]: https://docs.rs/jsonptr/latest/jsonptr/enum.Component.html
+[`Root`]: https://docs.rs/jsonptr/latest/jsonptr/enum.Component.html#variant.Root
+[`index`]: https://doc.rust-lang.org/std/primitive.usize.html
+[`tokens`]: https://docs.rs/jsonptr/latest/jsonptr/struct.Pointer.html#method.tokens
+[`components`]: https://docs.rs/jsonptr/latest/jsonptr/struct.Pointer.html#method.components
+[`resolve`]: https://docs.rs/jsonptr/latest/jsonptr/resolve/index.html
+[`assign`]: https://docs.rs/jsonptr/latest/jsonptr/assign/index.html
+[`delete`]: https://docs.rs/jsonptr/latest/jsonptr/delete/index.html
+[`Resolve`]: https://docs.rs/jsonptr/latest/jsonptr/resolve/trait.Resolve.html
+[`ResolveMut`]: https://docs.rs/jsonptr/latest/jsonptr/resolve/trait.ResolveMut.html
+[`Assign`]: https://docs.rs/jsonptr/latest/jsonptr/assign/trait.Assign.html
+[`Delete`]: https://docs.rs/jsonptr/latest/jsonptr/delete/trait.Delete.html
+[`serde`]: https://docs.rs/serde/1.0.120/serde/index
+[`serde_json::Value`]: https://docs.rs/serde_json/1.0.120/serde_json/enum.Value.html
+[`str`]: https://doc.rust-lang.org/std/primitive.str.html
+[`String`]: https://doc.rust-lang.org/std/string/struct.String.html

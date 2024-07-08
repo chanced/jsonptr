@@ -18,7 +18,7 @@ use core::{borrow::Borrow, cmp::Ordering, ops::Deref, str::FromStr};
 */
 
 /// A JSON Pointer is a string containing a sequence of zero or more reference
-/// tokens, each prefixed by a '/' character.
+/// [`Token`]s, each prefixed by a `'/'` character.
 ///
 /// See [RFC 6901 for more
 /// information](https://datatracker.ietf.org/doc/html/rfc6901).
@@ -252,43 +252,53 @@ impl Pointer {
         self.tokens().nth(index).clone()
     }
 
-    /// Attempts to resolve a `Value` based on the path in this `Pointer`.
+    /// Attempts to resolve a [`R::Value`] based on the path in this [`Pointer`].
     ///
     /// ## Errors
-    /// Returns [`R::Error`](`Resolve::Error`) if an error occurs while
-    /// resolving.
+    /// Returns [`R::Error`] if an error occurs while resolving.
     ///
     /// The rules of such are determined by the `R`'s implementation of
-    /// [`Resolve`] but provided implementations return
-    /// [`ResolveError`](crate::resolve::ResolveError) if:
+    /// [`Resolve`] but provided implementations return [`ResolveError`] if:
     /// - The path is unreachable (e.g. a scalar is encountered prior to the end
     ///   of the path)
     /// - The path is not found (e.g. a key in an object or an index in an array
     ///   does not exist)
-    /// - A [`Token`](crate::Token) cannot be parsed as an array
-    ///   [`Index`](crate::index::Index)
-    /// - An array [`Index`](crate::index::Index) is out of bounds
+    /// - A [`Token`] cannot be parsed as an array [`Index`]
+    /// - An array [`Index`] is out of bounds
+    /// [`R::Value`]: `crate::resolve::Resolve::Value`
+    /// [`R::Error`]: `crate::resolve::Resolve::Error`
+    /// [`Resolve`]: `crate::resolve::Resolve`
+    /// [`ResolveError`]: `crate::resolve::ResolveError`
+    /// [`Token`]: crate::Token
+    /// [`Index`]: crate::index::Index
     #[cfg(feature = "resolve")]
     pub fn resolve<'v, R: crate::Resolve>(&self, value: &'v R) -> Result<&'v R::Value, R::Error> {
         value.resolve(self)
     }
 
-    /// Attempts to resolve a mutable `Value` based on the path in this `Pointer`.
+    /// Attempts to resolve a mutable [`R::Value`] based on the path in this
+    /// `Pointer`.
     ///
     /// ## Errors
-    /// Returns [`R::Error`](`ResolveMut::Error`) if an error occurs while
+    /// Returns [`R::Error`] if an error occurs while
     /// resolving.
     ///
     /// The rules of such are determined by the `R`'s implementation of
-    /// [`ResolveMut`] but provided implementations return
-    /// [`ResolveError`](crate::resolve::ResolveError) if:
+    /// [`ResolveMut`] but provided implementations return [`ResolveError`] if:
     /// - The path is unreachable (e.g. a scalar is encountered prior to the end
     ///   of the path)
     /// - The path is not found (e.g. a key in an object or an index in an array
     ///   does not exist)
-    /// - A [`Token`](crate::Token) cannot be parsed as an array
-    ///   [`Index`](crate::index::Index)
-    /// - An array [`Index`](crate::index::Index) is out of bounds
+    /// - A [`Token`] cannot be parsed as an array [`Index`]
+    /// - An array [`Index`] is out of bounds
+    ///
+    /// [`R::Value`]: `crate::resolve::ResolveMut::Value`
+    /// [`R::Error`]: `crate::resolve::ResolveMut::Error`
+    /// [`ResolveMut`]: `crate::resolve::ResolveMut`
+    /// [`ResolveError`]: `crate::resolve::ResolveError`
+    /// [`Token`]: crate::Token
+    /// [`Index`]: crate::index::Index
+
     #[cfg(feature = "resolve")]
     pub fn resolve_mut<'v, R: crate::ResolveMut>(
         &self,
@@ -684,7 +694,7 @@ impl<'a> IntoIterator for &'a Pointer {
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 */
 
-/// An owned, mutable Pointer (akin to String).
+/// An owned, mutable [`Pointer`] (akin to `String`).
 ///
 /// This type provides methods like [`PointerBuf::push_back`] and
 /// [`PointerBuf::replace_token`] that mutate the pointer in place. It also

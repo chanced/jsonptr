@@ -1,3 +1,25 @@
+// rustdoc + README hack: https://linebender.org/blog/doc-include
+//! <style>
+//! .rustdoc-hidden { display: none; }
+//! </style>
+//!
+//! [`Pointer`]: crate::Pointer
+//! [`PointerBuf`]: crate::PointerBuf
+//! [`Token`]: crate::Token
+//! [`Tokens`]: crate::Tokens
+//! [`Component`]: crate::Component
+//! [`Components`]: crate::Components
+//! [`Resolve`]: crate::resolve::Resolve
+//! [`ResolveMut`]: crate::resolve::ResolveMut
+//! [`resolve`]: crate::resolve
+//! [`assign`]: crate::assign
+//! [delete]: crate::delete
+//! [index]: crate::index
+//! [str]: str
+//! [String]: String
+//! [serde_json::Value]: serde_json::Value
+//! [toml::Value]: https://docs.rs/toml/0.8/toml/enum.Value.html
+
 #![doc = include_str!("../README.md")]
 #![warn(missing_docs)]
 #![deny(clippy::all, clippy::pedantic)]
