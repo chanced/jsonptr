@@ -265,12 +265,13 @@ impl Pointer {
     ///   does not exist)
     /// - A [`Token`] cannot be parsed as an array [`Index`]
     /// - An array [`Index`] is out of bounds
+    ///
     /// [`R::Value`]: `crate::resolve::Resolve::Value`
     /// [`R::Error`]: `crate::resolve::Resolve::Error`
     /// [`Resolve`]: `crate::resolve::Resolve`
     /// [`ResolveError`]: `crate::resolve::ResolveError`
-    /// [`Token`]: crate::Token
-    /// [`Index`]: crate::index::Index
+    /// [`Token`]: `crate::Token`
+    /// [`Index`]: `crate::index::Index`
     #[cfg(feature = "resolve")]
     pub fn resolve<'v, R: crate::Resolve>(&self, value: &'v R) -> Result<&'v R::Value, R::Error> {
         value.resolve(self)
@@ -296,8 +297,8 @@ impl Pointer {
     /// [`R::Error`]: `crate::resolve::ResolveMut::Error`
     /// [`ResolveMut`]: `crate::resolve::ResolveMut`
     /// [`ResolveError`]: `crate::resolve::ResolveError`
-    /// [`Token`]: crate::Token
-    /// [`Index`]: crate::index::Index
+    /// [`Token`]: `crate::Token`
+    /// [`Index`]: `crate::index::Index`
 
     #[cfg(feature = "resolve")]
     pub fn resolve_mut<'v, R: crate::ResolveMut>(
