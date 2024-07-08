@@ -11,8 +11,8 @@
 //! [`resolve`](Pointer::resolve) and [`resolve_mut`](Pointer::resolve_mut)
 //! methods on [`Pointer`] and [`PointerBuf`](crate::PointerBuf).
 //! ```rust
-//! use jsonptr::{Pointer, Resolve, ResolveMut};
-//! use serde_json::json;
+//! # use jsonptr::{Pointer, Resolve, ResolveMut};
+//! # use serde_json::json;
 //!
 //! let ptr = Pointer::from_static("/foo/1");
 //! let mut data = json!({"foo": ["bar", "baz"]});
