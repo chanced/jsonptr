@@ -17,15 +17,15 @@ similar, document. This crate provides two types, [`Pointer`] and [`PointerBuf`]
 
 A pointer is composed of zero or more [`Token`]s, single segments which
 represent a field of an object or an [`index`] of an array, and are bounded by
-either `'/'` or the end of the string. `Token`s are lightly encoded, where `'~'`
+either `'/'` or the end of the string. Tokens are lightly encoded, where `'~'`
 is escaped as `"~0"` due to it signaling encoding and `'/'` is escaped as `"~1"`
 because `'/'` separates tokens and would split the token into two otherwise.
 
-`Token`s can be iterated over using either [`Tokens`], returned from the
+[`Token`]s can be iterated over using either [`Tokens`], returned from the
 [`tokens`] method of a pointer or [`Components`], returned from the
 [`components`] method. The difference being that `Tokens` iterates over each
 token in the pointer, while `Components` iterates over [`Component`]s, which can
-represent the root of the document or a single token along with its `offset` of
+represent the root of the document or a single token along with the offset of
 the token from within the pointer.
 
 Operations [`resolve`], [`assign`] and [`delete`] are provided as traits with
