@@ -15,6 +15,7 @@
 //! [`assign`]: `crate::assign`
 //! [`delete`]: `crate::delete`
 //! [`index`]: `crate::index`
+//! [`Root`]: `crate::Component::Root`
 //! [`str`]: `str`
 //! [`String`]: `String`
 //! [`serde_json::Value`]: `serde_json::Value`

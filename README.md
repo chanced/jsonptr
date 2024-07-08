@@ -24,7 +24,7 @@ either `'/'` or the end of the string. [`Token`]s are lightly encoded, where
 [`tokens`] method of a pointer or [`Components`], returned from the
 [`components`] method. The difference being that [`Tokens`] iterates over each
 [`Token`] in the [`Pointer`], while a [`Component`] can represent the
-[`Root`](Component::Root) document or a single [`Token`](Component::Token).
+[`Root`] document or a single [`Token`](Component::Token).
 
 Operations [`resolve`], [`assign`] and [`delete`] are provided as traits with
 corresponding methods on [`Pointer`]. Implementations of each trait are provided
