@@ -1,6 +1,9 @@
-use crate::{index::Index, InvalidEncodingError, ParseIndexError};
+use core::str::Split;
+
+use crate::index::{Index, ParseIndexError};
 use alloc::{
     borrow::Cow,
+    fmt,
     string::{String, ToString},
     vec::Vec,
 };
@@ -22,8 +25,9 @@ const SLASH_ENC: u8 = b'1';
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 */
 
-/// A `Token` is a segment of a JSON Pointer, seperated by '/' (%x2F). It can
-/// represent a key in a JSON object or an index in a JSON array.
+/// A `Token` is a segment of a JSON [`Pointer`](crate::Token), preceded by `'/'` (`%x2F`).
+///
+/// `Token`s can represent a key in a JSON object or an index in an array.
 ///
 /// - Indexes should not contain leading zeros.
 /// - When dealing with arrays or path expansion for assignment, `"-"` represent
@@ -232,7 +236,7 @@ impl<'a> Token<'a> {
     /// ## Examples
     ///
     /// ```
-    /// # use jsonptr::{Index, Token};
+    /// # use jsonptr::{index::Index, Token};
     /// assert_eq!(Token::new("-").to_index(), Ok(Index::Next));
     /// assert_eq!(Token::new("0").to_index(), Ok(Index::Num(0)));
     /// assert_eq!(Token::new("2").to_index(), Ok(Index::Num(2)));
@@ -319,6 +323,72 @@ impl alloc::fmt::Display for Token<'_> {
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                                                                              ║
+║                                    Tokens                                    ║
+║                                   ¯¯¯¯¯¯¯¯                                   ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
+
+/// An iterator over the [`Token`]s of a [`Pointer`](crate::Pointer).
+#[derive(Debug)]
+pub struct Tokens<'a> {
+    inner: Split<'a, char>,
+}
+
+impl<'a> Iterator for Tokens<'a> {
+    type Item = Token<'a>;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(Token::from_encoded_unchecked)
+    }
+}
+impl<'t> Tokens<'t> {
+    pub(crate) fn new(inner: Split<'t, char>) -> Self {
+        Self { inner }
+    }
+}
+
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                             InvalidEncodingError                             ║
+║                            ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯                            ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
+
+/// A token within a json pointer contained invalid encoding (`~` not followed
+/// by `0` or `1`).
+///
+#[derive(Debug, PartialEq, Eq)]
+pub struct InvalidEncodingError {
+    /// offset of the erroneous `~` from within the `Token`
+    pub offset: usize,
+}
+
+impl InvalidEncodingError {
+    /// The byte offset of the first invalid `~`.
+    pub fn offset(&self) -> usize {
+        self.offset
+    }
+}
+
+impl fmt::Display for InvalidEncodingError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "json pointer is malformed due to invalid encoding ('~' not followed by '0' or '1')"
+        )
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for InvalidEncodingError {}
+
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
 ║                                    Tests                                     ║
 ║                                   ¯¯¯¯¯¯¯                                    ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
@@ -327,22 +397,116 @@ impl alloc::fmt::Display for Token<'_> {
 
 #[cfg(test)]
 mod tests {
+    use crate::{assign::AssignError, index::OutOfBoundsError, Pointer};
+
     use super::*;
     use quickcheck_macros::quickcheck;
 
     #[test]
-    fn test_from() {
+    fn from() {
         assert_eq!(Token::from("/").encoded(), "~1");
         assert_eq!(Token::from("~/").encoded(), "~0~1");
+        assert_eq!(Token::from(34u32).encoded(), "34");
+        assert_eq!(Token::from(34u64).encoded(), "34");
+        assert_eq!(Token::from(String::from("foo")).encoded(), "foo");
+        assert_eq!(Token::from(&Token::new("foo")).encoded(), "foo");
     }
 
     #[test]
-    fn test_from_encoded() {
+    fn to_index() {
+        assert_eq!(Token::new("-").to_index(), Ok(Index::Next));
+        assert_eq!(Token::new("0").to_index(), Ok(Index::Num(0)));
+        assert_eq!(Token::new("2").to_index(), Ok(Index::Num(2)));
+        assert!(Token::new("a").to_index().is_err());
+        assert!(Token::new("-1").to_index().is_err());
+    }
+
+    #[test]
+    fn new() {
+        assert_eq!(Token::new("~1").encoded(), "~01");
+        assert_eq!(Token::new("a/b").encoded(), "a~1b");
+    }
+
+    #[test]
+    fn serde() {
+        let token = Token::from_encoded("foo~0").unwrap();
+        let json = serde_json::to_string(&token).unwrap();
+        assert_eq!(json, "\"foo~\"");
+        let deserialized: Token = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, token);
+    }
+
+    #[test]
+    fn assign_error_display() {
+        let err = AssignError::FailedToParseIndex {
+            offset: 3,
+            source: ParseIndexError {
+                source: "a".parse::<usize>().unwrap_err(),
+            },
+        };
+        assert_eq!(
+            err.to_string(),
+            "assignment failed due to an invalid index at offset 3"
+        );
+
+        let err = AssignError::OutOfBounds {
+            offset: 3,
+            source: OutOfBoundsError {
+                index: 3,
+                length: 2,
+            },
+        };
+
+        assert_eq!(
+            err.to_string(),
+            "assignment failed due to index at offset 3 being out of bounds"
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "std")]
+    fn assign_error_source() {
+        use std::error::Error;
+        let err = AssignError::FailedToParseIndex {
+            offset: 3,
+            source: ParseIndexError {
+                source: "a".parse::<usize>().unwrap_err(),
+            },
+        };
+        assert!(err.source().is_some());
+        assert!(err.source().unwrap().is::<ParseIndexError>());
+
+        let err = AssignError::OutOfBounds {
+            offset: 3,
+            source: OutOfBoundsError {
+                index: 3,
+                length: 2,
+            },
+        };
+
+        assert!(err.source().unwrap().is::<OutOfBoundsError>());
+    }
+
+    #[test]
+    fn from_encoded() {
         assert_eq!(Token::from_encoded("~1").unwrap().encoded(), "~1");
         assert_eq!(Token::from_encoded("~0~1").unwrap().encoded(), "~0~1");
         let t = Token::from_encoded("a~1b").unwrap();
         assert_eq!(t.decoded(), "a/b");
-        let _ = Token::from_encoded("a/b").unwrap_err();
+        assert!(Token::from_encoded("a/b").is_err());
+        assert!(Token::from_encoded("a~a").is_err());
+    }
+
+    #[test]
+    fn invalid_encoding_offset() {
+        let err = InvalidEncodingError { offset: 3 };
+        assert_eq!(err.offset(), 3);
+    }
+
+    #[test]
+    fn into_owned() {
+        let token = Token::from_encoded("foo~0").unwrap().into_owned();
+        assert_eq!(token.encoded(), "foo~0");
     }
 
     #[quickcheck]
@@ -350,5 +514,27 @@ mod tests {
         let token = Token::new(s);
         let decoded = Token::from_encoded(token.encoded()).unwrap();
         token == decoded
+    }
+
+    #[test]
+    fn invalid_encoding_error_display() {
+        assert_eq!(
+            Token::from_encoded("~").unwrap_err().to_string(),
+            "json pointer is malformed due to invalid encoding ('~' not followed by '0' or '1')"
+        );
+    }
+
+    #[test]
+    fn tokens() {
+        let pointer = Pointer::from_static("/a/b/c");
+        let tokens: Vec<Token> = pointer.tokens().collect();
+        assert_eq!(
+            tokens,
+            vec![
+                Token::from_encoded_unchecked("a"),
+                Token::from_encoded_unchecked("b"),
+                Token::from_encoded_unchecked("c")
+            ]
+        );
     }
 }

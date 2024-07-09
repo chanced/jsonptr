@@ -13,18 +13,10 @@
 //!     - `"json"` - `serde_json::Value::Null`
 //!     - `"toml"` - `toml::Value::Table::Default`
 //!
-//! ## Feature Flag
-//! This module is enabled by default with the `"resolve"` feature flag.
+//! This module is enabled by default with the `"delete"` feature flag.
 //!
-//! ## Provided implementations
-//!
-//! | Lang  |     value type      | feature flag | Default |
-//! | ----- |: ----------------- :|: ---------- :| ------- |
-//! | JSON  | `serde_json::Value` |   `"json"`   |   ✓     |
-//! | TOML  |    `toml::Value`    |   `"toml"`   |         |
-//!
-//! ## Examples
-//! ### Deleting a resolved pointer:
+//! ## Usage
+//!  Deleting a resolved pointer:
 //! ```rust
 //! use jsonptr::{Pointer, delete::Delete};
 //! use serde_json::json;
@@ -34,7 +26,7 @@
 //! assert_eq!(data.delete(&ptr), Some("qux".into()));
 //! assert_eq!(data, json!({ "foo": { "bar": {} } }));
 //! ```
-//! ### Deleting a non-existent Pointer returns `None`:
+//! Deleting a non-existent Pointer returns `None`:
 //! ```rust
 //! use jsonptr::{ Pointer, delete::Delete };
 //! use serde_json::json;
@@ -44,7 +36,7 @@
 //! assert_eq!(ptr.delete(&mut data), None);
 //! assert_eq!(data, json!({}));
 //! ```
-//! ### Deleting a root pointer replaces the value with `Value::Null`:
+//! Deleting a root pointer replaces the value with `Value::Null`:
 //! ```rust
 //! use jsonptr::{Pointer, delete::Delete};
 //! use serde_json::json;
@@ -54,6 +46,14 @@
 //! assert_eq!(data.delete(&ptr), Some(json!({ "foo": { "bar": "baz" } })));
 //! assert!(data.is_null());
 //! ```
+//!
+//! ## Provided implementations
+//!
+//! | Lang  |     value type      | feature flag | Default |
+//! | ----- |: ----------------- :|: ---------- :| ------- |
+//! | JSON  | `serde_json::Value` |   `"json"`   |   ✓     |
+//! | TOML  |    `toml::Value`    |   `"toml"`   |         |
+
 use crate::Pointer;
 
 /*
@@ -183,7 +183,7 @@ mod tests {
         fn all(tests: impl IntoIterator<Item = Test<V>>) {
             tests.into_iter().enumerate().for_each(|(i, t)| t.run(i));
         }
-        fn run(self, i: usize) {
+        fn run(self, _i: usize) {
             let Test {
                 mut data,
                 ptr,
@@ -193,16 +193,8 @@ mod tests {
 
             let ptr = Pointer::from_static(ptr);
             let deleted = ptr.delete(&mut data);
-            assert_eq!(
-                expected_data,
-                data,
-                "\ntest delete #{i} failed:\ndata not as expected\n\nptr: \"{ptr}\"\n\nexpected data:\n{expected_data:#?}\n\nactual data:\n{data:#?}\n\n"
-            );
-            assert_eq!(
-                expected_deleted,
-                deleted,
-                "\ntest delete #{i} failed:\n\ndeleted value not as expected\nexpected deleted:{expected_data:#?}\n\nactual deleted:{deleted:#?}\n\n",
-            );
+            assert_eq!(expected_data, data);
+            assert_eq!(expected_deleted, deleted);
         }
     }
     /*
@@ -212,7 +204,7 @@ mod tests {
     */
     #[test]
     #[cfg(feature = "json")]
-    fn test_delete_json() {
+    fn delete_json() {
         Test::all([
             // 0
             Test {
@@ -271,6 +263,12 @@ mod tests {
                 expected_data: json!({"test": "test"}),
                 expected_deleted: Some(json!(21)),
             },
+            Test {
+                ptr: "",
+                data: json!({"Example": 21, "test": "test"}),
+                expected_data: json!(null),
+                expected_deleted: Some(json!({"Example": 21, "test": "test"})),
+            },
         ]);
     }
     /*
@@ -280,7 +278,7 @@ mod tests {
     */
     #[test]
     #[cfg(feature = "toml")]
-    fn test_delete_toml() {
+    fn delete_toml() {
         use toml::{toml, Table, Value};
 
         Test::all([

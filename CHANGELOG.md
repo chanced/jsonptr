@@ -20,7 +20,7 @@ This is a breaking release including:
 -   [Quickcheck](https://docs.rs/quickcheck/latest/quickcheck/index.html)-based testing
 -   New methods: `Pointer::split_front`, `Pointer::split_back`, `Pointer::parent`, `Pointer::strip_suffix`
 -   Implemented `Display` and `Debug` for `ParseError`
--   Adds `Pointer::split_at` which utilizes character offsets to split a pointer at a seperator
+-   Adds `Pointer::split_at` which utilizes character offsets to split a pointer at a separator
 -   Adds specific error types `ParseError`, `ResolveError`, `AssignError`
 
 ### Changed

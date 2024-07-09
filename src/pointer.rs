@@ -1,6 +1,7 @@
-use crate::{InvalidEncodingError, ParseError, ReplaceTokenError, Token, Tokens};
+use crate::{token::InvalidEncodingError, Components, Token, Tokens};
 use alloc::{
     borrow::ToOwned,
+    fmt,
     string::{String, ToString},
     vec::Vec,
 };
@@ -17,7 +18,7 @@ use core::{borrow::Borrow, cmp::Ordering, ops::Deref, str::FromStr};
 */
 
 /// A JSON Pointer is a string containing a sequence of zero or more reference
-/// tokens, each prefixed by a '/' character.
+/// [`Token`]s, each prefixed by a `'/'` character.
 ///
 /// See [RFC 6901 for more
 /// information](https://datatracker.ietf.org/doc/html/rfc6901).
@@ -182,7 +183,7 @@ impl Pointer {
             .into()
     }
     /// Splits the `Pointer` at the given index if the character at the index is
-    /// a seperator backslash (`'/'`), returning `Some((head, tail))`. Otherwise,
+    /// a separator backslash (`'/'`), returning `Some((head, tail))`. Otherwise,
     /// returns `None`.
     ///
     /// For the following JSON Pointer, the following splits are possible (0, 4, 8):
@@ -228,6 +229,10 @@ impl Pointer {
         self.0.strip_suffix(&suffix.0).map(Self::new)
     }
 
+    /// Returns the pointer stripped of the given prefix.
+    pub fn strip_prefix<'a>(&'a self, prefix: &Self) -> Option<&'a Self> {
+        self.0.strip_prefix(&prefix.0).map(Self::new)
+    }
     /// Attempts to get a `Token` by the index. Returns `None` if the index is
     /// out of bounds.
     ///
@@ -247,43 +252,54 @@ impl Pointer {
         self.tokens().nth(index).clone()
     }
 
-    /// Attempts to resolve a `Value` based on the path in this `Pointer`.
+    /// Attempts to resolve a [`R::Value`] based on the path in this [`Pointer`].
     ///
     /// ## Errors
-    /// Returns [`R::Error`](`Resolve::Error`) if an error occurs while
-    /// resolving.
+    /// Returns [`R::Error`] if an error occurs while resolving.
     ///
     /// The rules of such are determined by the `R`'s implementation of
-    /// [`Resolve`] but provided implementations return
-    /// [`ResolveError`](crate::resolve::ResolveError) if:
+    /// [`Resolve`] but provided implementations return [`ResolveError`] if:
     /// - The path is unreachable (e.g. a scalar is encountered prior to the end
     ///   of the path)
     /// - The path is not found (e.g. a key in an object or an index in an array
     ///   does not exist)
-    /// - An [`Token`] cannot be parsed as an array
-    ///   [`Index`](crate::index::Index)
-    /// - An array [`Index`](crate::index::Index) is out of bounds
+    /// - A [`Token`] cannot be parsed as an array [`Index`]
+    /// - An array [`Index`] is out of bounds
+    ///
+    /// [`R::Value`]: `crate::resolve::Resolve::Value`
+    /// [`R::Error`]: `crate::resolve::Resolve::Error`
+    /// [`Resolve`]: `crate::resolve::Resolve`
+    /// [`ResolveError`]: `crate::resolve::ResolveError`
+    /// [`Token`]: `crate::Token`
+    /// [`Index`]: `crate::index::Index`
     #[cfg(feature = "resolve")]
     pub fn resolve<'v, R: crate::Resolve>(&self, value: &'v R) -> Result<&'v R::Value, R::Error> {
         value.resolve(self)
     }
 
-    /// Attempts to resolve a mutable `Value` based on the path in this `Pointer`.
+    /// Attempts to resolve a mutable [`R::Value`] based on the path in this
+    /// `Pointer`.
     ///
     /// ## Errors
-    /// Returns [`R::Error`](`ResolveMut::Error`) if an error occurs while
+    /// Returns [`R::Error`] if an error occurs while
     /// resolving.
     ///
     /// The rules of such are determined by the `R`'s implementation of
-    /// [`ResolveMut`] but provided implementations return
-    /// [`ResolveError`](crate::resolve::ResolveError) if:
+    /// [`ResolveMut`] but provided implementations return [`ResolveError`] if:
     /// - The path is unreachable (e.g. a scalar is encountered prior to the end
     ///   of the path)
     /// - The path is not found (e.g. a key in an object or an index in an array
     ///   does not exist)
-    /// - An [`Token`] cannot be parsed as an array
-    ///   [`Index`](crate::index::Index)
-    /// - An array [`Index`](crate::index::Index) is out of bounds
+    /// - A [`Token`] cannot be parsed as an array [`Index`]
+    /// - An array [`Index`] is out of bounds
+    ///
+    /// [`R::Value`]: `crate::resolve::ResolveMut::Value`
+    /// [`R::Error`]: `crate::resolve::ResolveMut::Error`
+    /// [`ResolveMut`]: `crate::resolve::ResolveMut`
+    /// [`ResolveError`]: `crate::resolve::ResolveError`
+    /// [`Token`]: `crate::Token`
+    /// [`Index`]: `crate::index::Index`
+
     #[cfg(feature = "resolve")]
     pub fn resolve_mut<'v, R: crate::ResolveMut>(
         &self,
@@ -385,6 +401,24 @@ impl Pointer {
     {
         dest.assign(self, src)
     }
+
+    /// Returns [`Components`] of this JSON Pointer.
+    ///
+    /// A [`Component`](crate::Component) is either [`Token`] or the root
+    /// location of a document.
+    /// ## Example
+    /// ```
+    /// # use jsonptr::{Component, Pointer};
+    /// let ptr = Pointer::parse("/a/b").unwrap();
+    /// let mut components = ptr.components();
+    /// assert_eq!(components.next(), Some(Component::Root));
+    /// assert_eq!(components.next(), Some(Component::Token("a".into())));
+    /// assert_eq!(components.next(), Some(Component::Token("b".into())));
+    /// assert_eq!(components.next(), None);
+    /// ```
+    pub fn components(&self) -> Components {
+        self.into()
+    }
 }
 
 #[cfg(feature = "serde")]
@@ -441,10 +475,26 @@ impl PartialEq<&str> for Pointer {
         &&self.0 == other
     }
 }
-
+impl<'p> PartialEq<String> for &'p Pointer {
+    fn eq(&self, other: &String) -> bool {
+        self.0.eq(other)
+    }
+}
 impl PartialEq<str> for Pointer {
     fn eq(&self, other: &str) -> bool {
         &self.0 == other
+    }
+}
+
+impl PartialEq<Pointer> for &str {
+    fn eq(&self, other: &Pointer) -> bool {
+        *self == (&other.0)
+    }
+}
+
+impl PartialEq<Pointer> for String {
+    fn eq(&self, other: &Pointer) -> bool {
+        self == &other.0
     }
 }
 
@@ -481,6 +531,18 @@ impl PartialEq<String> for PointerBuf {
         &self.0 == other
     }
 }
+
+impl PartialEq<PointerBuf> for str {
+    fn eq(&self, other: &PointerBuf) -> bool {
+        self == other.0
+    }
+}
+impl PartialEq<PointerBuf> for &str {
+    fn eq(&self, other: &PointerBuf) -> bool {
+        *self == other.0
+    }
+}
+
 impl AsRef<Pointer> for Pointer {
     fn as_ref(&self) -> &Pointer {
         self
@@ -529,6 +591,62 @@ impl AsRef<[u8]> for Pointer {
     }
 }
 
+impl PartialOrd<PointerBuf> for Pointer {
+    fn partial_cmp(&self, other: &PointerBuf) -> Option<Ordering> {
+        self.0.partial_cmp(other.0.as_str())
+    }
+}
+
+impl PartialOrd<Pointer> for PointerBuf {
+    fn partial_cmp(&self, other: &Pointer) -> Option<Ordering> {
+        self.0.as_str().partial_cmp(&other.0)
+    }
+}
+impl PartialOrd<&Pointer> for PointerBuf {
+    fn partial_cmp(&self, other: &&Pointer) -> Option<Ordering> {
+        self.0.as_str().partial_cmp(&other.0)
+    }
+}
+
+impl PartialOrd<Pointer> for String {
+    fn partial_cmp(&self, other: &Pointer) -> Option<Ordering> {
+        self.as_str().partial_cmp(&other.0)
+    }
+}
+impl PartialOrd<String> for &Pointer {
+    fn partial_cmp(&self, other: &String) -> Option<Ordering> {
+        self.0.partial_cmp(other.as_str())
+    }
+}
+
+impl PartialOrd<PointerBuf> for String {
+    fn partial_cmp(&self, other: &PointerBuf) -> Option<Ordering> {
+        self.as_str().partial_cmp(other.0.as_str())
+    }
+}
+
+impl PartialOrd<Pointer> for str {
+    fn partial_cmp(&self, other: &Pointer) -> Option<Ordering> {
+        self.partial_cmp(&other.0)
+    }
+}
+
+impl PartialOrd<PointerBuf> for str {
+    fn partial_cmp(&self, other: &PointerBuf) -> Option<Ordering> {
+        self.partial_cmp(other.0.as_str())
+    }
+}
+impl PartialOrd<PointerBuf> for &str {
+    fn partial_cmp(&self, other: &PointerBuf) -> Option<Ordering> {
+        (*self).partial_cmp(other.0.as_str())
+    }
+}
+impl PartialOrd<Pointer> for &str {
+    fn partial_cmp(&self, other: &Pointer) -> Option<Ordering> {
+        (*self).partial_cmp(&other.0)
+    }
+}
+
 impl PartialOrd<&str> for &Pointer {
     fn partial_cmp(&self, other: &&str) -> Option<Ordering> {
         PartialOrd::partial_cmp(&self.0[..], &other[..])
@@ -538,6 +656,24 @@ impl PartialOrd<&str> for &Pointer {
 impl PartialOrd<String> for Pointer {
     fn partial_cmp(&self, other: &String) -> Option<Ordering> {
         self.0.partial_cmp(other.as_str())
+    }
+}
+
+impl PartialOrd<&str> for PointerBuf {
+    fn partial_cmp(&self, other: &&str) -> Option<Ordering> {
+        PartialOrd::partial_cmp(&self.0[..], &other[..])
+    }
+}
+
+impl<'p> PartialOrd<PointerBuf> for &'p Pointer {
+    fn partial_cmp(&self, other: &PointerBuf) -> Option<Ordering> {
+        self.0.partial_cmp(other.0.as_str())
+    }
+}
+
+impl PartialOrd<String> for PointerBuf {
+    fn partial_cmp(&self, other: &String) -> Option<Ordering> {
+        self.0.partial_cmp(other)
     }
 }
 
@@ -559,7 +695,7 @@ impl<'a> IntoIterator for &'a Pointer {
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 */
 
-/// An owned, mutable Pointer (akin to String).
+/// An owned, mutable [`Pointer`] (akin to `String`).
 ///
 /// This type provides methods like [`PointerBuf::push_back`] and
 /// [`PointerBuf::replace_token`] that mutate the pointer in place. It also
@@ -577,7 +713,7 @@ impl PointerBuf {
     /// Attempts to parse a string into a `PointerBuf`.
     ///
     /// ## Errors
-    /// Returns a `ParseError` if the string is not a valid JSON Pointer.
+    /// Returns a [`ParseError`] if the string is not a valid JSON Pointer.
     pub fn parse<S: AsRef<str> + ?Sized>(s: &S) -> Result<Self, ParseError> {
         Pointer::parse(&s).map(Pointer::to_buf)
     }
@@ -666,7 +802,7 @@ impl PointerBuf {
             });
         }
         let mut tokens = self.tokens().collect::<Vec<_>>();
-        if index > tokens.len() {
+        if index >= tokens.len() {
             return Err(ReplaceTokenError {
                 count: tokens.len(),
                 index,
@@ -794,7 +930,7 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
     if bytes[0] != b'/' {
         return Err(ParseError::NoLeadingBackslash);
     }
-    let mut ptr_offset = 0; // offset within the pointer of the most recent '/' seperator
+    let mut ptr_offset = 0; // offset within the pointer of the most recent '/' separator
     let mut tok_offset = 0; // offset within the current token
 
     let bytes = value.as_bytes();
@@ -802,7 +938,7 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
     while i < bytes.len() {
         match bytes[i] {
             b'/' => {
-                // backslashes ('/') seperate tokens
+                // backslashes ('/') separate tokens
                 // we increment the ptr_offset to point to this character
                 ptr_offset = i;
                 // and reset the token offset
@@ -815,7 +951,7 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
                     // the pointer is not properly encoded
                     //
                     // we use the pointer offset, which points to the last
-                    // encountered seperator, as the offset of the error.
+                    // encountered separator, as the offset of the error.
                     // The source `InvalidEncodingError` then uses the token
                     // offset.
                     //
@@ -839,11 +975,157 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
             _ => {}
         }
         i += 1;
-        // not a seperator so we increment the token offset
+        // not a separator so we increment the token offset
         tok_offset += 1;
     }
     Ok(value)
 }
+
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                                  ParseError                                  ║
+║                                 ¯¯¯¯¯¯¯¯¯¯¯¯                                 ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
+
+/// Indicates that a `Pointer` was malformed and unable to be parsed.
+#[derive(Debug, PartialEq)]
+pub enum ParseError {
+    /// `Pointer` did not start with a backslash (`'/'`).
+    NoLeadingBackslash,
+
+    /// `Pointer` contained invalid encoding (e.g. `~` not followed by `0` or
+    /// `1`).
+    InvalidEncoding {
+        /// Offset of the partial pointer starting with the token that contained
+        /// the invalid encoding
+        offset: usize,
+        /// The source `InvalidEncodingError`
+        source: InvalidEncodingError,
+    },
+}
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NoLeadingBackslash { .. } => {
+                write!(
+                    f,
+                    "json pointer is malformed as it does not start with a backslash ('/')"
+                )
+            }
+            Self::InvalidEncoding { source, .. } => write!(f, "{source}"),
+        }
+    }
+}
+
+impl ParseError {
+    /// Returns `true` if this error is `NoLeadingBackslash`
+    pub fn is_no_leading_backslash(&self) -> bool {
+        matches!(self, Self::NoLeadingBackslash { .. })
+    }
+
+    /// Returns `true` if this error is `InvalidEncoding`    
+    pub fn is_invalid_encoding(&self) -> bool {
+        matches!(self, Self::InvalidEncoding { .. })
+    }
+
+    /// Offset of the partial pointer starting with the token which caused the error.
+    ///
+    /// ```text
+    /// "/foo/invalid~tilde/invalid"
+    ///      ↑
+    /// ```
+    ///
+    /// ```
+    /// # use jsonptr::PointerBuf;
+    /// let err = PointerBuf::parse("/foo/invalid~tilde/invalid").unwrap_err();
+    /// assert_eq!(err.pointer_offset(), 4)
+    /// ```
+    pub fn pointer_offset(&self) -> usize {
+        match *self {
+            Self::NoLeadingBackslash { .. } => 0,
+            Self::InvalidEncoding { offset, .. } => offset,
+        }
+    }
+
+    /// Offset of the character index from within the first token of
+    /// [`Self::pointer_offset`])
+    ///
+    /// ```text
+    /// "/foo/invalid~tilde/invalid"
+    ///              ↑
+    ///              8
+    /// ```
+    /// ```
+    /// # use jsonptr::PointerBuf;
+    /// let err = PointerBuf::parse("/foo/invalid~tilde/invalid").unwrap_err();
+    /// assert_eq!(err.source_offset(), 8)
+    /// ```
+    pub fn source_offset(&self) -> usize {
+        match self {
+            Self::NoLeadingBackslash { .. } => 0,
+            Self::InvalidEncoding { source, .. } => source.offset,
+        }
+    }
+
+    /// Offset of the first invalid encoding from within the pointer.
+    /// ```text
+    /// "/foo/invalid~tilde/invalid"
+    ///              ↑
+    ///             12
+    /// ```
+    /// ```
+    /// use jsonptr::PointerBuf;
+    /// let err = PointerBuf::parse("/foo/invalid~tilde/invalid").unwrap_err();
+    /// assert_eq!(err.complete_offset(), 12)
+    /// ```
+    pub fn complete_offset(&self) -> usize {
+        self.source_offset() + self.pointer_offset()
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for ParseError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::InvalidEncoding { source, .. } => Some(source),
+            Self::NoLeadingBackslash => None,
+        }
+    }
+}
+
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                              ReplaceTokenError                               ║
+║                             ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
+
+/// Returned from `Pointer::replace_token` when the provided index is out of
+/// bounds.
+#[derive(Debug, PartialEq, Eq)]
+pub struct ReplaceTokenError {
+    /// The index of the token that was out of bounds.
+    pub index: usize,
+    /// The number of tokens in the `Pointer`.
+    pub count: usize,
+}
+
+impl fmt::Display for ReplaceTokenError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "index {} is out of bounds ({})", self.index, self.count)
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for ReplaceTokenError {}
 
 /*
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -857,6 +1139,8 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
 
 #[cfg(test)]
 mod tests {
+    use std::error::Error;
+
     use super::*;
     use quickcheck::TestResult;
     use quickcheck_macros::quickcheck;
@@ -868,7 +1152,38 @@ mod tests {
     }
 
     #[test]
-    fn test_parse() {
+    fn strip_suffix() {
+        let p = Pointer::new("/example/pointer/to/some/value");
+        let stripped = p.strip_suffix(Pointer::new("/to/some/value")).unwrap();
+        assert_eq!(stripped, "/example/pointer");
+    }
+
+    #[test]
+    fn strip_prefix() {
+        let p = Pointer::new("/example/pointer/to/some/value");
+        let stripped = p.strip_prefix(Pointer::new("/example/pointer")).unwrap();
+        assert_eq!(stripped, "/to/some/value");
+    }
+
+    #[test]
+    fn parse_error_is_no_leading_backslash() {
+        let err = ParseError::NoLeadingBackslash;
+        assert!(err.is_no_leading_backslash());
+        assert!(!err.is_invalid_encoding());
+    }
+
+    #[test]
+    fn parse_error_is_invalid_encoding() {
+        let err = ParseError::InvalidEncoding {
+            offset: 0,
+            source: InvalidEncodingError { offset: 1 },
+        };
+        assert!(!err.is_no_leading_backslash());
+        assert!(err.is_invalid_encoding());
+    }
+
+    #[test]
+    fn parse() {
         let tests = [
             ("", Ok("")),
             ("/", Ok("/")),
@@ -906,18 +1221,53 @@ mod tests {
         ];
         for (input, expected) in tests {
             let actual = Pointer::parse(input).map(Pointer::as_str);
-            assert_eq!(
-                actual, expected,
-                "pointer parsing failed to meet expectations
-                \ninput: {input}
-                \nexpected:\n{expected:#?}
-                \nactual:\n{actual:#?}",
-            );
+            assert_eq!(actual, expected);
         }
     }
 
     #[test]
-    fn test_push_pop_back() {
+    fn parse_error_offsets() {
+        let err = Pointer::parse("/foo/invalid~encoding").unwrap_err();
+        assert_eq!(err.pointer_offset(), 4);
+        assert_eq!(err.source_offset(), 8);
+        assert_eq!(err.complete_offset(), 12);
+
+        let err = Pointer::parse("invalid~encoding").unwrap_err();
+        assert_eq!(err.pointer_offset(), 0);
+        assert_eq!(err.source_offset(), 0);
+
+        let err = Pointer::parse("no-leading/slash").unwrap_err();
+        assert!(err.source().is_none());
+    }
+
+    #[test]
+    #[cfg(feature = "std")]
+    fn parse_error_source() {
+        use std::error::Error;
+        let err = Pointer::parse("/foo/invalid~encoding").unwrap_err();
+        assert!(err.source().is_some());
+        let source = err.source().unwrap();
+        assert!(source.is::<InvalidEncodingError>());
+
+        let err = Pointer::parse("no-leading/slash").unwrap_err();
+        assert!(err.source().is_none());
+    }
+
+    #[test]
+    fn pointerbuf_as_pointer_returns_pointer() {
+        let ptr = PointerBuf::parse("/foo/bar").unwrap();
+        assert_eq!(ptr.as_ptr(), ptr);
+    }
+
+    #[test]
+    fn pointer_buf_clear() {
+        let mut ptr = PointerBuf::from_tokens(["foo", "bar"]);
+        ptr.clear();
+        assert_eq!(ptr, "");
+    }
+
+    #[test]
+    fn push_pop_back() {
         let mut ptr = PointerBuf::default();
         assert_eq!(ptr, "", "default, root pointer should equal \"\"");
         assert_eq!(ptr.count(), 0, "default pointer should have 0 tokens");
@@ -926,37 +1276,24 @@ mod tests {
         assert_eq!(ptr, "/foo", "pointer should equal \"/foo\" after push_back");
 
         ptr.push_back("bar".into());
-        assert_eq!(
-            ptr, "/foo/bar",
-            "pointer should equal \"/foo/bar\" after push_back"
-        );
+        assert_eq!(ptr, "/foo/bar");
         ptr.push_back("/baz".into());
-        assert_eq!(
-            ptr, "/foo/bar/~1baz",
-            "pointer should equal \"/foo/bar/~1baz\" after push_back"
-        );
+        assert_eq!(ptr, "/foo/bar/~1baz");
 
         let mut ptr = PointerBuf::from_tokens(["foo", "bar"]);
         assert_eq!(ptr.pop_back(), Some("bar".into()));
         assert_eq!(ptr, "/foo", "pointer should equal \"/foo\" after pop_back");
-        assert_eq!(
-            ptr.pop_back(),
-            Some("foo".into()),
-            "\"foo\" should have been popped from the back"
-        );
+        assert_eq!(ptr.pop_back(), Some("foo".into()));
         assert_eq!(ptr, "", "pointer should equal \"\" after pop_back");
     }
 
     #[test]
-    fn test_replace_token() {
+    fn replace_token() {
         let mut ptr = PointerBuf::try_from("/test/token").unwrap();
 
         let res = ptr.replace_token(0, "new".into());
         assert!(res.is_ok());
-        assert_eq!(
-            ptr, "/new/token",
-            "pointer should equal \"/new/token\" after replace_token"
-        );
+        assert_eq!(ptr, "/new/token");
 
         let res = ptr.replace_token(3, "invalid".into());
 
@@ -964,7 +1301,7 @@ mod tests {
     }
 
     #[test]
-    fn test_push_pop_front() {
+    fn push_pop_front() {
         let mut ptr = PointerBuf::default();
         assert_eq!(ptr, "");
         assert_eq!(ptr.count(), 0);
@@ -989,6 +1326,12 @@ mod tests {
         assert_eq!(ptr.count(), 1);
         assert_eq!(ptr.pop_front(), Some("foo".into()));
         assert_eq!(ptr, "");
+    }
+
+    #[test]
+    fn display_replace_token_error() {
+        let err = ReplaceTokenError { index: 3, count: 2 };
+        assert_eq!(format!("{err}"), "index 3 is out of bounds (2)");
     }
 
     #[test]
@@ -1036,7 +1379,7 @@ mod tests {
     }
 
     #[test]
-    fn test_formatting() {
+    fn formatting() {
         assert_eq!(PointerBuf::from_tokens(["foo", "bar"]), "/foo/bar");
         assert_eq!(
             PointerBuf::from_tokens(["~/foo", "~bar", "/baz"]),
@@ -1044,10 +1387,13 @@ mod tests {
         );
         assert_eq!(PointerBuf::from_tokens(["field", "", "baz"]), "/field//baz");
         assert_eq!(PointerBuf::default(), "");
+
+        let ptr = PointerBuf::from_tokens(["foo", "bar", "baz"]);
+        assert_eq!(ptr.to_string(), "/foo/bar/baz");
     }
 
     #[test]
-    fn test_last() {
+    fn last() {
         let ptr = Pointer::from_static("/foo/bar");
 
         assert_eq!(ptr.last(), Some("bar".into()));
@@ -1066,7 +1412,7 @@ mod tests {
     }
 
     #[test]
-    fn test_first() {
+    fn first() {
         let ptr = Pointer::from_static("/foo/bar");
         assert_eq!(ptr.first(), Some("foo".into()));
 
@@ -1078,12 +1424,131 @@ mod tests {
     }
 
     #[test]
-    fn test_pointerbuf_try_from() {
+    fn pointerbuf_try_from() {
         let ptr = PointerBuf::from_tokens(["foo", "bar", "~/"]);
 
         assert_eq!(PointerBuf::try_from("/foo/bar/~0~1").unwrap(), ptr);
         let into: PointerBuf = "/foo/bar/~0~1".try_into().unwrap();
         assert_eq!(ptr, into);
+    }
+
+    #[test]
+    fn default() {
+        let ptr = PointerBuf::default();
+        assert_eq!(ptr, "");
+        assert_eq!(ptr.count(), 0);
+
+        let ptr = <&Pointer>::default();
+        assert_eq!(ptr, "");
+    }
+
+    #[test]
+    #[cfg(all(feature = "serde", feature = "json"))]
+    fn to_json_value() {
+        use serde_json::Value;
+        let ptr = Pointer::from_static("/foo/bar");
+        assert_eq!(ptr.to_json_value(), Value::String(String::from("/foo/bar")));
+    }
+
+    #[cfg(all(feature = "resolve", feature = "json"))]
+    #[test]
+    fn resolve() {
+        // full tests in resolve.rs
+        use serde_json::json;
+        let value = json!({
+            "foo": {
+                "bar": {
+                    "baz": "qux"
+                }
+            }
+        });
+        let ptr = Pointer::from_static("/foo/bar/baz");
+        let resolved = ptr.resolve(&value).unwrap();
+        assert_eq!(resolved, &json!("qux"));
+    }
+
+    #[cfg(all(feature = "delete", feature = "json"))]
+    #[test]
+    fn delete() {
+        use serde_json::json;
+        let mut value = json!({
+            "foo": {
+                "bar": {
+                    "baz": "qux"
+                }
+            }
+        });
+        let ptr = Pointer::from_static("/foo/bar/baz");
+        let deleted = ptr.delete(&mut value).unwrap();
+        assert_eq!(deleted, json!("qux"));
+        assert_eq!(
+            value,
+            json!({
+                "foo": {
+                    "bar": {}
+                }
+            })
+        );
+    }
+
+    #[cfg(all(feature = "assign", feature = "json"))]
+    #[test]
+    fn assign() {
+        use serde_json::json;
+        let mut value = json!({});
+        let ptr = Pointer::from_static("/foo/bar");
+        let replaced = ptr.assign(&mut value, json!("baz")).unwrap();
+        assert_eq!(replaced, None);
+        assert_eq!(
+            value,
+            json!({
+                "foo": {
+                    "bar": "baz"
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn get() {
+        let ptr = Pointer::from_static("/0/1/2/3/4/5/6/7/8/9");
+        for i in 0..10 {
+            assert_eq!(ptr.get(i).unwrap().decoded(), i.to_string());
+        }
+    }
+
+    #[test]
+    fn replace_token_success() {
+        let mut ptr = PointerBuf::from_tokens(["foo", "bar", "baz"]);
+        assert!(ptr.replace_token(1, "qux".into()).is_ok());
+        assert_eq!(ptr, PointerBuf::from_tokens(["foo", "qux", "baz"]));
+
+        assert!(ptr.replace_token(0, "corge".into()).is_ok());
+        assert_eq!(ptr, PointerBuf::from_tokens(["corge", "qux", "baz"]));
+
+        assert!(ptr.replace_token(2, "quux".into()).is_ok());
+        assert_eq!(ptr, PointerBuf::from_tokens(["corge", "qux", "quux"]));
+    }
+
+    #[test]
+    fn replace_token_out_of_bounds() {
+        let mut ptr = PointerBuf::from_tokens(["foo", "bar"]);
+        assert!(ptr.replace_token(2, "baz".into()).is_err());
+        assert_eq!(ptr, PointerBuf::from_tokens(["foo", "bar"])); // Ensure original pointer is unchanged
+    }
+
+    #[test]
+    fn replace_token_with_empty_string() {
+        let mut ptr = PointerBuf::from_tokens(["foo", "bar", "baz"]);
+        assert!(ptr.replace_token(1, "".into()).is_ok());
+        assert_eq!(ptr, PointerBuf::from_tokens(["foo", "", "baz"]));
+    }
+
+    #[test]
+    fn replace_token_in_empty_pointer() {
+        let mut ptr = PointerBuf::default();
+        assert!(ptr.replace_token(0, "foo".into()).is_err());
+        assert_eq!(ptr, PointerBuf::default()); // Ensure the pointer remains empty
     }
 
     #[test]
@@ -1128,6 +1593,48 @@ mod tests {
             assert!(ptr.back().is_none());
             assert!(ptr.pop_back().is_none());
         }
+    }
+
+    #[test]
+    // `clippy::useless_asref` is tripping here because the `as_ref` is being
+    // called on the same type (`&Pointer`). This is just to ensure that the
+    // `as_ref` method is implemented correctly and stays that way.
+    #[allow(clippy::useless_asref)]
+    fn pointerbuf_as_ref_returns_pointer() {
+        let ptr_str = "/foo/bar";
+        let ptr = Pointer::from_static(ptr_str);
+        let ptr_buf = ptr.to_buf();
+        assert_eq!(ptr_buf.as_ref(), ptr);
+        let r: &Pointer = ptr.as_ref();
+        assert_eq!(ptr, r);
+
+        let s: &str = ptr.as_ref();
+        assert_eq!(s, ptr_str);
+
+        let b: &[u8] = ptr.as_ref();
+        assert_eq!(b, ptr_str.as_bytes());
+    }
+
+    #[test]
+    fn from_tokens() {
+        let ptr = PointerBuf::from_tokens(["foo", "bar", "baz"]);
+        assert_eq!(ptr, "/foo/bar/baz");
+    }
+
+    #[test]
+    fn pointer_borrow() {
+        let ptr = Pointer::from_static("/foo/bar");
+        let borrowed: &str = ptr.borrow();
+        assert_eq!(borrowed, "/foo/bar");
+    }
+
+    #[test]
+    #[cfg(feature = "json")]
+    fn into_value() {
+        use serde_json::Value;
+        let ptr = Pointer::from_static("/foo/bar");
+        let value: Value = ptr.into();
+        assert_eq!(value, Value::String("/foo/bar".to_string()));
     }
 
     #[test]
@@ -1275,14 +1782,132 @@ mod tests {
         let mut b = base.clone();
         b.append(&suffix_1);
         let isect = a.intersection(&b);
-        if isect != base {
-            println!("\nintersection failed\nbase: {base:?}\nisect: {isect:?}\nsuffix_0: {suffix_0:?}\nsuffix_1: {suffix_1:?}\n");
-        }
         TestResult::from_bool(isect == base)
     }
 
+    #[cfg(all(feature = "json", feature = "std", feature = "serde"))]
     #[test]
-    fn test_intersection() {
+    fn serde() {
+        use serde::Deserialize;
+        let ptr = PointerBuf::from_tokens(["foo", "bar"]);
+        let json = serde_json::to_string(&ptr).unwrap();
+        assert_eq!(json, "\"/foo/bar\"");
+        let deserialized: PointerBuf = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, ptr);
+
+        let ptr = Pointer::from_static("/foo/bar");
+        let json = serde_json::to_string(&ptr).unwrap();
+        assert_eq!(json, "\"/foo/bar\"");
+
+        let mut de = serde_json::Deserializer::from_str("\"/foo/bar\"");
+        let p = <&Pointer>::deserialize(&mut de).unwrap();
+        assert_eq!(p, ptr);
+        let s = serde_json::to_string(p).unwrap();
+        assert_eq!(json, s);
+
+        let invalid = serde_json::from_str::<&Pointer>("\"foo/bar\"");
+        assert!(invalid.is_err());
+        assert_eq!(
+            invalid.unwrap_err().to_string(),
+            "failed to parse json pointer\n\ncaused by:\njson pointer is malformed as it does not start with a backslash ('/') at line 1 column 9"
+        );
+    }
+
+    #[test]
+    fn to_owned() {
+        let ptr = Pointer::from_static("/bread/crumbs");
+        let buf = ptr.to_owned();
+        assert_eq!(buf, "/bread/crumbs");
+    }
+
+    #[test]
+    #[allow(clippy::cmp_owned, unused_must_use)]
+    fn partial_eq() {
+        let ptr_string = String::from("/bread/crumbs");
+        let ptr_str = "/bread/crumbs";
+        let ptr = Pointer::from_static(ptr_str);
+        let ptr_buf = ptr.to_buf();
+        <&Pointer as PartialEq<&Pointer>>::eq(&ptr, &ptr);
+        <Pointer as PartialEq<&str>>::eq(ptr, &ptr_str);
+        <&Pointer as PartialEq<String>>::eq(&ptr, &ptr_string);
+        <Pointer as PartialEq<String>>::eq(ptr, &ptr_string);
+        <Pointer as PartialEq<PointerBuf>>::eq(ptr, &ptr_buf);
+        <&str as PartialEq<Pointer>>::eq(&ptr_str, ptr);
+        <String as PartialEq<Pointer>>::eq(&ptr_string, ptr);
+        <str as PartialEq<Pointer>>::eq(ptr_str, ptr);
+        <PointerBuf as PartialEq<str>>::eq(&ptr_buf, ptr_str);
+        <PointerBuf as PartialEq<PointerBuf>>::eq(&ptr_buf, &ptr_buf);
+        <PointerBuf as PartialEq<Pointer>>::eq(&ptr_buf, ptr);
+        <Pointer as PartialEq<PointerBuf>>::eq(ptr, &ptr_buf);
+        <PointerBuf as PartialEq<&Pointer>>::eq(&ptr_buf, &ptr);
+        <PointerBuf as PartialEq<&str>>::eq(&ptr_buf, &ptr_str);
+        <PointerBuf as PartialEq<String>>::eq(&ptr_buf, &ptr_string);
+        <&Pointer as PartialEq<PointerBuf>>::eq(&ptr, &ptr_buf);
+        <str as PartialEq<PointerBuf>>::eq(ptr_str, &ptr_buf);
+        <&str as PartialEq<PointerBuf>>::eq(&ptr_str, &ptr_buf);
+        <String as PartialEq<PointerBuf>>::eq(&ptr_string, &ptr_buf);
+    }
+
+    #[test]
+    fn partial_ord() {
+        let a_str = "/foo/bar";
+        let a_string = a_str.to_string();
+        let a_ptr = Pointer::from_static(a_str);
+        let a_buf = a_ptr.to_buf();
+        let b_str = "/foo/bar";
+        let b_string = b_str.to_string();
+        let b_ptr = Pointer::from_static(b_str);
+        let b_buf = b_ptr.to_buf();
+        let c_str = "/foo/bar/baz";
+        let c_string = c_str.to_string();
+        let c_ptr = Pointer::from_static(c_str);
+        let c_buf = c_ptr.to_buf();
+
+        assert!(<Pointer as PartialOrd<PointerBuf>>::lt(a_ptr, &c_buf));
+        assert!(<PointerBuf as PartialOrd<Pointer>>::lt(&a_buf, c_ptr));
+        assert!(<String as PartialOrd<Pointer>>::lt(&a_string, c_ptr));
+        assert!(<str as PartialOrd<Pointer>>::lt(a_str, c_ptr));
+        assert!(<str as PartialOrd<PointerBuf>>::lt(a_str, &c_buf));
+        assert!(<&str as PartialOrd<Pointer>>::lt(&a_str, c_ptr));
+        assert!(<&str as PartialOrd<PointerBuf>>::lt(&a_str, &c_buf));
+        assert!(<&Pointer as PartialOrd<PointerBuf>>::lt(&a_ptr, &c_buf));
+        assert!(<&Pointer as PartialOrd<&str>>::lt(&b_ptr, &c_str));
+        assert!(<Pointer as PartialOrd<String>>::lt(a_ptr, &c_string));
+        assert!(<PointerBuf as PartialOrd<&str>>::lt(&a_buf, &c_str));
+        assert!(<PointerBuf as PartialOrd<String>>::lt(&a_buf, &c_string));
+        assert!(a_ptr < c_buf);
+        assert!(c_buf > a_ptr);
+        assert!(a_buf < c_ptr);
+        assert!(a_ptr < c_buf);
+        assert!(a_ptr < c_ptr);
+        assert!(a_ptr <= c_ptr);
+        assert!(c_ptr > a_ptr);
+        assert!(c_ptr >= a_ptr);
+        assert!(a_ptr == b_ptr);
+        assert!(a_ptr <= b_ptr);
+        assert!(a_ptr >= b_ptr);
+        assert!(a_string < c_buf);
+        assert!(a_string <= c_buf);
+        assert!(c_string > a_buf);
+        assert!(c_string >= a_buf);
+        assert!(a_string == b_buf);
+        assert!(a_ptr < c_buf);
+        assert!(a_ptr <= c_buf);
+        assert!(c_ptr > a_buf);
+        assert!(c_ptr >= a_buf);
+        assert!(a_ptr == b_buf);
+        assert!(a_ptr <= b_buf);
+        assert!(a_ptr >= b_buf);
+        assert!(a_ptr < c_buf);
+        assert!(c_ptr > b_string);
+        // couldn't inline this
+        #[allow(clippy::nonminimal_bool)]
+        let not = !(a_ptr > c_buf);
+        assert!(not);
+    }
+
+    #[test]
+    fn intersection() {
         struct Test {
             base: &'static str,
             a_suffix: &'static str,
@@ -1294,6 +1919,11 @@ mod tests {
                 base: "",
                 a_suffix: "/",
                 b_suffix: "/a/b/c",
+            },
+            Test {
+                base: "",
+                a_suffix: "",
+                b_suffix: "",
             },
             Test {
                 base: "/a",
@@ -1324,10 +1954,53 @@ mod tests {
             a.append(&PointerBuf::parse(a_suffix).unwrap());
             b.append(&PointerBuf::parse(b_suffix).unwrap());
             let intersection = a.intersection(&b);
-            assert_eq!(
-                intersection, base,
-                "\nintersection failed\n\nbase:{base}\na_suffix:{a_suffix}\nb_suffix:{b_suffix} expected: \"{base}\"\n   actual: \"{intersection}\"\n"
-            );
+            assert_eq!(intersection, base);
         }
+    }
+    #[test]
+    fn parse_error_display() {
+        assert_eq!(
+            ParseError::NoLeadingBackslash.to_string(),
+            "json pointer is malformed as it does not start with a backslash ('/')"
+        );
+    }
+
+    #[test]
+    fn into_iter() {
+        use core::iter::IntoIterator;
+
+        let ptr = PointerBuf::from_tokens(["foo", "bar", "baz"]);
+        let tokens: Vec<Token> = ptr.into_iter().collect();
+        let from_tokens = PointerBuf::from_tokens(tokens);
+        assert_eq!(ptr, from_tokens);
+
+        let ptr = Pointer::from_static("/foo/bar/baz");
+        let tokens: Vec<_> = ptr.into_iter().collect();
+        assert_eq!(ptr, PointerBuf::from_tokens(tokens));
+    }
+
+    #[test]
+    fn from_str() {
+        let p = PointerBuf::from_str("/foo/bar").unwrap();
+        assert_eq!(p, "/foo/bar");
+    }
+
+    #[test]
+    fn from_token() {
+        let p = PointerBuf::from(Token::new("foo"));
+        assert_eq!(p, "/foo");
+    }
+
+    #[test]
+    fn from_usize() {
+        let p = PointerBuf::from(0);
+        assert_eq!(p, "/0");
+    }
+
+    #[test]
+    fn borrow() {
+        let ptr = PointerBuf::from_tokens(["foo", "bar"]);
+        let borrowed: &Pointer = ptr.borrow();
+        assert_eq!(borrowed, "/foo/bar");
     }
 }

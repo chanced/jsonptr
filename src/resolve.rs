@@ -4,8 +4,26 @@
 //! implemented by types that can internally resolve a value based on a JSON
 //! Pointer.
 //!
-//! ## Feature Flag
 //! This module is enabled by default with the `"resolve"` feature flag.
+//!
+//! ## Usage
+//! [`Resolve`] and [`ResolveMut`] can be used directly or through the
+//! [`resolve`](Pointer::resolve) and [`resolve_mut`](Pointer::resolve_mut)
+//! methods on [`Pointer`] and [`PointerBuf`](crate::PointerBuf).
+//!
+//! ```rust
+//! use jsonptr::{Pointer, Resolve, ResolveMut};
+//! use serde_json::json;
+//!
+//! let ptr = Pointer::from_static("/foo/1");
+//! let mut data = json!({"foo": ["bar", "baz"]});
+//!
+//! let value = ptr.resolve(&data).unwrap();
+//! assert_eq!(value, &json!("baz"));
+//!
+//! let value = data.resolve_mut(ptr).unwrap();
+//! assert_eq!(value, &json!("baz"));
+//! ```
 //!
 //! ## Provided implementations
 //!
@@ -15,7 +33,10 @@
 //! | TOML  |    `toml::Value`    |   `"toml"`   |         |
 //!
 //!
-use crate::{OutOfBoundsError, ParseIndexError, Pointer, Token};
+use crate::{
+    index::{OutOfBoundsError, ParseIndexError},
+    Pointer, Token,
+};
 
 /*
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -55,7 +76,7 @@ pub trait Resolve {
 */
 
 /// A trait implemented by types which can resolve a mutable reference to a
-/// `serde_json::Value` from the path in a JSON [`Pointer`].
+/// value type from a path represented by a JSON [`Pointer`].
 pub trait ResolveMut {
     /// The type of value that is being resolved.
     type Value;
@@ -395,55 +416,198 @@ mod toml {
 #[cfg(test)]
 mod tests {
     use super::{Resolve, ResolveError, ResolveMut};
-    use crate::Pointer;
+    use crate::{
+        index::{OutOfBoundsError, ParseIndexError},
+        Pointer,
+    };
     use core::fmt;
 
-    struct Test<'v, V> {
-        ptr: &'static str,
-        expected_result: Result<&'v V, ResolveError>,
-        data: &'v V,
+    #[cfg(feature = "std")]
+    #[test]
+    fn resolve_error_source() {
+        use std::error::Error;
+        let err = ResolveError::FailedToParseIndex {
+            offset: 0,
+            source: ParseIndexError {
+                source: "invalid".parse::<usize>().unwrap_err(),
+            },
+        };
+        assert!(err.source().is_some());
+
+        let err = ResolveError::OutOfBounds {
+            offset: 0,
+            source: OutOfBoundsError {
+                index: 1,
+                length: 0,
+            },
+        };
+        assert!(err.source().is_some());
+
+        let err = ResolveError::NotFound { offset: 0 };
+        assert!(err.source().is_none());
+
+        let err = ResolveError::Unreachable { offset: 0 };
+        assert!(err.source().is_none());
     }
 
-    impl<'v, V> Test<'v, V>
-    where
-        V: Resolve<Value = V, Error = ResolveError>
-            + ResolveMut<Value = V, Error = ResolveError>
-            + Clone
-            + PartialEq
-            + fmt::Display
-            + fmt::Debug,
-    {
-        fn all(tests: impl IntoIterator<Item = Test<'v, V>>) {
-            tests.into_iter().enumerate().for_each(|(i, t)| t.run(i));
-        }
+    #[test]
+    fn resolve_error_display() {
+        let err = ResolveError::FailedToParseIndex {
+            offset: 0,
+            source: ParseIndexError {
+                source: "invalid".parse::<usize>().unwrap_err(),
+            },
+        };
+        assert_eq!(format!("{err}"), "failed to parse index at offset 0");
 
-        fn run(self, i: usize) {
-            _ = self;
-            let Test {
-                ptr,
-                data,
-                expected_result,
-            } = self;
-            let ptr = Pointer::from_static(ptr);
+        let err = ResolveError::OutOfBounds {
+            offset: 0,
+            source: OutOfBoundsError {
+                index: 1,
+                length: 0,
+            },
+        };
+        assert_eq!(format!("{err}"), "index at offset 0 out of bounds");
 
-            // cloning the data & expected_result to make comparison easier
-            let mut data = data.clone();
-            let expected_result = expected_result.cloned();
+        let err = ResolveError::NotFound { offset: 0 };
 
-            // testing Resolve
-            let res = data.resolve(ptr).cloned();
-            assert_eq!(
-                &res, &expected_result,
-                "test #{i} failed:\n\nexpected\n{expected_result:#?}\n\nactual:\n{res:#?}",
-            );
+        assert_eq!(format!("{err}"), "pointer starting at offset 0 not found");
 
-            // testing ResolveMut
-            let res = data.resolve_mut(ptr).cloned();
-            assert_eq!(
-                &res, &expected_result,
-                "test #{i} failed:\n\nexpected\n{expected_result:#?}\n\nactual:\n{res:#?}",
-            );
-        }
+        let err = ResolveError::Unreachable { offset: 0 };
+        assert_eq!(
+            format!("{err}"),
+            "pointer starting at offset 0 is unreachable"
+        );
+    }
+
+    #[test]
+    fn resolve_error_offset() {
+        let err = ResolveError::FailedToParseIndex {
+            offset: 0,
+            source: ParseIndexError {
+                source: "invalid".parse::<usize>().unwrap_err(),
+            },
+        };
+        assert_eq!(err.offset(), 0);
+
+        let err = ResolveError::OutOfBounds {
+            offset: 0,
+            source: OutOfBoundsError {
+                index: 1,
+                length: 0,
+            },
+        };
+        assert_eq!(err.offset(), 0);
+
+        let err = ResolveError::NotFound { offset: 0 };
+        assert_eq!(err.offset(), 0);
+
+        let err = ResolveError::Unreachable { offset: 0 };
+        assert_eq!(err.offset(), 0);
+    }
+
+    #[test]
+    fn resolve_error_is_unreachable() {
+        let err = ResolveError::FailedToParseIndex {
+            offset: 0,
+            source: ParseIndexError {
+                source: "invalid".parse::<usize>().unwrap_err(),
+            },
+        };
+        assert!(!err.is_unreachable());
+
+        let err = ResolveError::OutOfBounds {
+            offset: 0,
+            source: OutOfBoundsError {
+                index: 1,
+                length: 0,
+            },
+        };
+        assert!(!err.is_unreachable());
+
+        let err = ResolveError::NotFound { offset: 0 };
+        assert!(!err.is_unreachable());
+
+        let err = ResolveError::Unreachable { offset: 0 };
+        assert!(err.is_unreachable());
+    }
+
+    #[test]
+    fn resolve_error_is_not_found() {
+        let err = ResolveError::FailedToParseIndex {
+            offset: 0,
+            source: ParseIndexError {
+                source: "invalid".parse::<usize>().unwrap_err(),
+            },
+        };
+        assert!(!err.is_not_found());
+
+        let err = ResolveError::OutOfBounds {
+            offset: 0,
+            source: OutOfBoundsError {
+                index: 1,
+                length: 0,
+            },
+        };
+        assert!(!err.is_not_found());
+
+        let err = ResolveError::NotFound { offset: 0 };
+        assert!(err.is_not_found());
+
+        let err = ResolveError::Unreachable { offset: 0 };
+        assert!(!err.is_not_found());
+    }
+
+    #[test]
+    fn resolve_error_is_out_of_bounds() {
+        let err = ResolveError::FailedToParseIndex {
+            offset: 0,
+            source: ParseIndexError {
+                source: "invalid".parse::<usize>().unwrap_err(),
+            },
+        };
+        assert!(!err.is_out_of_bounds());
+
+        let err = ResolveError::OutOfBounds {
+            offset: 0,
+            source: OutOfBoundsError {
+                index: 1,
+                length: 0,
+            },
+        };
+        assert!(err.is_out_of_bounds());
+
+        let err = ResolveError::NotFound { offset: 0 };
+        assert!(!err.is_out_of_bounds());
+
+        let err = ResolveError::Unreachable { offset: 0 };
+        assert!(!err.is_out_of_bounds());
+    }
+
+    #[test]
+    fn resolve_error_is_failed_to_parse_index() {
+        let err = ResolveError::FailedToParseIndex {
+            offset: 0,
+            source: ParseIndexError {
+                source: "invalid".parse::<usize>().unwrap_err(),
+            },
+        };
+        assert!(err.is_failed_to_parse_index());
+
+        let err = ResolveError::OutOfBounds {
+            offset: 0,
+            source: OutOfBoundsError {
+                index: 1,
+                length: 0,
+            },
+        };
+        assert!(!err.is_failed_to_parse_index());
+
+        let err = ResolveError::NotFound { offset: 0 };
+        assert!(!err.is_failed_to_parse_index());
+
+        let err = ResolveError::Unreachable { offset: 0 };
+        assert!(!err.is_failed_to_parse_index());
     }
 
     /*
@@ -454,7 +618,7 @@ mod tests {
 
     #[test]
     #[cfg(feature = "json")]
-    fn test_resolve_json() {
+    fn resolve_json() {
         use serde_json::json;
 
         let data = &json!({
@@ -476,86 +640,86 @@ mod tests {
             " ": 7,
             "m~n": 8
         });
-        // let data = &test_data;
+        // let data = &data;
 
         Test::all([
             // 0
             Test {
                 ptr: "",
                 data,
-                expected_result: Ok(data),
+                expected: Ok(data),
             },
             // 1
             Test {
                 ptr: "/array",
                 data,
-                expected_result: Ok(data.get("array").unwrap()), // ["bar", "baz"]
+                expected: Ok(data.get("array").unwrap()), // ["bar", "baz"]
             },
             // 2
             Test {
                 ptr: "/array/0",
                 data,
-                expected_result: Ok(data.get("array").unwrap().get(0).unwrap()), // "bar"
+                expected: Ok(data.get("array").unwrap().get(0).unwrap()), // "bar"
             },
             // 3
             Test {
                 ptr: "/a~1b",
                 data,
-                expected_result: Ok(data.get("a/b").unwrap()), // 1
+                expected: Ok(data.get("a/b").unwrap()), // 1
             },
             // 4
             Test {
                 ptr: "/c%d",
                 data,
-                expected_result: Ok(data.get("c%d").unwrap()), // 2
+                expected: Ok(data.get("c%d").unwrap()), // 2
             },
             // 5
             Test {
                 ptr: "/e^f",
                 data,
-                expected_result: Ok(data.get("e^f").unwrap()), // 3
+                expected: Ok(data.get("e^f").unwrap()), // 3
             },
             // 6
             Test {
                 ptr: "/g|h",
                 data,
-                expected_result: Ok(data.get("g|h").unwrap()), // 4
+                expected: Ok(data.get("g|h").unwrap()), // 4
             },
             // 7
             Test {
                 ptr: "/i\\j",
                 data,
-                expected_result: Ok(data.get("i\\j").unwrap()), // 5
+                expected: Ok(data.get("i\\j").unwrap()), // 5
             },
             // 8
             Test {
                 ptr: "/k\"l",
                 data,
-                expected_result: Ok(data.get("k\"l").unwrap()), // 6
+                expected: Ok(data.get("k\"l").unwrap()), // 6
             },
             // 9
             Test {
                 ptr: "/ ",
                 data,
-                expected_result: Ok(data.get(" ").unwrap()), // 7
+                expected: Ok(data.get(" ").unwrap()), // 7
             },
             // 10
             Test {
                 ptr: "/m~0n",
                 data,
-                expected_result: Ok(data.get("m~n").unwrap()), // 8
+                expected: Ok(data.get("m~n").unwrap()), // 8
             },
             // 11
             Test {
                 ptr: "/object/bool/unresolvable",
                 data,
-                expected_result: Err(ResolveError::Unreachable { offset: 12 }),
+                expected: Err(ResolveError::Unreachable { offset: 12 }),
             },
             // 12
             Test {
                 ptr: "/object/not_found",
                 data,
-                expected_result: Err(ResolveError::NotFound { offset: 7 }),
+                expected: Err(ResolveError::NotFound { offset: 7 }),
             },
         ]);
     }
@@ -567,7 +731,7 @@ mod tests {
     */
     #[test]
     #[cfg(feature = "toml")]
-    fn test_resolve_toml() {
+    fn resolve_toml() {
         use toml::{toml, Value};
 
         let data = &Value::Table(toml! {
@@ -588,87 +752,115 @@ mod tests {
             " " = 7
             "m~n" = 8
         });
-        // let data = &test_data;
+        // let data = &data;
 
         Test::all([
-            // 0
             Test {
                 ptr: "",
                 data,
-                expected_result: Ok(data),
+                expected: Ok(data),
             },
-            // 1
             Test {
                 ptr: "/array",
                 data,
-                expected_result: Ok(data.get("array").unwrap()), // ["bar", "baz"]
+                expected: Ok(data.get("array").unwrap()), // ["bar", "baz"]
             },
-            // 2
             Test {
                 ptr: "/array/0",
                 data,
-                expected_result: Ok(data.get("array").unwrap().get(0).unwrap()), // "bar"
+                expected: Ok(data.get("array").unwrap().get(0).unwrap()), // "bar"
             },
-            // 3
             Test {
                 ptr: "/a~1b",
                 data,
-                expected_result: Ok(data.get("a/b").unwrap()), // 1
+                expected: Ok(data.get("a/b").unwrap()), // 1
             },
-            // 4
             Test {
                 ptr: "/c%d",
                 data,
-                expected_result: Ok(data.get("c%d").unwrap()), // 2
+                expected: Ok(data.get("c%d").unwrap()), // 2
             },
-            // 5
             Test {
                 ptr: "/e^f",
                 data,
-                expected_result: Ok(data.get("e^f").unwrap()), // 3
+                expected: Ok(data.get("e^f").unwrap()), // 3
             },
-            // 6
             Test {
                 ptr: "/g|h",
                 data,
-                expected_result: Ok(data.get("g|h").unwrap()), // 4
+                expected: Ok(data.get("g|h").unwrap()), // 4
             },
-            // 7
             Test {
                 ptr: "/i\\j",
                 data,
-                expected_result: Ok(data.get("i\\j").unwrap()), // 5
+                expected: Ok(data.get("i\\j").unwrap()), // 5
             },
-            // 8
             Test {
                 ptr: "/k\"l",
                 data,
-                expected_result: Ok(data.get("k\"l").unwrap()), // 6
+                expected: Ok(data.get("k\"l").unwrap()), // 6
             },
-            // 9
             Test {
                 ptr: "/ ",
                 data,
-                expected_result: Ok(data.get(" ").unwrap()), // 7
+                expected: Ok(data.get(" ").unwrap()), // 7
             },
-            // 10
             Test {
                 ptr: "/m~0n",
                 data,
-                expected_result: Ok(data.get("m~n").unwrap()), // 8
+                expected: Ok(data.get("m~n").unwrap()), // 8
             },
-            // 11
             Test {
                 ptr: "/object/bool/unresolvable",
                 data,
-                expected_result: Err(ResolveError::Unreachable { offset: 12 }),
+                expected: Err(ResolveError::Unreachable { offset: 12 }),
             },
-            // 12
             Test {
                 ptr: "/object/not_found",
                 data,
-                expected_result: Err(ResolveError::NotFound { offset: 7 }),
+                expected: Err(ResolveError::NotFound { offset: 7 }),
             },
         ]);
+    }
+    struct Test<'v, V> {
+        ptr: &'static str,
+        expected: Result<&'v V, ResolveError>,
+        data: &'v V,
+    }
+
+    impl<'v, V> Test<'v, V>
+    where
+        V: Resolve<Value = V, Error = ResolveError>
+            + ResolveMut<Value = V, Error = ResolveError>
+            + Clone
+            + PartialEq
+            + fmt::Display
+            + fmt::Debug,
+    {
+        fn all(tests: impl IntoIterator<Item = Test<'v, V>>) {
+            tests.into_iter().enumerate().for_each(|(i, t)| t.run(i));
+        }
+
+        fn run(self, _i: usize) {
+            _ = self;
+            let Test {
+                ptr,
+                data,
+                expected,
+            } = self;
+            let ptr = Pointer::from_static(ptr);
+
+            // cloning the data & expected to make comparison easier
+            let mut data = data.clone();
+            let expected = expected.cloned();
+
+            // testing Resolve
+            let res = data.resolve(ptr).cloned();
+            assert_eq!(&res, &expected);
+
+            // testing ResolveMut
+            let res = data.resolve_mut(ptr).cloned();
+            assert_eq!(&res, &expected);
+        }
     }
 }
