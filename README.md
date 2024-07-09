@@ -195,9 +195,9 @@ dual licensed as above, without any additional terms or conditions.
 [`ResolveMut`]: https://docs.rs/jsonptr/latest/jsonptr/resolve/trait.ResolveMut.html
 [`Assign`]: https://docs.rs/jsonptr/latest/jsonptr/assign/trait.Assign.html
 [`Delete`]: https://docs.rs/jsonptr/latest/jsonptr/delete/trait.Delete.html
-[`serde`]: https://docs.rs/serde/1.0.120/serde/index
-[`serde_json`]: https://docs.rs/serde_json/1.0.120/serde_json/enum.Value.html
-[`serde_json::Value`]: https://docs.rs/serde_json/1.0.120/serde_json/enum.Value.html
+[`serde`]: https://docs.rs/serde/1.0/serde/index
+[`serde_json`]: https://docs.rs/serde_json/1.0/serde_json/enum.Value.html
+[`serde_json::Value`]: https://docs.rs/serde_json/1.0/serde_json/enum.Value.html
 [`toml`]: https://docs.rs/toml/0.8/toml/enum.Value.html
 [`toml::Value`]: https://docs.rs/toml/0.8/toml/enum.Value.html
 [`Path`]: https://doc.rust-lang.org/std/path/struct.Path.html

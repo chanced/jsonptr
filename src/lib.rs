@@ -1,10 +1,9 @@
 // rustdoc + README hack: https://linebender.org/blog/doc-include
-
 //! <style>.rustdoc-hidden { display: none; }</style>
-//! [`Pointer`]: crate::Pointer
-//! [`Pointer::components`]: crate::Pointer::components
+//! [`Pointer`]: https://docs.rs/jsonptr/latest/jsonptr/struct.Pointer.html
 //! [`Pointer::tokens`]: crate::Pointer::tokens
-//! [`Pointer::parse`]: crate::Pointer::Parse
+//! [`Pointer::components`]: crate::Pointer::components
+//! [`Pointer::parse`]: crate::Pointer::parse
 //! [`Pointer::resolve`]: crate::Pointer::resolve
 //! [`Pointer::resolve_mut`]: crate::Pointer::resolve_mut
 //! [`Pointer::assign`]: crate::Pointer::assign
@@ -20,7 +19,7 @@
 //! [`tokens`]: crate::Pointer::tokens
 //! [`components`]: crate::Pointer::components
 //! [`resolve`]: crate::resolve
-//! [`assign`]: crate::assign
+//! [`assign`]: crate::asign
 //! [`delete`]: crate::delete
 //! [`Resolve`]: crate::resolve::Resolve
 //! [`ResolveMut`]: crate::resolve::ResolveMut
@@ -30,6 +29,9 @@
 //! [`serde_json`]: https://docs.rs/serde_json/1.0/serde_json/enum.Value.html
 //! [`serde_json::Value`]: https://docs.rs/serde_json/1.0/serde_json/enum.Value.html
 //! [`toml`]: https://docs.rs/toml/0.8/toml/enum.Value.html
+//! [`toml::Value`]: https://docs.rs/toml/0.8/toml/enum.Value.html
+//! [`Path`]: https://doc.rust-lang.org/std/path/struct.Path.html
+//! [`PathBuf`]: https://doc.rust-lang.org/std/path/struct.PathBuf.html
 
 #![doc = include_str!("../README.md")]
 #![warn(missing_docs)]
