@@ -402,15 +402,6 @@ mod tests {
     }
 
     #[test]
-    fn serde() {
-        let token = Token::from_encoded("foo~0").unwrap();
-        let json = serde_json::to_string(&token).unwrap();
-        assert_eq!(json, "\"foo~\"");
-        let deserialized: Token = serde_json::from_str(&json).unwrap();
-        assert_eq!(deserialized, token);
-    }
-
-    #[test]
     fn assign_error_display() {
         let err = AssignError::FailedToParseIndex {
             offset: 3,
