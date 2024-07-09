@@ -36,10 +36,9 @@ flags](#feature-flags).
 
 ## Usage
 
-To parse a pointer from a string, use the [`parse`](Pointer::parse) method.
-[`PointerBuf`] can use either the [`parse`](PointerBuf::parse) or
-[`from_tokens`](PointerBuf::from_tokens) construct from an iterator of
-[`Token`]s:
+To parse a [`Pointer`] from a string, use the [`Pointer::parse`] method.
+[`PointerBuf`] can use either the [`PointerBuf::parse`] or constructed from an
+iterator of [`Token`]s with the [`PointerBuf::from_tokens`]:
 
 ```rust
 use jsonptr::{Pointer, PointerBuf};
@@ -58,8 +57,9 @@ assert_eq!(front.decoded(), "examples");
 assert_eq!(remaining, Pointer::parse("/0/name").unwrap());
 ```
 
-Values can be resolved by `Pointer`s using either [`Resolve`] or [`ResolveMut`]
-traits. See the [`resolve`] mod for more information.
+Get values at the location of a pointer using either the [`Resolve`] and
+[`ResolveMut`] traits or [`Pointer::resolve`] and [`Pointer::resolve_mut`]
+methods. See the [`resolve`] mod for more information.
 
 ```rust
 use jsonptr::Pointer;
@@ -71,8 +71,8 @@ let bar = ptr.resolve(&data).unwrap();
 assert_eq!(bar, &json!(34));
 ```
 
-Values can be assigned using the [`Assign`] trait. See [`assign`] for more
-information.
+Values can be set, with path expansion, using the either the [`Assign`] trait or
+[`Pointer::assign`]. See [`assign`] for more information.
 
 ```rust
 use jsonptr::Pointer;
@@ -85,8 +85,8 @@ assert_eq!(replaced, Some(json!(42)));
 assert_eq!(data, json!({"secret": { "universe": 34 }}));
 ```
 
-Values can be deleted with the [`Delete`] trait. See [`delete`] for more
-information.
+Values can be removed with the either the [`Delete`] trait or
+[`Pointer::delete`]. See [`delete`] for more information.
 
 ```rust
 use jsonptr::Pointer;
@@ -138,9 +138,15 @@ dual licensed as above, without any additional terms or conditions.
 
 </div>
 
-[`Pointer::components`]: (https://docs.rs/jsonptr/latest/jsonptrstruct.Pointer.html#method.components)
-[`Pointer::tokens`]: (https://docs.rs/jsonptr/latest/jsonptrstruct.Pointer.html#method.tokens)
+[`Pointer::components`]: https://docs.rs/jsonptr/latest/jsonptrstruct.Pointer.html#method.components
+[`Pointer::tokens`]: https://docs.rs/jsonptr/latest/jsonptrstruct.Pointer.html#method.tokens
 [`Pointer`]: https://docs.rs/jsonptr/latest/jsonptr/struct.Pointer.html
+[`Pointer::resolve`]: https://docs.rs/jsonptr/latest/jsonptr/struct.Pointer.html#method.resolve
+[`Pointer::resolve_mut`]: https://docs.rs/jsonptr/latest/jsonptr/struct.Pointer.html#method.resolve_mut
+[`Pointer::assign`]: https://docs.rs/jsonptr/latest/jsonptr/struct.Pointer.html#method.assign
+[`Pointer::delete`]: https://docs.rs/jsonptr/latest/jsonptr/struct.Pointer.html#method.delete
+[`PointerBuf::parse`]: https://docs.rs/jsonptr/latest/jsonptr/struct.PointerBuf.html#method.parse
+[`PointerBuf::from_tokens`]: https://docs.rs/jsonptr/latest/jsonptr/struct.PointerBuf.html#method.from_tokens
 [`PointerBuf`]: https://docs.rs/jsonptr/latest/jsonptr/struct.PointerBuf.html
 [`Token`]: https://docs.rs/jsonptr/latest/jsonptr/struct.Token.html
 [`Tokens`]: https://docs.rs/jsonptr/latest/jsonptr/struct.Tokens.html
