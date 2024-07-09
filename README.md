@@ -185,8 +185,7 @@ dual licensed as above, without any additional terms or conditions.
 [`Tokens`]: https://docs.rs/jsonptr/latest/jsonptr/struct.Tokens.html
 [`Components`]: https://docs.rs/jsonptr/latest/jsonptr/struct.Components.html
 [`Component`]: https://docs.rs/jsonptr/latest/jsonptr/enum.Component.html
-[`Root`]: https://docs.rs/jsonptr/latest/jsonptr/enum.Component.html#variant.Root
-[`index`]: https://doc.rust-lang.org/std/primitive.usize.html
+[`index`]: https://docs.rs/jsonptr/latest/jsonptr/index/index.html
 [`tokens`]: https://docs.rs/jsonptr/latest/jsonptr/struct.Pointer.html#method.tokens
 [`components`]: https://docs.rs/jsonptr/latest/jsonptr/struct.Pointer.html#method.components
 [`resolve`]: https://docs.rs/jsonptr/latest/jsonptr/resolve/index.html
@@ -203,7 +202,3 @@ dual licensed as above, without any additional terms or conditions.
 [`toml::Value`]: https://docs.rs/toml/0.8/toml/enum.Value.html
 [`Path`]: https://doc.rust-lang.org/std/path/struct.Path.html
 [`PathBuf`]: https://doc.rust-lang.org/std/path/struct.PathBuf.html
-
-```
-
-```

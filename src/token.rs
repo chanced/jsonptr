@@ -250,27 +250,6 @@ impl<'a> Token<'a> {
     }
 }
 
-#[cfg(feature = "serde")]
-impl serde::Serialize for Token<'_> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_str(self.decoded().as_ref())
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<'de> serde::Deserialize<'de> for Token<'de> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let s = <&'de str>::deserialize(deserializer)?;
-        Ok(Token::new(s))
-    }
-}
-
 macro_rules! impl_from_num {
     ($($ty:ty),*) => {
         $(

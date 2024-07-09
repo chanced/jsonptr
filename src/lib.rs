@@ -1,30 +1,37 @@
 // rustdoc + README hack: https://linebender.org/blog/doc-include
 //! <style>.rustdoc-hidden { display: none; }</style>
-//! <style>.rustdoc-hidden { display: none; }</style>
-//! [`Pointer`]: `crate::Pointer`
-//! [`PointerBuf`]: `crate::PointerBuf`
-//! [`Token`]: `crate::Token`
-//! [`Tokens`]: `crate::Tokens`
-//! [`Component`]: `crate::Component`
-//! [`Components`]: `crate::Components`
-//! [`Resolve`]: `crate::resolve::Resolve`
-//! [`ResolveMut`]: `crate::resolve::ResolveMut`
-//! [`resolve`]: `crate::resolve`
-//! [`assign`]: `crate::assign`
-//! [`delete`]: `crate::delete`
-//! [`index`]: `crate::index`
-//! [`Root`]: `crate::Component::Root`
-//! [`str`]: `str`
-//! [`String`]: `String`
-//! [`serde_json::Value`]: `serde_json::Value`
-//! [`Pointer::resolve`]: `crate::Pointer::resolve`
-//! [`Pointer::resolve_mut`]: `crate::Pointer::resolve_mut`
-//! [`Pointer::assign`]: `crate::Pointer::assign`
-//! [`Pointer::delete`]: `crate::Pointer::delete`
-//! [`Pointer::parse`]: `crate::Pointer::parse`
-//! [`PointerBuf::parse`]: `crate::PointerBuf::parse`
-//! [`PointerBuf::from_tokens`]: `crate::Pointer::from_tokens`
+//! [`Pointer`]: crate::Pointer
+//! [`Pointer::components`]: crate::Pointer::components
+//! [`Pointer::tokens`]: crate::Pointer::tokens
+//! [`Pointer::parse`]: crate::Pointer::Parse
+//! [`Pointer::resolve`]: crate::Pointer::resolve
+//! [`Pointer::resolve_mut`]: crate::Pointer::resolve_mut
+//! [`Pointer::assign`]: crate::Pointer::assign
+//! [`Pointer::delete`]: crate::Pointer::delete
+//! [`PointerBuf::parse`]: crate::PointerBuf::parse
+//! [`PointerBuf`]: crate::PointerBuf
+//! [`from_tokens`]: crate::PointerBuf::from_tokens
+//! [`Token`]: crate::Token
+//! [`Tokens`]: crate::Tokens
+//! [`Components`]: crate::Components
+//! [`Component`]: crate::Component
+//! [`index`]: crate::index
+//! [`tokens`]: crate::Pointer::tokens
+//! [`components`]: crate::Pointer::components
+//! [`resolve`]: crate::resolve
+//! [`assign`]: crate::assign
+//! [`delete`]: crate::delete
+//! [`Resolve`]: crate::resolve::Resolve
+//! [`ResolveMut`]: crate::resolve::ResolveMut
+//! [`Assign`]: crate::assign::Assign
+//! [`Delete`]: crate::delete::Delete
+//! [`serde`]: https://docs.rs/serde/1.0/serde/index
+//! [`serde_json`]: https://docs.rs/serde_json/1.0/serde_json/enum.Value.html
+//! [`serde_json::Value`]: https://docs.rs/serde_json/1.0/serde_json/enum.Value.html
+//! [`toml`]: https://docs.rs/toml/0.8/toml/enum.Value.html
 //! [`toml::Value`]: https://docs.rs/toml/0.8/toml/enum.Value.html
+//! [`Path`]: https://doc.rust-lang.org/std/path/struct.Path.html
+//! [`PathBuf`]: https://doc.rust-lang.org/std/path/struct.PathBuf.html
 
 #![doc = include_str!("../README.md")]
 #![warn(missing_docs)]
@@ -58,7 +65,7 @@ pub mod resolve;
 pub use resolve::{Resolve, ResolveMut};
 
 mod pointer;
-pub use pointer::{ParseError, Pointer, PointerBuf, ReplaceError};
+pub use pointer::{ParseError, Pointer, PointerBuf};
 
 mod token;
 pub use token::{InvalidEncodingError, Token, Tokens};
