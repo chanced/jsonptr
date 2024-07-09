@@ -250,44 +250,18 @@ impl<'a> Token<'a> {
     }
 }
 
-#[cfg(feature = "serde")]
-impl serde::Serialize for Token<'_> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_str(self.decoded().as_ref())
-    }
+macro_rules! impl_from_num {
+    ($($ty:ty),*) => {
+        $(
+            impl From<$ty> for Token<'static> {
+                fn from(v: $ty) -> Self {
+                    Token::from_encoded_unchecked(v.to_string())
+                }
+            }
+        )*
+    };
 }
-
-#[cfg(feature = "serde")]
-impl<'de> serde::Deserialize<'de> for Token<'de> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let s = <&'de str>::deserialize(deserializer)?;
-        Ok(Token::new(s))
-    }
-}
-
-impl From<usize> for Token<'static> {
-    fn from(v: usize) -> Self {
-        Token::from_encoded_unchecked(v.to_string())
-    }
-}
-
-impl From<u32> for Token<'static> {
-    fn from(v: u32) -> Self {
-        Token::from_encoded_unchecked(v.to_string())
-    }
-}
-
-impl From<u64> for Token<'static> {
-    fn from(v: u64) -> Self {
-        Token::from_encoded_unchecked(v.to_string())
-    }
-}
+impl_from_num!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize);
 
 impl<'a> From<&'a str> for Token<'a> {
     fn from(value: &'a str) -> Self {
@@ -425,15 +399,6 @@ mod tests {
     fn new() {
         assert_eq!(Token::new("~1").encoded(), "~01");
         assert_eq!(Token::new("a/b").encoded(), "a~1b");
-    }
-
-    #[test]
-    fn serde() {
-        let token = Token::from_encoded("foo~0").unwrap();
-        let json = serde_json::to_string(&token).unwrap();
-        assert_eq!(json, "\"foo~\"");
-        let deserialized: Token = serde_json::from_str(&json).unwrap();
-        assert_eq!(deserialized, token);
     }
 
     #[test]

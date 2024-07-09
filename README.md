@@ -36,28 +36,60 @@ flags](#feature-flags).
 
 ## Usage
 
-To parse a [`Pointer`] from a string, use the [`Pointer::parse`] method.
-[`PointerBuf`] can use either the [`PointerBuf::parse`] or constructed from an
-iterator of [`Token`]s with the [`PointerBuf::from_tokens`]:
+To parse a [`Pointer`] from a string, use either [`Pointer::parse`], for
+potentially fallible parsing, or the `const fn` `from_static` to produce a
+`&'static Pointer` from a string that is known to be valid.
 
 ```rust
-use jsonptr::{Pointer, PointerBuf};
-use serde_json::json;
-
+# use jsonptr::Pointer;
 let ptr = Pointer::parse("/examples/0/name").unwrap();
 
-let buf = PointerBuf::from_tokens(["examples", "0", "name"]);
-assert_eq!(ptr, &buf);
+let static_ptr = Pointer::from_static("/examples/0/name");
+assert_eq!(ptr, static_ptr);
 
 let parent = ptr.parent().unwrap();
 assert_eq!(parent, Pointer::parse("/examples/0").unwrap());
 
-let (front, remaining) = ptr.split_front().unwrap();
-assert_eq!(front.decoded(), "examples");
+let (token, remaining) = ptr.split_front().unwrap();
+assert_eq!(token.decoded(), "examples");
 assert_eq!(remaining, Pointer::parse("/0/name").unwrap());
 ```
 
-Get values at the location of a pointer using either the [`Resolve`] and
+[`PointerBuf`]s can be parsed using [`PointerBuf::parse`] or constructed from an
+iterator of [`Token`]s with the [`from_tokens`] method:
+
+```rust
+# use jsonptr::PointerBuf;
+let mut buf = PointerBuf::parse("/examples/0/name").unwrap();
+
+let from_tokens = PointerBuf::from_tokens(["examples", "0", "name"]);
+assert_eq!(&buf, &from_tokens);
+
+buf.push_front("pointer");
+buf.push_front("~");
+buf.push_back("/");
+assert_eq!(buf.as_str(), "/~0/pointer/examples/0/name/~1");
+```
+
+Iterating over the tokens or components of a pointer:
+
+```rust
+# use jsonptr::{Pointer, Component, Token};
+let ptr = Pointer::from_static("/path/to/value");
+
+//  Using the `tokens` method:
+let tokens: Vec<_> = ptr.tokens().collect();
+assert_eq!(tokens, vec![Token::new("path"), Token::new("to"), Token::new("value")]);
+
+// Using the `components` method:
+let mut components = ptr.components();
+assert_eq!(components.next(), Some(Component::Root));
+assert_eq!(components.next(), Some(Component::Token(Token::new("path"))));
+assert_eq!(components.next(), Some(Component::Token(Token::new("to"))));
+assert_eq!(components.next(), Some(Component::Token(Token::new("value"))));
+```
+
+To get a value at the location of a pointer, use either the [`Resolve`] and
 [`ResolveMut`] traits or [`Pointer::resolve`] and [`Pointer::resolve_mut`]
 methods. See the [`resolve`] mod for more information.
 
@@ -141,19 +173,19 @@ dual licensed as above, without any additional terms or conditions.
 [`Pointer::components`]: https://docs.rs/jsonptr/latest/jsonptrstruct.Pointer.html#method.components
 [`Pointer::tokens`]: https://docs.rs/jsonptr/latest/jsonptrstruct.Pointer.html#method.tokens
 [`Pointer`]: https://docs.rs/jsonptr/latest/jsonptr/struct.Pointer.html
+[`Pointer::parse`]: https://docs.rs/jsonptr/latest/jsonptr/struct.Pointer.html#method.parse
 [`Pointer::resolve`]: https://docs.rs/jsonptr/latest/jsonptr/struct.Pointer.html#method.resolve
 [`Pointer::resolve_mut`]: https://docs.rs/jsonptr/latest/jsonptr/struct.Pointer.html#method.resolve_mut
 [`Pointer::assign`]: https://docs.rs/jsonptr/latest/jsonptr/struct.Pointer.html#method.assign
 [`Pointer::delete`]: https://docs.rs/jsonptr/latest/jsonptr/struct.Pointer.html#method.delete
 [`PointerBuf::parse`]: https://docs.rs/jsonptr/latest/jsonptr/struct.PointerBuf.html#method.parse
-[`PointerBuf::from_tokens`]: https://docs.rs/jsonptr/latest/jsonptr/struct.PointerBuf.html#method.from_tokens
+[`from_tokens`]: https://docs.rs/jsonptr/latest/jsonptr/struct.PointerBuf.html#method.from_tokens
 [`PointerBuf`]: https://docs.rs/jsonptr/latest/jsonptr/struct.PointerBuf.html
 [`Token`]: https://docs.rs/jsonptr/latest/jsonptr/struct.Token.html
 [`Tokens`]: https://docs.rs/jsonptr/latest/jsonptr/struct.Tokens.html
 [`Components`]: https://docs.rs/jsonptr/latest/jsonptr/struct.Components.html
 [`Component`]: https://docs.rs/jsonptr/latest/jsonptr/enum.Component.html
-[`Root`]: https://docs.rs/jsonptr/latest/jsonptr/enum.Component.html#variant.Root
-[`index`]: https://doc.rust-lang.org/std/primitive.usize.html
+[`index`]: https://docs.rs/jsonptr/latest/jsonptr/index/index.html
 [`tokens`]: https://docs.rs/jsonptr/latest/jsonptr/struct.Pointer.html#method.tokens
 [`components`]: https://docs.rs/jsonptr/latest/jsonptr/struct.Pointer.html#method.components
 [`resolve`]: https://docs.rs/jsonptr/latest/jsonptr/resolve/index.html
@@ -163,8 +195,10 @@ dual licensed as above, without any additional terms or conditions.
 [`ResolveMut`]: https://docs.rs/jsonptr/latest/jsonptr/resolve/trait.ResolveMut.html
 [`Assign`]: https://docs.rs/jsonptr/latest/jsonptr/assign/trait.Assign.html
 [`Delete`]: https://docs.rs/jsonptr/latest/jsonptr/delete/trait.Delete.html
-[`serde`]: https://docs.rs/serde/1.0.120/serde/index
-[`serde_json`]: https://docs.rs/serde_json/1.0.120/serde_json/enum.Value.html
+[`serde`]: https://docs.rs/serde/1.0/serde/index
+[`serde_json`]: https://docs.rs/serde_json/1.0/serde_json/enum.Value.html
+[`serde_json::Value`]: https://docs.rs/serde_json/1.0/serde_json/enum.Value.html
 [`toml`]: https://docs.rs/toml/0.8/toml/enum.Value.html
+[`toml::Value`]: https://docs.rs/toml/0.8/toml/enum.Value.html
 [`Path`]: https://doc.rust-lang.org/std/path/struct.Path.html
 [`PathBuf`]: https://doc.rust-lang.org/std/path/struct.PathBuf.html
