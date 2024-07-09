@@ -271,23 +271,18 @@ impl<'de> serde::Deserialize<'de> for Token<'de> {
     }
 }
 
-impl From<usize> for Token<'static> {
-    fn from(v: usize) -> Self {
-        Token::from_encoded_unchecked(v.to_string())
-    }
+macro_rules! impl_from_num {
+    ($($ty:ty),*) => {
+        $(
+            impl From<$ty> for Token<'static> {
+                fn from(v: $ty) -> Self {
+                    Token::from_encoded_unchecked(v.to_string())
+                }
+            }
+        )*
+    };
 }
-
-impl From<u32> for Token<'static> {
-    fn from(v: u32) -> Self {
-        Token::from_encoded_unchecked(v.to_string())
-    }
-}
-
-impl From<u64> for Token<'static> {
-    fn from(v: u64) -> Self {
-        Token::from_encoded_unchecked(v.to_string())
-    }
-}
+impl_from_num!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize);
 
 impl<'a> From<&'a str> for Token<'a> {
     fn from(value: &'a str) -> Self {
