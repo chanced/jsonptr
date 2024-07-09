@@ -71,15 +71,22 @@ buf.push_back("/");
 assert_eq!(buf.as_str(), "/~0/pointer/examples/0/name/~1");
 ```
 
-To iterate over the tokens of a pointer, there are a few options:
-
-Using the `tokens` method:
+Iterating over the tokens or components of a pointer:
 
 ```rust
-# use jsonptr::{Pointer, Token};
+# use jsonptr::{Pointer, Component, Token};
 let ptr = Pointer::from_static("/path/to/value");
+
+//  Using the `tokens` method:
 let tokens: Vec<_> = ptr.tokens().collect();
 assert_eq!(tokens, vec![Token::new("path"), Token::new("to"), Token::new("value")]);
+
+// Using the `components` method:
+let mut components = ptr.components();
+assert_eq!(components.next(), Some(Component::Root));
+assert_eq!(components.next(), Some(Component::Token(Token::new("path"))));
+assert_eq!(components.next(), Some(Component::Token(Token::new("to"))));
+assert_eq!(components.next(), Some(Component::Token(Token::new("value"))));
 ```
 
 To get a value at the location of a pointer, use either the [`Resolve`] and
