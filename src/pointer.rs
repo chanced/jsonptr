@@ -204,11 +204,11 @@ impl Pointer {
     /// assert_eq!(tail, Pointer::from_static("/bar/baz"));
     /// assert_eq!(ptr.split_at(3), None);
     /// ```
-    pub fn split_at(&self, idx: usize) -> Option<(&Self, &Self)> {
-        if self.0.as_bytes().get(idx).copied() != Some(b'/') {
+    pub fn split_at(&self, offset: usize) -> Option<(&Self, &Self)> {
+        if self.0.as_bytes().get(offset).copied() != Some(b'/') {
             return None;
         }
-        let (head, tail) = self.0.split_at(idx);
+        let (head, tail) = self.0.split_at(offset);
         Some((Self::new(head), Self::new(tail)))
     }
 
@@ -737,15 +737,21 @@ impl PointerBuf {
     }
 
     /// Pushes a `Token` onto the front of this `Pointer`.
-    pub fn push_front(&mut self, token: Token) {
+    pub fn push_front<'t, T>(&mut self, token: T)
+    where
+        T: Into<Token<'t>>,
+    {
         self.0.insert(0, '/');
-        self.0.insert_str(1, token.encoded());
+        self.0.insert_str(1, token.into().encoded());
     }
 
     /// Pushes a `Token` onto the back of this `Pointer`.
-    pub fn push_back(&mut self, token: Token) {
+    pub fn push_back<'t, T>(&mut self, token: T)
+    where
+        T: Into<Token<'t>>,
+    {
         self.0.push('/');
-        self.0.push_str(token.encoded());
+        self.0.push_str(token.into().encoded());
     }
 
     /// Removes and returns the last `Token` in the `Pointer` if it exists.
@@ -790,11 +796,14 @@ impl PointerBuf {
     ///
     /// ## Errors
     /// A [`ReplaceTokenError`] is returned if the index is out of bounds.
-    pub fn replace_token(
+    pub fn replace_token<'t, T>(
         &mut self,
         index: usize,
-        token: Token,
-    ) -> Result<Option<Token>, ReplaceTokenError> {
+        token: T,
+    ) -> Result<Option<Token>, ReplaceTokenError>
+    where
+        T: Into<Token<'t>>,
+    {
         if self.is_root() {
             return Err(ReplaceTokenError {
                 count: self.count(),
@@ -809,7 +818,7 @@ impl PointerBuf {
             });
         }
         let old = tokens.get(index).map(super::token::Token::to_owned);
-        tokens[index] = token;
+        tokens[index] = token.into();
 
         let mut buf = String::new();
         for token in tokens {
@@ -1272,12 +1281,12 @@ mod tests {
         assert_eq!(ptr, "", "default, root pointer should equal \"\"");
         assert_eq!(ptr.count(), 0, "default pointer should have 0 tokens");
 
-        ptr.push_back("foo".into());
+        ptr.push_back("foo");
         assert_eq!(ptr, "/foo", "pointer should equal \"/foo\" after push_back");
 
-        ptr.push_back("bar".into());
+        ptr.push_back("bar");
         assert_eq!(ptr, "/foo/bar");
-        ptr.push_back("/baz".into());
+        ptr.push_back("/baz");
         assert_eq!(ptr, "/foo/bar/~1baz");
 
         let mut ptr = PointerBuf::from_tokens(["foo", "bar"]);
@@ -1291,11 +1300,11 @@ mod tests {
     fn replace_token() {
         let mut ptr = PointerBuf::try_from("/test/token").unwrap();
 
-        let res = ptr.replace_token(0, "new".into());
+        let res = ptr.replace_token(0, "new");
         assert!(res.is_ok());
         assert_eq!(ptr, "/new/token");
 
-        let res = ptr.replace_token(3, "invalid".into());
+        let res = ptr.replace_token(3, "invalid");
 
         assert!(res.is_err());
     }
@@ -1305,15 +1314,15 @@ mod tests {
         let mut ptr = PointerBuf::default();
         assert_eq!(ptr, "");
         assert_eq!(ptr.count(), 0);
-        ptr.push_front("bar".into());
+        ptr.push_front("bar");
         assert_eq!(ptr, "/bar");
         assert_eq!(ptr.count(), 1);
 
-        ptr.push_front("foo".into());
+        ptr.push_front("foo");
         assert_eq!(ptr, "/foo/bar");
         assert_eq!(ptr.count(), 2);
 
-        ptr.push_front("too".into());
+        ptr.push_front("too");
         assert_eq!(ptr, "/too/foo/bar");
         assert_eq!(ptr.count(), 3);
 
@@ -1354,7 +1363,7 @@ mod tests {
         {
             let mut ptr = PointerBuf::new();
             assert_eq!(ptr.tokens().count(), 0);
-            ptr.push_back("".into());
+            ptr.push_back("");
             assert_eq!(ptr.tokens().count(), 1);
             ptr.pop_back();
             assert_eq!(ptr.tokens().count(), 0);
@@ -1362,9 +1371,9 @@ mod tests {
         {
             let mut ptr = PointerBuf::new();
             let input = ["", "", "", "foo", "", "bar", "baz", ""];
-            for (idx, s) in input.iter().enumerate() {
+            for (idx, &s) in input.iter().enumerate() {
                 assert_eq!(ptr.tokens().count(), idx);
-                ptr.push_back((*s).into());
+                ptr.push_back(s);
             }
             assert_eq!(ptr.tokens().count(), input.len());
             for (idx, s) in input.iter().enumerate() {
@@ -1520,34 +1529,34 @@ mod tests {
     #[test]
     fn replace_token_success() {
         let mut ptr = PointerBuf::from_tokens(["foo", "bar", "baz"]);
-        assert!(ptr.replace_token(1, "qux".into()).is_ok());
+        assert!(ptr.replace_token(1, "qux").is_ok());
         assert_eq!(ptr, PointerBuf::from_tokens(["foo", "qux", "baz"]));
 
-        assert!(ptr.replace_token(0, "corge".into()).is_ok());
+        assert!(ptr.replace_token(0, "corge").is_ok());
         assert_eq!(ptr, PointerBuf::from_tokens(["corge", "qux", "baz"]));
 
-        assert!(ptr.replace_token(2, "quux".into()).is_ok());
+        assert!(ptr.replace_token(2, "quux").is_ok());
         assert_eq!(ptr, PointerBuf::from_tokens(["corge", "qux", "quux"]));
     }
 
     #[test]
     fn replace_token_out_of_bounds() {
         let mut ptr = PointerBuf::from_tokens(["foo", "bar"]);
-        assert!(ptr.replace_token(2, "baz".into()).is_err());
+        assert!(ptr.replace_token(2, "baz").is_err());
         assert_eq!(ptr, PointerBuf::from_tokens(["foo", "bar"])); // Ensure original pointer is unchanged
     }
 
     #[test]
     fn replace_token_with_empty_string() {
         let mut ptr = PointerBuf::from_tokens(["foo", "bar", "baz"]);
-        assert!(ptr.replace_token(1, "".into()).is_ok());
+        assert!(ptr.replace_token(1, "").is_ok());
         assert_eq!(ptr, PointerBuf::from_tokens(["foo", "", "baz"]));
     }
 
     #[test]
     fn replace_token_in_empty_pointer() {
         let mut ptr = PointerBuf::default();
-        assert!(ptr.replace_token(0, "foo".into()).is_err());
+        assert!(ptr.replace_token(0, "foo").is_err());
         assert_eq!(ptr, PointerBuf::default()); // Ensure the pointer remains empty
     }
 
@@ -1555,9 +1564,9 @@ mod tests {
     fn pop_back_works_with_empty_strings() {
         {
             let mut ptr = PointerBuf::new();
-            ptr.push_back("".into());
-            ptr.push_back("".into());
-            ptr.push_back("bar".into());
+            ptr.push_back("");
+            ptr.push_back("");
+            ptr.push_back("bar");
 
             assert_eq!(ptr.tokens().count(), 3);
             ptr.pop_back();
@@ -1571,7 +1580,7 @@ mod tests {
         {
             let mut ptr = PointerBuf::new();
             assert_eq!(ptr.tokens().count(), 0);
-            ptr.push_back("".into());
+            ptr.push_back("");
             assert_eq!(ptr.tokens().count(), 1);
             ptr.pop_back();
             assert_eq!(ptr.tokens().count(), 0);
@@ -1579,9 +1588,9 @@ mod tests {
         {
             let mut ptr = PointerBuf::new();
             let input = ["", "", "", "foo", "", "bar", "baz", ""];
-            for (idx, s) in input.iter().enumerate() {
+            for (idx, &s) in input.iter().enumerate() {
                 assert_eq!(ptr.tokens().count(), idx);
-                ptr.push_back((*s).into());
+                ptr.push_back(s);
             }
             assert_eq!(ptr.tokens().count(), input.len());
             for (idx, s) in input.iter().enumerate().rev() {
