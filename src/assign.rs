@@ -20,8 +20,8 @@
 //! method of [`Pointer`].
 //!
 //! ```rust
-//! # use jsonptr::Pointer;
-//! # use serde_json::json;
+//! use jsonptr::Pointer;
+//! use serde_json::json;
 //! let mut data = json!({"foo": "bar"});
 //! let ptr = Pointer::from_static("/foo");
 //! let replaced = ptr.assign(&mut data, "baz").unwrap();
