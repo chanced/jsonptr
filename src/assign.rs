@@ -15,8 +15,6 @@
 //! - All tokens not equal to `"0"` or `"-"` will be considered keys of an
 //!   object.
 //!
-//!
-//!
 //! ## Usage
 //! [`Assign`] can be used directly or through the [`assign`](Pointer::assign)
 //! method of [`Pointer`].
