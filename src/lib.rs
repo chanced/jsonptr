@@ -1,4 +1,5 @@
 // rustdoc + README hack: https://linebender.org/blog/doc-include
+
 //! <style>.rustdoc-hidden { display: none; }</style>
 //! [`Pointer`]: crate::Pointer
 //! [`Pointer::components`]: crate::Pointer::components
@@ -29,9 +30,6 @@
 //! [`serde_json`]: https://docs.rs/serde_json/1.0/serde_json/enum.Value.html
 //! [`serde_json::Value`]: https://docs.rs/serde_json/1.0/serde_json/enum.Value.html
 //! [`toml`]: https://docs.rs/toml/0.8/toml/enum.Value.html
-//! [`toml::Value`]: https://docs.rs/toml/0.8/toml/enum.Value.html
-//! [`Path`]: https://doc.rust-lang.org/std/path/struct.Path.html
-//! [`PathBuf`]: https://doc.rust-lang.org/std/path/struct.PathBuf.html
 
 #![doc = include_str!("../README.md")]
 #![warn(missing_docs)]
