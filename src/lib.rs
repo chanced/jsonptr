@@ -19,6 +19,13 @@
 //! [`str`]: `str`
 //! [`String`]: `String`
 //! [`serde_json::Value`]: `serde_json::Value`
+//! [`Pointer::resolve`]: `crate::Pointer::resolve`
+//! [`Pointer::resolve_mut`]: `crate::Pointer::resolve_mut`
+//! [`Pointer::assign`]: `crate::Pointer::assign`
+//! [`Pointer::delete`]: `crate::Pointer::delete`
+//! [`Pointer::parse`]: `crate::Pointer::parse`
+//! [`PointerBuf::parse`]: `crate::PointerBuf::parse`
+//! [`PointerBuf::from_tokens`]: `crate::Pointer::from_tokens`
 //! [`toml::Value`]: https://docs.rs/toml/0.8/toml/enum.Value.html
 
 #![doc = include_str!("../README.md")]
