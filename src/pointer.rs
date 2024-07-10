@@ -97,6 +97,17 @@ impl Pointer {
         unsafe { &*(core::ptr::from_ref::<str>(s) as *const Self) }
     }
 
+    /// Returns the length in bytes of the encoded string representation of this
+    /// `Pointer`.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+    /// Returns `true` if `self` is a root pointer, meaning it has a length of
+    /// zero bytes.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     /// The encoded string representation of this `Pointer`
     pub fn as_str(&self) -> &str {
         &self.0
@@ -123,6 +134,27 @@ impl Pointer {
     /// Returns `true` if the JSON Pointer equals `""`.
     pub fn is_root(&self) -> bool {
         self.0.is_empty()
+    }
+
+    /// Returns the partial pointer which includes all tokens up to and
+    /// including the token at the the given index.
+    // TODO: this needs a better name
+    pub(crate) fn partial(&self, index: usize) -> Option<&Self> {
+        let mut split = self.0.split('/').skip(1).enumerate();
+        let mut offset = 0;
+
+        #[allow(clippy::while_let_loop, clippy::while_let_on_iterator)]
+        while let Some((i, tok)) = split.next() {
+            if i == index {
+                let Some((_, tok)) = split.next() else {
+                    return Some(self);
+                };
+                offset = offset + tok.len() + 1;
+                return Some(Self::new(&self.0[..offset]));
+            }
+            offset += tok.len() + 1;
+        }
+        None
     }
 
     /// Returns a `serde_json::Value` representation of this `Pointer`
@@ -2006,9 +2038,10 @@ mod tests {
     }
 
     #[test]
-    fn borrow() {
-        let ptr = PointerBuf::from_tokens(["foo", "bar"]);
-        let borrowed: &Pointer = ptr.borrow();
-        assert_eq!(borrowed, "/foo/bar");
+    fn partial() {
+        let p = Pointer::from_static("/foo/bar/baz");
+        assert_eq!(p.partial(0).unwrap(), "/foo");
+        assert_eq!(p.partial(1).unwrap(), "/foo/bar");
+        assert_eq!(p.partial(2).unwrap(), "/foo/bar/baz");
     }
 }
