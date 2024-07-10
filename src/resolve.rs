@@ -33,9 +33,11 @@
 //! | TOML  |    `toml::Value`    |   `"toml"`   |         |
 //!
 //!
+use core::{borrow::Borrow, fmt, ops::ControlFlow};
+
 use crate::{
     index::{OutOfBoundsError, ParseIndexError},
-    Pointer, Token,
+    Component, Pointer, Token,
 };
 
 /*
@@ -55,7 +57,7 @@ pub trait Resolve {
     type Value;
 
     /// Error associated with `Resolve`
-    type Error;
+    type Error: fmt::Debug;
 
     /// Resolve a reference to `Self::Value` based on the path in a [Pointer].
     ///
@@ -63,6 +65,51 @@ pub trait Resolve {
     /// Returns a [`Self::Error`](Resolve::Error) if the [`Pointer`] can not
     /// be resolved.
     fn resolve(&self, ptr: &Pointer) -> Result<&Self::Value, Self::Error>;
+
+    /// TODO
+    /// ## Errors
+    fn walk_to<F, B>(&self, ptr: &Pointer, f: F) -> Result<ControlFlow<B>, Self::Error>
+    where
+        F: Fn(Component, &Self::Value) -> ControlFlow<B>,
+    {
+        let _ = self.resolve(ptr)?;
+        let root = self.resolve(Pointer::root()).unwrap();
+        let mut last = None;
+        for component in ptr.components() {
+            match component {
+                Component::Root => {
+                    last = Some(f(Component::Root, root));
+                }
+                Component::Token {
+                    token,
+                    index,
+                    offset,
+                    pointer,
+                } => {
+                    let value = self.resolve(pointer).unwrap();
+                    let tok_len = token.encoded().len();
+                    let ctrl_flow = f(
+                        Component::Token {
+                            token,
+                            pointer,
+                            index,
+                            offset,
+                        },
+                        value,
+                    );
+                    if offset + tok_len >= ptr.len() {
+                        // last token
+                        return Ok(ctrl_flow);
+                    }
+                    if ctrl_flow.is_break() {
+                        return Ok(ctrl_flow);
+                    }
+                    last = Some(ctrl_flow);
+                }
+            }
+        }
+        Ok(last.unwrap())
+    }
 }
 
 /*
@@ -724,6 +771,26 @@ mod tests {
         ]);
     }
 
+    #[test]
+    #[cfg(feature = "json")]
+    fn json_walk_to() {
+        use core::ops::ControlFlow;
+
+        use serde_json::json;
+
+        let value = json!({
+            "foo": {
+                "bar": {
+                    "baz": {
+                        "qux": [0,1,2,3]
+                    }
+                }
+            }
+        });
+
+        let ptr = Pointer::from_static("/foo/bar/baz/qux/2");
+        value.walk_to(ptr, |c, v| {});
+    }
     /*
     ╔═══════════════════════════════════════════════════╗
     ║                        toml                       ║
