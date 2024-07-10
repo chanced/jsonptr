@@ -25,8 +25,7 @@ because `'/'` separates tokens and would split the token into two otherwise.
 [`tokens`] method of a pointer or [`Components`], returned from the
 [`components`] method. The difference being that `Tokens` iterates over each
 token in the pointer, while `Components` iterates over [`Component`]s, which can
-represent the root of the document or a single token along with the offset of
-the token from within the pointer.
+represent the root of the document or a single token of the pointer.
 
 Operations [`resolve`], [`assign`] and [`delete`] are provided as traits with
 corresponding methods on pointer types. Implementations of each trait are
