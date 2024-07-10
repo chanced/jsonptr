@@ -9,7 +9,7 @@ license       = "MIT OR Apache-2.0"
 name          = "jsonptr"
 repository    = "https://github.com/chanced/jsonptr"
 rust-version  = "1.76.0"
-version       = "0.5.0"
+version       = "0.5.1"
 
 [dependencies]
 serde      = { version = "1.0.203", optional = true, features = ["alloc"] }
