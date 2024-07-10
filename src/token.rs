@@ -61,7 +61,7 @@ impl<'a> Token<'a> {
     /// # use jsonptr::Token;
     /// assert_eq!(Token::from_encoded("~1foo~1~0bar").unwrap().decoded(), "/foo/~bar");
     /// let err = Token::from_encoded("foo/oops~bar").unwrap_err();
-    /// assert_eq!(err.offset(), 3);
+    /// assert_eq!(err.offset, 3);
     /// ```
     ///
     /// ## Errors
