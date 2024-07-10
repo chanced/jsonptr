@@ -340,13 +340,6 @@ pub struct InvalidEncodingError {
     pub offset: usize,
 }
 
-impl InvalidEncodingError {
-    /// The byte offset of the first invalid `~`.
-    pub fn offset(&self) -> usize {
-        self.offset
-    }
-}
-
 impl fmt::Display for InvalidEncodingError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -460,12 +453,6 @@ mod tests {
         assert_eq!(t.decoded(), "a/b");
         assert!(Token::from_encoded("a/b").is_err());
         assert!(Token::from_encoded("a~a").is_err());
-    }
-
-    #[test]
-    fn invalid_encoding_offset() {
-        let err = InvalidEncodingError { offset: 3 };
-        assert_eq!(err.offset(), 3);
     }
 
     #[test]
