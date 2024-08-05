@@ -424,6 +424,7 @@ mod tests {
             err.source().unwrap().to_string(),
             "not a number".parse::<usize>().unwrap_err().to_string()
         );
+        assert!(ParseIndexError::LeadingZeros.source().is_none());
     }
 
     #[test]
