@@ -398,9 +398,7 @@ mod tests {
     fn assign_error_display() {
         let err = AssignError::FailedToParseIndex {
             offset: 3,
-            source: ParseIndexError {
-                source: "a".parse::<usize>().unwrap_err(),
-            },
+            source: ParseIndexError::InvalidInteger("a".parse::<usize>().unwrap_err()),
         };
         assert_eq!(
             err.to_string(),
@@ -427,9 +425,7 @@ mod tests {
         use std::error::Error;
         let err = AssignError::FailedToParseIndex {
             offset: 3,
-            source: ParseIndexError {
-                source: "a".parse::<usize>().unwrap_err(),
-            },
+            source: ParseIndexError::InvalidInteger("a".parse::<usize>().unwrap_err()),
         };
         assert!(err.source().is_some());
         assert!(err.source().unwrap().is::<ParseIndexError>());

@@ -11,7 +11,7 @@
 //! in the case of arrays, or a scalar value (including `null`) based upon a
 //! best-guess effort on the meaning of each [`Token`](crate::Token):
 //! - If the [`Token`](crate::Token) is equal to `"0"` or `"-"`, the token will
-//!  be considered an index of an array.
+//!   be considered an index of an array.
 //! - All tokens not equal to `"0"` or `"-"` will be considered keys of an
 //!   object.
 //!
@@ -63,7 +63,7 @@ use core::fmt::{self, Debug};
 /// effort on the meaning of each [`Token`](crate::Token):
 ///
 /// - If the [`Token`](crate::Token) is equal to `"0"` or `"-"`, the token will
-///  be considered an index of an array.
+///   be considered an index of an array.
 /// - All tokens not equal to `"0"` or `"-"` will be considered keys of an
 ///   object.
 ///
@@ -753,9 +753,17 @@ mod tests {
                 assign: json!("foo"),
                 expected: Err(AssignError::FailedToParseIndex {
                     offset: 0,
-                    source: ParseIndexError {
-                        source: usize::from_str("foo").unwrap_err(),
-                    },
+                    source: ParseIndexError::InvalidInteger(usize::from_str("foo").unwrap_err()),
+                }),
+                expected_data: json!([]),
+            },
+            Test {
+                ptr: "/002",
+                data: json!([]),
+                assign: json!("foo"),
+                expected: Err(AssignError::FailedToParseIndex {
+                    offset: 0,
+                    source: ParseIndexError::LeadingZeros,
                 }),
                 expected_data: json!([]),
             },
@@ -907,9 +915,7 @@ mod tests {
                 assign: "foo".into(),
                 expected: Err(AssignError::FailedToParseIndex {
                     offset: 0,
-                    source: ParseIndexError {
-                        source: usize::from_str("foo").unwrap_err(),
-                    },
+                    source: ParseIndexError::InvalidInteger(usize::from_str("foo").unwrap_err()),
                 }),
                 expected_data: Value::Array(vec![]),
             },
