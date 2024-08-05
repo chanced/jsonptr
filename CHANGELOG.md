@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 -   `Token::to_index` now fails if the token contains leading zeros, as mandated by the RFC.
 
+### Changed
+
+-   `ParseIndexError` is now an enum to reflect the new failure mode when parsing indices.
+
 ## [0.5.1]
 
 ### Changed
