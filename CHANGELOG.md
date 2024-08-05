@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+-   `Token::to_index` now fails if the token contains leading zeros, as mandated by the RFC.
+
+## [0.5.1]
+
+### Changed
+
+-   README tweak.
+
+## [0.5.0] 
+
 This is a breaking release including:
 
 -   [#30](https://github.com/chanced/jsonptr/pull/30) and [#37](https://github.com/chanced/jsonptr/pull/37) by [@asmello](https://github.com/asmello)
