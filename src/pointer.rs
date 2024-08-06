@@ -1959,8 +1959,8 @@ mod tests {
             let base = PointerBuf::parse(base).expect(&format!("failed to parse ${base}"));
             let mut a = base.clone();
             let mut b = base.clone();
-            a.append(&PointerBuf::parse(a_suffix).unwrap());
-            b.append(&PointerBuf::parse(b_suffix).unwrap());
+            a.append(PointerBuf::parse(a_suffix).unwrap());
+            b.append(PointerBuf::parse(b_suffix).unwrap());
             let intersection = a.intersection(&b);
             assert_eq!(intersection, base);
         }

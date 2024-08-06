@@ -428,9 +428,7 @@ mod tests {
         use std::error::Error;
         let err = ResolveError::FailedToParseIndex {
             offset: 0,
-            source: ParseIndexError {
-                source: "invalid".parse::<usize>().unwrap_err(),
-            },
+            source: ParseIndexError::InvalidInteger("invalid".parse::<usize>().unwrap_err()),
         };
         assert!(err.source().is_some());
 
@@ -454,9 +452,7 @@ mod tests {
     fn resolve_error_display() {
         let err = ResolveError::FailedToParseIndex {
             offset: 0,
-            source: ParseIndexError {
-                source: "invalid".parse::<usize>().unwrap_err(),
-            },
+            source: ParseIndexError::InvalidInteger("invalid".parse::<usize>().unwrap_err()),
         };
         assert_eq!(format!("{err}"), "failed to parse index at offset 0");
 
@@ -484,9 +480,7 @@ mod tests {
     fn resolve_error_offset() {
         let err = ResolveError::FailedToParseIndex {
             offset: 0,
-            source: ParseIndexError {
-                source: "invalid".parse::<usize>().unwrap_err(),
-            },
+            source: ParseIndexError::InvalidInteger("invalid".parse::<usize>().unwrap_err()),
         };
         assert_eq!(err.offset(), 0);
 
@@ -510,9 +504,7 @@ mod tests {
     fn resolve_error_is_unreachable() {
         let err = ResolveError::FailedToParseIndex {
             offset: 0,
-            source: ParseIndexError {
-                source: "invalid".parse::<usize>().unwrap_err(),
-            },
+            source: ParseIndexError::InvalidInteger("invalid".parse::<usize>().unwrap_err()),
         };
         assert!(!err.is_unreachable());
 
@@ -536,9 +528,7 @@ mod tests {
     fn resolve_error_is_not_found() {
         let err = ResolveError::FailedToParseIndex {
             offset: 0,
-            source: ParseIndexError {
-                source: "invalid".parse::<usize>().unwrap_err(),
-            },
+            source: ParseIndexError::InvalidInteger("invalid".parse::<usize>().unwrap_err()),
         };
         assert!(!err.is_not_found());
 
@@ -562,9 +552,7 @@ mod tests {
     fn resolve_error_is_out_of_bounds() {
         let err = ResolveError::FailedToParseIndex {
             offset: 0,
-            source: ParseIndexError {
-                source: "invalid".parse::<usize>().unwrap_err(),
-            },
+            source: ParseIndexError::InvalidInteger("invalid".parse::<usize>().unwrap_err()),
         };
         assert!(!err.is_out_of_bounds());
 
@@ -588,9 +576,7 @@ mod tests {
     fn resolve_error_is_failed_to_parse_index() {
         let err = ResolveError::FailedToParseIndex {
             offset: 0,
-            source: ParseIndexError {
-                source: "invalid".parse::<usize>().unwrap_err(),
-            },
+            source: ParseIndexError::InvalidInteger("invalid".parse::<usize>().unwrap_err()),
         };
         assert!(err.is_failed_to_parse_index());
 
