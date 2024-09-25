@@ -422,6 +422,53 @@ impl Pointer {
     pub fn components(&self) -> Components {
         self.into()
     }
+
+    /// Appends `token` onto `self` as a new [`Pointerbuf`].
+    ///
+    /// ## Example
+    /// ```
+    /// let ptr = jsonptr::Pointer::from_static("/foo");
+    /// let foobar = ptr.with_trailing_token("bar");
+    /// assert_eq!(foobar, "/foo/bar");
+    /// ```
+    pub fn with_trailing_token<'t, T>(&self, token: T) -> PointerBuf
+    where
+        T: Into<Token<'t>>,
+    {
+        let mut buf = self.to_buf();
+        buf.push_back(token);
+        buf
+    }
+
+    /// Prepends `token` onto `self` as a new `PointerBuf`.
+    ///
+    /// ## Example
+    /// ```
+    /// let ptr = jsonptr::Pointer::from_static("/bar");
+    /// let foobar = ptr.with_leading_token("foo");
+    /// assert_eq!(foobar, "/foo/bar");
+    /// ```
+    pub fn with_leading_token<'t, T>(&self, token: T) -> PointerBuf
+    where
+        T: Into<Token<'t>>,
+    {
+        let mut buf = self.to_buf();
+        buf.push_front(token);
+        buf
+    }
+
+    /// Appends the `Pointer` `other` onto `self` as a new `PointerBuf`.
+    ///
+    /// ```
+    /// let ptr = jsonptr::Pointer::from_static("/foo");
+    /// let barbaz = jsonptr::Pointer::from_static("/bar/baz");
+    /// assert_eq!(ptr.with_appended(&barbaz), "/foo/bar/baz");
+    /// ```
+    pub fn with_appended(&self, other: &Pointer) -> PointerBuf {
+        let mut buf = self.to_buf();
+        buf.append(other);
+        buf
+    }
 }
 
 #[cfg(feature = "serde")]
