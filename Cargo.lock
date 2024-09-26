@@ -68,7 +68,7 @@ checksum = "d2f3e61cf687687b30c9e6ddf0fc36cf15f035e66d491e6da968fa49ffa9a378"
 
 [[package]]
 name = "jsonptr"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "quickcheck",
  "quickcheck_macros",
