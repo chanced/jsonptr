@@ -422,6 +422,67 @@ impl Pointer {
     pub fn components(&self) -> Components {
         self.into()
     }
+
+    /// Creates an owned [`Pointerbuf`] like `self` but with `token` appended.
+    ///
+    /// See [`PointerBuf::push_back`] for more details.
+    ///
+    /// **Note**: this method allocates. If you find yourself calling it more
+    /// than once for a given pointer, consider using [`PointerBuf::push_back`]
+    /// instead.
+    ///
+    /// ## Examples
+    /// ```
+    /// let ptr = jsonptr::Pointer::from_static("/foo");
+    /// let foobar = ptr.with_trailing_token("bar");
+    /// assert_eq!(foobar, "/foo/bar");
+    /// ```
+    pub fn with_trailing_token<'t>(&self, token: impl Into<Token<'t>>) -> PointerBuf {
+        let mut buf = self.to_buf();
+        buf.push_back(token.into());
+        buf
+    }
+
+    /// Creates an owned [`Pointerbuf`] like `self` but with `token` prepended.
+    ///
+    /// See [`PointerBuf::push_front`] for more details.
+    ///
+    /// **Note**: this method allocates. If you find yourself calling it more
+    /// than once for a given pointer, consider using [`PointerBuf::push_front`]
+    /// instead.
+    ///
+    /// ## Examples
+    /// ```
+    /// let ptr = jsonptr::Pointer::from_static("/bar");
+    /// let foobar = ptr.with_leading_token("foo");
+    /// assert_eq!(foobar, "/foo/bar");
+    /// ```
+    pub fn with_leading_token<'t>(&self, token: impl Into<Token<'t>>) -> PointerBuf {
+        let mut buf = self.to_buf();
+        buf.push_front(token);
+        buf
+    }
+
+    /// Creates an owned [`Pointerbuf`] like `self` but with `other` appended to
+    /// the end.
+    ///
+    /// See [`PointerBuf::append`] for more details.
+    ///
+    /// **Note**: this method allocates. If you find yourself calling it more
+    /// than once for a given pointer, consider using [`PointerBuf::append`]
+    /// instead.
+    ///
+    /// ## Examples
+    /// ```
+    /// let ptr = jsonptr::Pointer::from_static("/foo");
+    /// let barbaz = jsonptr::Pointer::from_static("/bar/baz");
+    /// assert_eq!(ptr.concat(&barbaz), "/foo/bar/baz");
+    /// ```
+    pub fn concat(&self, other: &Pointer) -> PointerBuf {
+        let mut buf = self.to_buf();
+        buf.append(other);
+        buf
+    }
 }
 
 #[cfg(feature = "serde")]
@@ -740,19 +801,13 @@ impl PointerBuf {
     }
 
     /// Pushes a `Token` onto the front of this `Pointer`.
-    pub fn push_front<'t, T>(&mut self, token: T)
-    where
-        T: Into<Token<'t>>,
-    {
+    pub fn push_front<'t>(&mut self, token: impl Into<Token<'t>>) {
         self.0.insert(0, '/');
         self.0.insert_str(1, token.into().encoded());
     }
 
     /// Pushes a `Token` onto the back of this `Pointer`.
-    pub fn push_back<'t, T>(&mut self, token: T)
-    where
-        T: Into<Token<'t>>,
-    {
+    pub fn push_back<'t>(&mut self, token: impl Into<Token<'t>>) {
         self.0.push('/');
         self.0.push_str(token.into().encoded());
     }
@@ -799,10 +854,11 @@ impl PointerBuf {
     ///
     /// ## Errors
     /// A [`ReplaceError`] is returned if the index is out of bounds.
-    pub fn replace<'t, T>(&mut self, index: usize, token: T) -> Result<Option<Token>, ReplaceError>
-    where
-        T: Into<Token<'t>>,
-    {
+    pub fn replace<'t>(
+        &mut self,
+        index: usize,
+        token: impl Into<Token<'t>>,
+    ) -> Result<Option<Token>, ReplaceError> {
         if self.is_root() {
             return Err(ReplaceError {
                 count: self.count(),

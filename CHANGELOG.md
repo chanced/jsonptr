@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## Added
+
+-   Adds fluid methods `with_trailing_token`, `with_leading_token`, `concat` to `Pointer`.
+
+## [0.6.0] - 2024-08-06
+
 ### Fixed
 
 -   `Token::to_index` now fails if the token contains leading zeros, as mandated by the RFC.
@@ -21,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 -   README tweak.
 
-## [0.5.0] 
+## [0.5.0]
 
 This is a breaking release including:
 
