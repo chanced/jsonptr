@@ -437,12 +437,9 @@ impl Pointer {
     /// let foobar = ptr.with_trailing_token("bar");
     /// assert_eq!(foobar, "/foo/bar");
     /// ```
-    pub fn with_trailing_token<'t, T>(&self, token: T) -> PointerBuf
-    where
-        T: Into<Token<'t>>,
-    {
+    pub fn with_trailing_token<'t>(&self, token: impl Into<Token<'t>>) -> PointerBuf {
         let mut buf = self.to_buf();
-        buf.push_back(token);
+        buf.push_back(token.into());
         buf
     }
 
@@ -460,10 +457,7 @@ impl Pointer {
     /// let foobar = ptr.with_leading_token("foo");
     /// assert_eq!(foobar, "/foo/bar");
     /// ```
-    pub fn with_leading_token<'t, T>(&self, token: T) -> PointerBuf
-    where
-        T: Into<Token<'t>>,
-    {
+    pub fn with_leading_token<'t>(&self, token: impl Into<Token<'t>>) -> PointerBuf {
         let mut buf = self.to_buf();
         buf.push_front(token);
         buf
@@ -807,19 +801,13 @@ impl PointerBuf {
     }
 
     /// Pushes a `Token` onto the front of this `Pointer`.
-    pub fn push_front<'t, T>(&mut self, token: T)
-    where
-        T: Into<Token<'t>>,
-    {
+    pub fn push_front<'t>(&mut self, token: impl Into<Token<'t>>) {
         self.0.insert(0, '/');
         self.0.insert_str(1, token.into().encoded());
     }
 
     /// Pushes a `Token` onto the back of this `Pointer`.
-    pub fn push_back<'t, T>(&mut self, token: T)
-    where
-        T: Into<Token<'t>>,
-    {
+    pub fn push_back<'t>(&mut self, token: impl Into<Token<'t>>) {
         self.0.push('/');
         self.0.push_str(token.into().encoded());
     }
@@ -866,10 +854,11 @@ impl PointerBuf {
     ///
     /// ## Errors
     /// A [`ReplaceError`] is returned if the index is out of bounds.
-    pub fn replace<'t, T>(&mut self, index: usize, token: T) -> Result<Option<Token>, ReplaceError>
-    where
-        T: Into<Token<'t>>,
-    {
+    pub fn replace<'t>(
+        &mut self,
+        index: usize,
+        token: impl Into<Token<'t>>,
+    ) -> Result<Option<Token>, ReplaceError> {
         if self.is_root() {
             return Err(ReplaceError {
                 count: self.count(),
