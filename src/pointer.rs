@@ -423,9 +423,15 @@ impl Pointer {
         self.into()
     }
 
-    /// Appends `token` onto `self` as a new [`Pointerbuf`].
+    /// Creates an owned [`Pointerbuf`] like `self` but with `token` appended.
     ///
-    /// ## Example
+    /// See [`PointerBuf::push_back`] for more details.
+    ///
+    /// **Note**: this method allocates. If you find yourself calling it more
+    /// than once for a given pointer, consider using [`PointerBuf::push_back`]
+    /// instead.
+    ///
+    /// ## Examples
     /// ```
     /// let ptr = jsonptr::Pointer::from_static("/foo");
     /// let foobar = ptr.with_trailing_token("bar");
@@ -440,9 +446,15 @@ impl Pointer {
         buf
     }
 
-    /// Prepends `token` onto `self` as a new `PointerBuf`.
+    /// Creates an owned [`Pointerbuf`] like `self` but with `token` prepended.
     ///
-    /// ## Example
+    /// See [`PointerBuf::push_front`] for more details.
+    ///
+    /// **Note**: this method allocates. If you find yourself calling it more
+    /// than once for a given pointer, consider using [`PointerBuf::push_front`]
+    /// instead.
+    ///
+    /// ## Examples
     /// ```
     /// let ptr = jsonptr::Pointer::from_static("/bar");
     /// let foobar = ptr.with_leading_token("foo");
@@ -457,14 +469,22 @@ impl Pointer {
         buf
     }
 
-    /// Appends the `Pointer` `other` onto `self` as a new `PointerBuf`.
+    /// Creates an owned [`Pointerbuf`] like `self` but with `other` appended to
+    /// the end.
     ///
+    /// See [`PointerBuf::append`] for more details.
+    ///
+    /// **Note**: this method allocates. If you find yourself calling it more
+    /// than once for a given pointer, consider using [`PointerBuf::append`]
+    /// instead.
+    ///
+    /// ## Examples
     /// ```
     /// let ptr = jsonptr::Pointer::from_static("/foo");
     /// let barbaz = jsonptr::Pointer::from_static("/bar/baz");
-    /// assert_eq!(ptr.with_appended(&barbaz), "/foo/bar/baz");
+    /// assert_eq!(ptr.concat(&barbaz), "/foo/bar/baz");
     /// ```
-    pub fn with_appended(&self, other: &Pointer) -> PointerBuf {
+    pub fn concat(&self, other: &Pointer) -> PointerBuf {
         let mut buf = self.to_buf();
         buf.append(other);
         buf
