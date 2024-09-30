@@ -475,13 +475,45 @@ impl Pointer {
     /// ## Examples
     /// ```
     /// let ptr = jsonptr::Pointer::from_static("/foo");
-    /// let barbaz = jsonptr::Pointer::from_static("/bar/baz");
-    /// assert_eq!(ptr.concat(&barbaz), "/foo/bar/baz");
+    /// let other = jsonptr::Pointer::from_static("/bar/baz");
+    /// assert_eq!(ptr.concat(other), "/foo/bar/baz");
     /// ```
     pub fn concat(&self, other: &Pointer) -> PointerBuf {
         let mut buf = self.to_buf();
         buf.append(other);
         buf
+    }
+
+    //  Returns the length of `self` in encoded format.
+    ///
+    /// This length is in bytes, not [`char`]s or graphemes. In other words, it might
+    /// not be what a human considers the length of the string.
+    ///
+    /// ## Examples
+    /// ```
+    /// let mut ptr = jsonptr::Pointer::from_static("/foo/bar").to_buf();
+    /// assert_eq!(ptr.len(), 8);
+    ///
+    /// ptr.push_back("~");
+    /// assert_eq!(ptr.len(), 11);
+    ///
+    /// ```
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Returns `true` if the `Pointer` is empty (i.e. root).    
+    ///
+    /// ## Examples
+    /// ```
+    /// let mut ptr = jsonptr::PointerBuf::new();
+    /// assert!(ptr.is_empty());
+    ///
+    /// ptr.push_back("foo");
+    /// assert!(!ptr.is_empty());
+    /// ```
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 }
 
@@ -1911,6 +1943,42 @@ mod tests {
         let ptr = Pointer::from_static("/bread/crumbs");
         let buf = ptr.to_owned();
         assert_eq!(buf, "/bread/crumbs");
+    }
+
+    #[test]
+    fn concat() {
+        let ptr = Pointer::from_static("/foo");
+        let barbaz = Pointer::from_static("/bar/baz");
+        assert_eq!(ptr.concat(barbaz), "/foo/bar/baz");
+    }
+
+    #[test]
+    fn with_leading_token() {
+        let ptr = Pointer::from_static("/bar");
+        let foobar = ptr.with_leading_token("foo");
+        assert_eq!(foobar, "/foo/bar");
+    }
+
+    #[test]
+    fn with_trailing_token() {
+        let ptr = Pointer::from_static("/foo");
+        let foobar = ptr.with_trailing_token("bar");
+        assert_eq!(foobar, "/foo/bar");
+    }
+
+    #[test]
+    fn len() {
+        let ptr = Pointer::from_static("/foo/bar");
+        assert_eq!(ptr.len(), 8);
+        let mut ptr = ptr.to_buf();
+        ptr.push_back("~");
+        assert_eq!(ptr.len(), 11);
+    }
+
+    #[test]
+    fn is_empty() {
+        assert!(Pointer::from_static("").is_empty());
+        assert!(!Pointer::from_static("/").is_empty());
     }
 
     #[test]
