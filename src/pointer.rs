@@ -423,7 +423,7 @@ impl Pointer {
         self.into()
     }
 
-    /// Creates an owned [`Pointerbuf`] like `self` but with `token` appended.
+    /// Creates an owned [`PointerBuf`] like `self` but with `token` appended.
     ///
     /// See [`PointerBuf::push_back`] for more details.
     ///
@@ -443,7 +443,7 @@ impl Pointer {
         buf
     }
 
-    /// Creates an owned [`Pointerbuf`] like `self` but with `token` prepended.
+    /// Creates an owned [`PointerBuf`] like `self` but with `token` prepended.
     ///
     /// See [`PointerBuf::push_front`] for more details.
     ///
@@ -463,7 +463,7 @@ impl Pointer {
         buf
     }
 
-    /// Creates an owned [`Pointerbuf`] like `self` but with `other` appended to
+    /// Creates an owned [`PointerBuf`] like `self` but with `other` appended to
     /// the end.
     ///
     /// See [`PointerBuf::append`] for more details.
@@ -798,6 +798,35 @@ impl PointerBuf {
     /// Coerces to a Pointer slice.
     pub fn as_ptr(&self) -> &Pointer {
         self
+    }
+
+    //  Returns the length of `self` in encoded format.
+    ///
+    /// This length is in bytes, not [`char`]s or graphemes. In other words, it might
+    /// not be what a human considers the length of the string.
+    ///
+    /// ## Examples
+    /// ```
+    /// let ptr = jsonptr::Pointer::from_static("/foo/bar");
+    /// assert_eq!(ptr.len(), 8);
+    ///
+    /// ```
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Returns `true` if the `Pointer` is empty (i.e. root).    
+    ///
+    /// ## Examples
+    /// ```
+    /// let mut ptr = jsonptr::PointerBuf::new();
+    /// assert!(ptr.is_empty());
+    ///
+    /// ptr.push_back("foo");
+    /// assert!(!ptr.is_empty());
+    /// ```
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 
     /// Pushes a `Token` onto the front of this `Pointer`.

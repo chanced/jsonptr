@@ -40,9 +40,9 @@ potentially fallible parsing, or the `const fn` `from_static` to produce a
 `&'static Pointer` from a string that is known to be valid.
 
 ```rust
-# use jsonptr::Pointer;
-let ptr = Pointer::parse("/examples/0/name").unwrap();
+use jsonptr::Pointer;
 
+let ptr = Pointer::parse("/examples/0/name").unwrap();
 let static_ptr = Pointer::from_static("/examples/0/name");
 assert_eq!(ptr, static_ptr);
 
@@ -58,7 +58,7 @@ assert_eq!(remaining, Pointer::parse("/0/name").unwrap());
 iterator of [`Token`]s with the [`from_tokens`] method:
 
 ```rust
-# use jsonptr::PointerBuf;
+use jsonptr::PointerBuf;
 let mut buf = PointerBuf::parse("/examples/0/name").unwrap();
 
 let from_tokens = PointerBuf::from_tokens(["examples", "0", "name"]);
@@ -73,7 +73,7 @@ assert_eq!(buf.as_str(), "/~0/pointer/examples/0/name/~1");
 Iterating over the tokens or components of a pointer:
 
 ```rust
-# use jsonptr::{Pointer, Component, Token};
+use jsonptr::{Pointer, Component, Token};
 let ptr = Pointer::from_static("/path/to/value");
 
 //  Using the `tokens` method:
