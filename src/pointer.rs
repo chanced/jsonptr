@@ -486,8 +486,8 @@ impl Pointer {
 
     //  Returns the length of `self` in encoded format.
     ///
-    /// This length is in bytes, not [`char`]s or graphemes. In other words, it might
-    /// not be what a human considers the length of the string.
+    /// This length expresses the byte count of the underlying string that
+    /// represents the RFC 6091 Pointer. See also [`std::str::len`].
     ///
     /// ## Examples
     /// ```
@@ -834,8 +834,8 @@ impl PointerBuf {
 
     //  Returns the length of `self` in encoded format.
     ///
-    /// This length is in bytes, not [`char`]s or graphemes. In other words, it might
-    /// not be what a human considers the length of the string.
+    /// This length expresses the byte count of the underlying string that
+    /// represents the RFC 6091 Pointer. See also [`std::str::len`].
     ///
     /// ## Examples
     /// ```
