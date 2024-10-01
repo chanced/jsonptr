@@ -486,8 +486,8 @@ impl Pointer {
 
     //  Returns the length of `self` in encoded format.
     ///
-    /// This length is in bytes, not [`char`]s or graphemes. In other words, it might
-    /// not be what a human considers the length of the string.
+    /// This length expresses the byte count of the underlying string that
+    /// represents the RFC 6091 Pointer. See also [`std::str::len`].
     ///
     /// ## Examples
     /// ```
@@ -830,35 +830,6 @@ impl PointerBuf {
     /// Coerces to a Pointer slice.
     pub fn as_ptr(&self) -> &Pointer {
         self
-    }
-
-    //  Returns the length of `self` in encoded format.
-    ///
-    /// This length is in bytes, not [`char`]s or graphemes. In other words, it might
-    /// not be what a human considers the length of the string.
-    ///
-    /// ## Examples
-    /// ```
-    /// let ptr = jsonptr::Pointer::from_static("/foo/bar");
-    /// assert_eq!(ptr.len(), 8);
-    ///
-    /// ```
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    /// Returns `true` if the `Pointer` is empty (i.e. root).    
-    ///
-    /// ## Examples
-    /// ```
-    /// let mut ptr = jsonptr::PointerBuf::new();
-    /// assert!(ptr.is_empty());
-    ///
-    /// ptr.push_back("foo");
-    /// assert!(!ptr.is_empty());
-    /// ```
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
     }
 
     /// Pushes a `Token` onto the front of this `Pointer`.
