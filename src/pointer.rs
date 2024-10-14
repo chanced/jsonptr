@@ -810,8 +810,10 @@ impl PointerBuf {
     ///
     /// ## Errors
     /// Returns a [`ParseError`] if the string is not a valid JSON Pointer.
-    pub fn parse<S: AsRef<str> + ?Sized>(s: &S) -> Result<Self, ParseError> {
-        Pointer::parse(&s).map(Pointer::to_buf)
+    pub fn parse(s: impl Into<String>) -> Result<Self, ParseError> {
+        let s = s.into();
+        validate(&s)?;
+        Ok(Self(s))
     }
 
     /// Creates a new `PointerBuf` from a slice of non-encoded strings.
