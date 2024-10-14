@@ -51,7 +51,7 @@ impl core::fmt::Display for Pointer {
 impl Pointer {
     /// Create a `Pointer` from a string that is known to be correctly encoded.
     ///
-    /// This is a zero-copy constructor.
+    /// This is a cost-free conversion.
     ///
     /// ## Safety
     /// The provided string must adhere to RFC 6901.
@@ -1300,6 +1300,20 @@ mod tests {
     #[should_panic = "invalid json pointer"]
     fn from_const_validates() {
         let _ = Pointer::from_static("foo/bar");
+    }
+
+    #[test]
+    fn root_is_alias_of_new_pathbuf() {
+        assert_eq!(PointerBuf::root(), PointerBuf::new());
+    }
+
+    #[test]
+    fn from_unchecked_pathbuf() {
+        let s = "/foo/bar/0";
+        assert_eq!(
+            unsafe { PointerBuf::new_unchecked(String::from(s)) },
+            PointerBuf::parse(s).unwrap()
+        );
     }
 
     #[test]
