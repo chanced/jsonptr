@@ -139,7 +139,8 @@ impl Pointer {
     pub fn back(&self) -> Option<Token> {
         self.0
             .rsplit_once('/')
-            .map(|(_, back)| Token::from_encoded_unchecked(back))
+            // SAFETY: pointer is encoded
+            .map(|(_, back)| unsafe { Token::from_encoded_unchecked(back) })
     }
 
     /// Returns the last token in the `Pointer`.
@@ -156,9 +157,10 @@ impl Pointer {
         }
         self.0[1..]
             .split_once('/')
+            // SAFETY: source pointer is encoded
             .map_or_else(
-                || Token::from_encoded_unchecked(&self.0[1..]),
-                |(front, _)| Token::from_encoded_unchecked(front),
+                || unsafe { Token::from_encoded_unchecked(&self.0[1..]) },
+                |(front, _)| unsafe { Token::from_encoded_unchecked(front) },
             )
             .into()
     }
@@ -178,13 +180,22 @@ impl Pointer {
         self.0[1..]
             .find('/')
             .map_or_else(
-                || (Token::from_encoded_unchecked(&self.0[1..]), Self::root()),
+                || {
+                    (
+                        // SAFETY: source pointer is encoded
+                        unsafe { Token::from_encoded_unchecked(&self.0[1..]) },
+                        Self::root(),
+                    )
+                },
                 |idx| {
                     let (front, back) = self.0[1..].split_at(idx);
-                    // SAFETY: we split at a token boundary, so back is valid pointer
-                    (Token::from_encoded_unchecked(front), unsafe {
-                        Self::new_unchecked(back)
-                    })
+                    (
+                        // SAFETY: source pointer is encoded
+                        unsafe { Token::from_encoded_unchecked(front) },
+                        // SAFETY: we split at a token boundary, so back is
+                        // valid pointer.
+                        unsafe { Self::new_unchecked(back) },
+                    )
                 },
             )
             .into()
@@ -222,15 +233,14 @@ impl Pointer {
 
     /// Splits the `Pointer` into the parent path and the last `Token`.
     pub fn split_back(&self) -> Option<(&Self, Token)> {
-        self.0
-            .rsplit_once('/')
-            // SAFETY: we split at a token boundary, so front is a valid pointer
-            .map(|(front, back)| {
-                (
-                    unsafe { Self::new_unchecked(front) },
-                    Token::from_encoded_unchecked(back),
-                )
-            })
+        self.0.rsplit_once('/').map(|(front, back)| {
+            (
+                // SAFETY: we split at a token boundary, so front is a valid pointer
+                unsafe { Self::new_unchecked(front) },
+                // SAFETY: source token is encoded
+                unsafe { Token::from_encoded_unchecked(back) },
+            )
+        })
     }
 
     /// A pointer to the parent of the current path.
@@ -890,7 +900,8 @@ impl PointerBuf {
     /// Removes and returns the last `Token` in the `Pointer` if it exists.
     pub fn pop_back(&mut self) -> Option<Token<'static>> {
         if let Some(idx) = self.0.rfind('/') {
-            let back = Token::from_encoded_unchecked(self.0.split_off(idx + 1));
+            // SAFETY: source pointer is encoded
+            let back = unsafe { Token::from_encoded_unchecked(self.0.split_off(idx + 1)) };
             self.0.pop(); // remove trailing `/`
             Some(back)
         } else {
@@ -908,8 +919,10 @@ impl PointerBuf {
             } else {
                 core::mem::take(&mut self.0)
             };
-            token.remove(0); // remove leading `/`
-            Token::from_encoded_unchecked(token)
+            // remove leading `/`
+            token.remove(0);
+            // SAFETY: source pointer is encoded
+            unsafe { Token::from_encoded_unchecked(token) }
         })
     }
 
@@ -1485,13 +1498,13 @@ mod tests {
 
             assert_eq!(ptr.tokens().count(), 3);
             let mut token = ptr.pop_front();
-            assert_eq!(token, Some(Token::from_encoded_unchecked("bar")));
+            assert_eq!(token, Some(Token::new("bar")));
             assert_eq!(ptr.tokens().count(), 2);
             token = ptr.pop_front();
-            assert_eq!(token, Some(Token::from_encoded_unchecked("")));
+            assert_eq!(token, Some(Token::new("")));
             assert_eq!(ptr.tokens().count(), 1);
             token = ptr.pop_front();
-            assert_eq!(token, Some(Token::from_encoded_unchecked("")));
+            assert_eq!(token, Some(Token::new("")));
             assert_eq!(ptr.tokens().count(), 0);
             assert_eq!(ptr, Pointer::root());
         }
