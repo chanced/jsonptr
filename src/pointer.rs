@@ -49,11 +49,14 @@ impl core::fmt::Display for Pointer {
     }
 }
 impl Pointer {
-    /// Private constructor for strings that are known to be correctly encoded
+    /// Create a `Pointer` from a string that is known to be correctly encoded.
     ///
-    /// This is a zero-copy constructor
-    fn new<S: AsRef<str> + ?Sized>(s: &S) -> &Self {
-        unsafe { &*(core::ptr::from_ref::<str>(s.as_ref()) as *const Self) }
+    /// This is a zero-copy constructor.
+    ///
+    /// ## Safety
+    /// The provided string must adhere to RFC 6901.
+    pub unsafe fn new_unchecked<S: AsRef<str> + ?Sized>(s: &S) -> &Self {
+        &*(core::ptr::from_ref::<str>(s.as_ref()) as *const Self)
     }
 
     /// Constant reference to a root pointer
@@ -72,7 +75,8 @@ impl Pointer {
     /// ## Errors
     /// Returns a `ParseError` if the string is not a valid JSON Pointer.
     pub fn parse<S: AsRef<str> + ?Sized>(s: &S) -> Result<&Self, ParseError> {
-        validate(s.as_ref()).map(Self::new)
+        // SAFETY: we validate first
+        validate(s.as_ref()).map(|s| unsafe { Self::new_unchecked(s) })
     }
 
     /// Creates a static `Pointer` from a string.
@@ -177,7 +181,10 @@ impl Pointer {
                 || (Token::from_encoded_unchecked(&self.0[1..]), Self::root()),
                 |idx| {
                     let (front, back) = self.0[1..].split_at(idx);
-                    (Token::from_encoded_unchecked(front), Self::new(back))
+                    // SAFETY: we split at a token boundary, so back is valid pointer
+                    (Token::from_encoded_unchecked(front), unsafe {
+                        Self::new_unchecked(back)
+                    })
                 },
             )
             .into()
@@ -209,30 +216,49 @@ impl Pointer {
             return None;
         }
         let (head, tail) = self.0.split_at(offset);
-        Some((Self::new(head), Self::new(tail)))
+        // SAFETY: we split at a token boundary, so head and tail are valid pointers
+        unsafe { Some((Self::new_unchecked(head), Self::new_unchecked(tail))) }
     }
 
     /// Splits the `Pointer` into the parent path and the last `Token`.
     pub fn split_back(&self) -> Option<(&Self, Token)> {
         self.0
             .rsplit_once('/')
-            .map(|(front, back)| (Self::new(front), Token::from_encoded_unchecked(back)))
+            // SAFETY: we split at a token boundary, so front is a valid pointer
+            .map(|(front, back)| {
+                (
+                    unsafe { Self::new_unchecked(front) },
+                    Token::from_encoded_unchecked(back),
+                )
+            })
     }
 
     /// A pointer to the parent of the current path.
     pub fn parent(&self) -> Option<&Self> {
-        self.0.rsplit_once('/').map(|(front, _)| Self::new(front))
+        // SAFETY: we split at a token boundary, so front is a valid pointer
+        self.0
+            .rsplit_once('/')
+            .map(|(front, _)| unsafe { Self::new_unchecked(front) })
     }
 
     /// Returns the pointer stripped of the given suffix.
     pub fn strip_suffix<'a>(&'a self, suffix: &Self) -> Option<&'a Self> {
-        self.0.strip_suffix(&suffix.0).map(Self::new)
+        self.0
+            .strip_suffix(&suffix.0)
+            // SAFETY: the suffix is a valid pointer, so removing it from the
+            // back of another pointer will preserve token boundaries
+            .map(|s| unsafe { Self::new_unchecked(s) })
     }
 
     /// Returns the pointer stripped of the given prefix.
     pub fn strip_prefix<'a>(&'a self, prefix: &Self) -> Option<&'a Self> {
-        self.0.strip_prefix(&prefix.0).map(Self::new)
+        self.0
+            .strip_prefix(&prefix.0)
+            // SAFETY: the suffix is a valid pointer, so removing it from the
+            // front of another pointer will preserve token boundaries
+            .map(|s| unsafe { Self::new_unchecked(s) })
     }
+
     /// Attempts to get a `Token` by the index. Returns `None` if the index is
     /// out of bounds.
     ///
@@ -491,7 +517,7 @@ impl Pointer {
     ///
     /// ## Examples
     /// ```
-    /// let mut ptr = jsonptr::Pointer::from_static("/foo/bar").to_buf();
+    /// let mut ptr = jsonptr::PointerBuf::parse("/foo/bar").unwrap();
     /// assert_eq!(ptr.len(), 8);
     ///
     /// ptr.push_back("~");
@@ -506,7 +532,7 @@ impl Pointer {
     ///
     /// ## Examples
     /// ```
-    /// let mut ptr = jsonptr::PointerBuf::new();
+    /// let mut ptr = jsonptr::PointerBuf::root();
     /// assert!(ptr.is_empty());
     ///
     /// ptr.push_back("foo");
@@ -802,16 +828,33 @@ pub struct PointerBuf(String);
 
 impl PointerBuf {
     /// Creates a new `PointerBuf` pointing to a document root.
+    ///
+    /// This is an alias to [`Self::new`].
+    pub fn root() -> Self {
+        Self::new()
+    }
+
+    /// Creates a new `PointerBuf` pointing to a document root.
     pub fn new() -> Self {
         Self(String::new())
+    }
+
+    /// Create a `PointerBuf` from a string that is known to be correctly encoded.
+    ///
+    /// ## Safety
+    /// The provided string must adhere to RFC 6901.
+    pub unsafe fn new_unchecked(s: impl Into<String>) -> Self {
+        Self(s.into())
     }
 
     /// Attempts to parse a string into a `PointerBuf`.
     ///
     /// ## Errors
     /// Returns a [`ParseError`] if the string is not a valid JSON Pointer.
-    pub fn parse<S: AsRef<str> + ?Sized>(s: &S) -> Result<Self, ParseError> {
-        Pointer::parse(&s).map(Pointer::to_buf)
+    pub fn parse(s: impl Into<String>) -> Result<Self, ParseError> {
+        let s = s.into();
+        validate(&s)?;
+        Ok(Self(s))
     }
 
     /// Creates a new `PointerBuf` from a slice of non-encoded strings.
@@ -939,7 +982,8 @@ impl Borrow<Pointer> for PointerBuf {
 impl Deref for PointerBuf {
     type Target = Pointer;
     fn deref(&self) -> &Self::Target {
-        Pointer::new(&self.0)
+        // SAFETY: we hold a valid pointer
+        unsafe { Pointer::new_unchecked(self.0.as_str()) }
     }
 }
 
@@ -1249,15 +1293,19 @@ mod tests {
 
     #[test]
     fn strip_suffix() {
-        let p = Pointer::new("/example/pointer/to/some/value");
-        let stripped = p.strip_suffix(Pointer::new("/to/some/value")).unwrap();
+        let p = Pointer::from_static("/example/pointer/to/some/value");
+        let stripped = p
+            .strip_suffix(Pointer::from_static("/to/some/value"))
+            .unwrap();
         assert_eq!(stripped, "/example/pointer");
     }
 
     #[test]
     fn strip_prefix() {
-        let p = Pointer::new("/example/pointer/to/some/value");
-        let stripped = p.strip_prefix(Pointer::new("/example/pointer")).unwrap();
+        let p = Pointer::from_static("/example/pointer/to/some/value");
+        let stripped = p
+            .strip_prefix(Pointer::from_static("/example/pointer"))
+            .unwrap();
         assert_eq!(stripped, "/to/some/value");
     }
 
@@ -1448,7 +1496,7 @@ mod tests {
             assert_eq!(ptr, Pointer::root());
         }
         {
-            let mut ptr = PointerBuf::new();
+            let mut ptr = PointerBuf::root();
             assert_eq!(ptr.tokens().count(), 0);
             ptr.push_back("");
             assert_eq!(ptr.tokens().count(), 1);
@@ -1456,7 +1504,7 @@ mod tests {
             assert_eq!(ptr.tokens().count(), 0);
         }
         {
-            let mut ptr = PointerBuf::new();
+            let mut ptr = PointerBuf::root();
             let input = ["", "", "", "foo", "", "bar", "baz", ""];
             for (idx, &s) in input.iter().enumerate() {
                 assert_eq!(ptr.tokens().count(), idx);
@@ -1650,7 +1698,7 @@ mod tests {
     #[test]
     fn pop_back_works_with_empty_strings() {
         {
-            let mut ptr = PointerBuf::new();
+            let mut ptr = PointerBuf::root();
             ptr.push_back("");
             ptr.push_back("");
             ptr.push_back("bar");
@@ -1662,10 +1710,10 @@ mod tests {
             assert_eq!(ptr.tokens().count(), 1);
             ptr.pop_back();
             assert_eq!(ptr.tokens().count(), 0);
-            assert_eq!(ptr, PointerBuf::new());
+            assert_eq!(ptr, PointerBuf::root());
         }
         {
-            let mut ptr = PointerBuf::new();
+            let mut ptr = PointerBuf::root();
             assert_eq!(ptr.tokens().count(), 0);
             ptr.push_back("");
             assert_eq!(ptr.tokens().count(), 1);
@@ -1673,7 +1721,7 @@ mod tests {
             assert_eq!(ptr.tokens().count(), 0);
         }
         {
-            let mut ptr = PointerBuf::new();
+            let mut ptr = PointerBuf::root();
             let input = ["", "", "", "foo", "", "bar", "baz", ""];
             for (idx, &s) in input.iter().enumerate() {
                 assert_eq!(ptr.tokens().count(), idx);
