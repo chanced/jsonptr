@@ -515,6 +515,14 @@ impl Pointer {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
+
+    /// Converts a `Box<Pointer>` into a `PointerBuf` without copying or allocating.
+    pub fn into_buf(self: Box<Pointer>) -> PointerBuf {
+        let inner = Box::into_raw(self);
+        // SAFETY: we ensure the layout of `Pointer` is the same as `str`
+        let inner = unsafe { Box::<str>::from_raw(inner as *mut str) };
+        PointerBuf(inner.into_string())
+    }
 }
 
 #[cfg(feature = "serde")]
@@ -940,6 +948,14 @@ impl Deref for PointerBuf {
     type Target = Pointer;
     fn deref(&self) -> &Self::Target {
         Pointer::new(&self.0)
+    }
+}
+
+impl From<PointerBuf> for Box<Pointer> {
+    fn from(value: PointerBuf) -> Self {
+        let s = value.0.into_boxed_str();
+        // SAFETY> we ensure that the layout of `str` is the same as `Pointer`
+        unsafe { Box::from_raw(Box::into_raw(s) as *mut Pointer) }
     }
 }
 
@@ -2134,5 +2150,13 @@ mod tests {
         let ptr = PointerBuf::from_tokens(["foo", "bar"]);
         let borrowed: &Pointer = ptr.borrow();
         assert_eq!(borrowed, "/foo/bar");
+    }
+
+    #[test]
+    fn from_box_to_buf() {
+        let original = PointerBuf::parse("/foo/bar/0").unwrap();
+        let boxed: Box<Pointer> = original.clone().into();
+        let unboxed = boxed.into_buf();
+        assert_eq!(original, unboxed);
     }
 }
