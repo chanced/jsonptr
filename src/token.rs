@@ -42,6 +42,9 @@ impl<'a> Token<'a> {
     ///
     /// This is like [`Self::from_encoded`], except that no validation is
     /// performed on the input string.
+    ///
+    /// ## Safety
+    /// Input string must be RFC 6901 encoded.
     pub(crate) unsafe fn from_encoded_unchecked(inner: impl Into<Cow<'a, str>>) -> Self {
         Self {
             inner: inner.into(),

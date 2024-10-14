@@ -542,7 +542,7 @@ impl Pointer {
     ///
     /// ## Examples
     /// ```
-    /// let mut ptr = jsonptr::PointerBuf::root();
+    /// let mut ptr = jsonptr::PointerBuf::new();
     /// assert!(ptr.is_empty());
     ///
     /// ptr.push_back("foo");
@@ -861,10 +861,8 @@ impl PointerBuf {
     ///
     /// ## Errors
     /// Returns a [`ParseError`] if the string is not a valid JSON Pointer.
-    pub fn parse(s: impl Into<String>) -> Result<Self, ParseError> {
-        let s = s.into();
-        validate(&s)?;
-        Ok(Self(s))
+    pub fn parse<S: AsRef<str> + ?Sized>(s: &S) -> Result<Self, ParseError> {
+        Pointer::parse(&s).map(Pointer::to_buf)
     }
 
     /// Creates a new `PointerBuf` from a slice of non-encoded strings.
@@ -1509,7 +1507,7 @@ mod tests {
             assert_eq!(ptr, Pointer::root());
         }
         {
-            let mut ptr = PointerBuf::root();
+            let mut ptr = PointerBuf::new();
             assert_eq!(ptr.tokens().count(), 0);
             ptr.push_back("");
             assert_eq!(ptr.tokens().count(), 1);
@@ -1517,7 +1515,7 @@ mod tests {
             assert_eq!(ptr.tokens().count(), 0);
         }
         {
-            let mut ptr = PointerBuf::root();
+            let mut ptr = PointerBuf::new();
             let input = ["", "", "", "foo", "", "bar", "baz", ""];
             for (idx, &s) in input.iter().enumerate() {
                 assert_eq!(ptr.tokens().count(), idx);
@@ -1711,7 +1709,7 @@ mod tests {
     #[test]
     fn pop_back_works_with_empty_strings() {
         {
-            let mut ptr = PointerBuf::root();
+            let mut ptr = PointerBuf::new();
             ptr.push_back("");
             ptr.push_back("");
             ptr.push_back("bar");
@@ -1723,10 +1721,10 @@ mod tests {
             assert_eq!(ptr.tokens().count(), 1);
             ptr.pop_back();
             assert_eq!(ptr.tokens().count(), 0);
-            assert_eq!(ptr, PointerBuf::root());
+            assert_eq!(ptr, PointerBuf::new());
         }
         {
-            let mut ptr = PointerBuf::root();
+            let mut ptr = PointerBuf::new();
             assert_eq!(ptr.tokens().count(), 0);
             ptr.push_back("");
             assert_eq!(ptr.tokens().count(), 1);
@@ -1734,7 +1732,7 @@ mod tests {
             assert_eq!(ptr.tokens().count(), 0);
         }
         {
-            let mut ptr = PointerBuf::root();
+            let mut ptr = PointerBuf::new();
             let input = ["", "", "", "foo", "", "bar", "baz", ""];
             for (idx, &s) in input.iter().enumerate() {
                 assert_eq!(ptr.tokens().count(), idx);
