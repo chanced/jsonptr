@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+### Added
+
 -   Adds method `into_buf` for `Box<Pointer>` and `impl From<PathBuf> for Box<Pointer>`. 
 
 ## [0.6.2] 2024-09-30
