@@ -110,9 +110,10 @@ jobs:
         runs-on: ubuntu-latest
         # we use a matrix here just because env can't be used in job names
         # https://docs.github.com/en/actions/learn-github-actions/contexts#context-availability
+        # TODO: would be nice to just parse this from the manifest
         strategy:
             matrix:
-                msrv: ["1.76"]
+                msrv: ["1.79"]
         name: ubuntu / ${{ matrix.msrv }}
         steps:
             - uses: actions/checkout@v4

@@ -815,10 +815,7 @@ impl PointerBuf {
     }
 
     /// Creates a new `PointerBuf` from a slice of non-encoded strings.
-    pub fn from_tokens<'a, T>(tokens: impl IntoIterator<Item = T>) -> Self
-    where
-        T: Into<Token<'a>>,
-    {
+    pub fn from_tokens<'t>(tokens: impl IntoIterator<Item: Into<Token<'t>>>) -> Self {
         let mut inner = String::new();
         for t in tokens.into_iter().map(Into::into) {
             inner.push('/');
