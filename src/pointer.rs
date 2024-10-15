@@ -1,6 +1,7 @@
 use crate::{token::InvalidEncodingError, Components, Token, Tokens};
 use alloc::{
     borrow::ToOwned,
+    boxed::Box,
     fmt,
     string::{String, ToString},
     vec::Vec,
