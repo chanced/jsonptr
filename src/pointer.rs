@@ -952,7 +952,7 @@ impl Deref for PointerBuf {
 impl From<PointerBuf> for Box<Pointer> {
     fn from(value: PointerBuf) -> Self {
         let s = value.0.into_boxed_str();
-        // SAFETY> we ensure that the layout of `str` is the same as `Pointer`
+        // SAFETY: we ensure that the layout of `str` is the same as `Pointer`
         unsafe { Box::from_raw(Box::into_raw(s) as *mut Pointer) }
     }
 }
