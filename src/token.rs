@@ -42,7 +42,10 @@ impl<'a> Token<'a> {
     ///
     /// This is like [`Self::from_encoded`], except that no validation is
     /// performed on the input string.
-    pub(crate) fn from_encoded_unchecked(inner: impl Into<Cow<'a, str>>) -> Self {
+    ///
+    /// ## Safety
+    /// Input string must be RFC 6901 encoded.
+    pub(crate) unsafe fn from_encoded_unchecked(inner: impl Into<Cow<'a, str>>) -> Self {
         Self {
             inner: inner.into(),
         }
@@ -255,7 +258,8 @@ macro_rules! impl_from_num {
         $(
             impl From<$ty> for Token<'static> {
                 fn from(v: $ty) -> Self {
-                    Token::from_encoded_unchecked(v.to_string())
+                    // SAFETY: only used for integer types, which are always valid
+                    unsafe { Token::from_encoded_unchecked(v.to_string()) }
                 }
             }
         )*
@@ -312,7 +316,10 @@ pub struct Tokens<'a> {
 impl<'a> Iterator for Tokens<'a> {
     type Item = Token<'a>;
     fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next().map(Token::from_encoded_unchecked)
+        self.inner
+            .next()
+            // SAFETY: source pointer is encoded
+            .map(|s| unsafe { Token::from_encoded_unchecked(s) })
     }
 }
 impl<'t> Tokens<'t> {
@@ -476,13 +483,12 @@ mod tests {
     fn tokens() {
         let pointer = Pointer::from_static("/a/b/c");
         let tokens: Vec<Token> = pointer.tokens().collect();
-        assert_eq!(
-            tokens,
+        assert_eq!(tokens, unsafe {
             vec![
                 Token::from_encoded_unchecked("a"),
                 Token::from_encoded_unchecked("b"),
-                Token::from_encoded_unchecked("c")
+                Token::from_encoded_unchecked("c"),
             ]
-        );
+        });
     }
 }
