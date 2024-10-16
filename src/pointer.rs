@@ -55,10 +55,12 @@ impl Pointer {
     ///
     /// ## Safety
     /// The provided string must adhere to [RFC 6901](https://datatracker.ietf.org/doc/html/rfc6901):
+    ///
     /// - The pointer must start with `'/'` (%x2F) unless empty
     /// - Tokens must be properly encoded:
     ///     - `'~'` (%x7E) must be escaped as `"~0"`
     ///     - `'/'` (%x2F) must be escaped as `"~1"`
+    ///
     /// For potentially fallible parsing, see [`Pointer::parse`].
     pub unsafe fn new_unchecked<S: AsRef<str> + ?Sized>(s: &S) -> &Self {
         &*(core::ptr::from_ref::<str>(s.as_ref()) as *const Self)
