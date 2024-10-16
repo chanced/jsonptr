@@ -7,10 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+-   Adds unsafe associated methods `Pointer::new_unchecked` and `PointerBuf::new_unchecked` for
+    external zero-cost construction.
+
 ### Changed
 
 -   Changed signature of `PathBuf::parse` to avoid requiring allocation.
--   Bump minimum Rust version to 1.79
+-   Bumps minimum Rust version to 1.79.
 
 ## [0.6.2] 2024-09-30
 
