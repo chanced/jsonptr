@@ -49,11 +49,21 @@ impl core::fmt::Display for Pointer {
     }
 }
 impl Pointer {
-    /// Private constructor for strings that are known to be correctly encoded
+    /// Create a `Pointer` from a string that is known to be correctly encoded.
     ///
-    /// This is a zero-copy constructor
-    fn new<S: AsRef<str> + ?Sized>(s: &S) -> &Self {
-        unsafe { &*(core::ptr::from_ref::<str>(s.as_ref()) as *const Self) }
+    /// This is a cost-free conversion.
+    ///
+    /// ## Safety
+    /// The provided string must adhere to [RFC 6901](https://datatracker.ietf.org/doc/html/rfc6901):
+    ///
+    /// - The pointer must start with `'/'` (%x2F) unless empty
+    /// - Tokens must be properly encoded:
+    ///     - `'~'` (%x7E) must be escaped as `"~0"`
+    ///     - `'/'` (%x2F) must be escaped as `"~1"`
+    ///
+    /// For potentially fallible parsing, see [`Pointer::parse`].
+    pub unsafe fn new_unchecked<S: AsRef<str> + ?Sized>(s: &S) -> &Self {
+        &*(core::ptr::from_ref::<str>(s.as_ref()) as *const Self)
     }
 
     /// Constant reference to a root pointer
@@ -72,7 +82,8 @@ impl Pointer {
     /// ## Errors
     /// Returns a `ParseError` if the string is not a valid JSON Pointer.
     pub fn parse<S: AsRef<str> + ?Sized>(s: &S) -> Result<&Self, ParseError> {
-        validate(s.as_ref()).map(Self::new)
+        // SAFETY: we validate first
+        validate(s.as_ref()).map(|s| unsafe { Self::new_unchecked(s) })
     }
 
     /// Creates a static `Pointer` from a string.
@@ -135,7 +146,8 @@ impl Pointer {
     pub fn back(&self) -> Option<Token> {
         self.0
             .rsplit_once('/')
-            .map(|(_, back)| Token::from_encoded_unchecked(back))
+            // SAFETY: pointer is encoded
+            .map(|(_, back)| unsafe { Token::from_encoded_unchecked(back) })
     }
 
     /// Returns the last token in the `Pointer`.
@@ -152,9 +164,10 @@ impl Pointer {
         }
         self.0[1..]
             .split_once('/')
+            // SAFETY: source pointer is encoded
             .map_or_else(
-                || Token::from_encoded_unchecked(&self.0[1..]),
-                |(front, _)| Token::from_encoded_unchecked(front),
+                || unsafe { Token::from_encoded_unchecked(&self.0[1..]) },
+                |(front, _)| unsafe { Token::from_encoded_unchecked(front) },
             )
             .into()
     }
@@ -174,10 +187,22 @@ impl Pointer {
         self.0[1..]
             .find('/')
             .map_or_else(
-                || (Token::from_encoded_unchecked(&self.0[1..]), Self::root()),
+                || {
+                    (
+                        // SAFETY: source pointer is encoded
+                        unsafe { Token::from_encoded_unchecked(&self.0[1..]) },
+                        Self::root(),
+                    )
+                },
                 |idx| {
                     let (front, back) = self.0[1..].split_at(idx);
-                    (Token::from_encoded_unchecked(front), Self::new(back))
+                    (
+                        // SAFETY: source pointer is encoded
+                        unsafe { Token::from_encoded_unchecked(front) },
+                        // SAFETY: we split at a token boundary, so back is
+                        // valid pointer.
+                        unsafe { Self::new_unchecked(back) },
+                    )
                 },
             )
             .into()
@@ -209,30 +234,48 @@ impl Pointer {
             return None;
         }
         let (head, tail) = self.0.split_at(offset);
-        Some((Self::new(head), Self::new(tail)))
+        // SAFETY: we split at a token boundary, so head and tail are valid pointers
+        unsafe { Some((Self::new_unchecked(head), Self::new_unchecked(tail))) }
     }
 
     /// Splits the `Pointer` into the parent path and the last `Token`.
     pub fn split_back(&self) -> Option<(&Self, Token)> {
-        self.0
-            .rsplit_once('/')
-            .map(|(front, back)| (Self::new(front), Token::from_encoded_unchecked(back)))
+        self.0.rsplit_once('/').map(|(front, back)| {
+            (
+                // SAFETY: we split at a token boundary, so front is a valid pointer
+                unsafe { Self::new_unchecked(front) },
+                // SAFETY: source token is encoded
+                unsafe { Token::from_encoded_unchecked(back) },
+            )
+        })
     }
 
     /// A pointer to the parent of the current path.
     pub fn parent(&self) -> Option<&Self> {
-        self.0.rsplit_once('/').map(|(front, _)| Self::new(front))
+        // SAFETY: we split at a token boundary, so front is a valid pointer
+        self.0
+            .rsplit_once('/')
+            .map(|(front, _)| unsafe { Self::new_unchecked(front) })
     }
 
     /// Returns the pointer stripped of the given suffix.
     pub fn strip_suffix<'a>(&'a self, suffix: &Self) -> Option<&'a Self> {
-        self.0.strip_suffix(&suffix.0).map(Self::new)
+        self.0
+            .strip_suffix(&suffix.0)
+            // SAFETY: the suffix is a valid pointer, so removing it from the
+            // back of another pointer will preserve token boundaries
+            .map(|s| unsafe { Self::new_unchecked(s) })
     }
 
     /// Returns the pointer stripped of the given prefix.
     pub fn strip_prefix<'a>(&'a self, prefix: &Self) -> Option<&'a Self> {
-        self.0.strip_prefix(&prefix.0).map(Self::new)
+        self.0
+            .strip_prefix(&prefix.0)
+            // SAFETY: the suffix is a valid pointer, so removing it from the
+            // front of another pointer will preserve token boundaries
+            .map(|s| unsafe { Self::new_unchecked(s) })
     }
+
     /// Attempts to get a `Token` by the index. Returns `None` if the index is
     /// out of bounds.
     ///
@@ -491,7 +534,7 @@ impl Pointer {
     ///
     /// ## Examples
     /// ```
-    /// let mut ptr = jsonptr::Pointer::from_static("/foo/bar").to_buf();
+    /// let mut ptr = jsonptr::PointerBuf::parse("/foo/bar").unwrap();
     /// assert_eq!(ptr.len(), 8);
     ///
     /// ptr.push_back("~");
@@ -802,8 +845,23 @@ pub struct PointerBuf(String);
 
 impl PointerBuf {
     /// Creates a new `PointerBuf` pointing to a document root.
+    ///
+    /// This is an alias to [`Self::new`].
+    pub fn root() -> Self {
+        Self::new()
+    }
+
+    /// Creates a new `PointerBuf` pointing to a document root.
     pub fn new() -> Self {
         Self(String::new())
+    }
+
+    /// Create a `PointerBuf` from a string that is known to be correctly encoded.
+    ///
+    /// ## Safety
+    /// The provided string must adhere to RFC 6901.
+    pub unsafe fn new_unchecked(s: impl Into<String>) -> Self {
+        Self(s.into())
     }
 
     /// Attempts to parse a string into a `PointerBuf`.
@@ -844,7 +902,8 @@ impl PointerBuf {
     /// Removes and returns the last `Token` in the `Pointer` if it exists.
     pub fn pop_back(&mut self) -> Option<Token<'static>> {
         if let Some(idx) = self.0.rfind('/') {
-            let back = Token::from_encoded_unchecked(self.0.split_off(idx + 1));
+            // SAFETY: source pointer is encoded
+            let back = unsafe { Token::from_encoded_unchecked(self.0.split_off(idx + 1)) };
             self.0.pop(); // remove trailing `/`
             Some(back)
         } else {
@@ -862,8 +921,10 @@ impl PointerBuf {
             } else {
                 core::mem::take(&mut self.0)
             };
-            token.remove(0); // remove leading `/`
-            Token::from_encoded_unchecked(token)
+            // remove leading `/`
+            token.remove(0);
+            // SAFETY: source pointer is encoded
+            unsafe { Token::from_encoded_unchecked(token) }
         })
     }
 
@@ -936,7 +997,8 @@ impl Borrow<Pointer> for PointerBuf {
 impl Deref for PointerBuf {
     type Target = Pointer;
     fn deref(&self) -> &Self::Target {
-        Pointer::new(&self.0)
+        // SAFETY: we hold a valid pointer
+        unsafe { Pointer::new_unchecked(self.0.as_str()) }
     }
 }
 
@@ -1245,16 +1307,34 @@ mod tests {
     }
 
     #[test]
+    fn root_is_alias_of_new_pathbuf() {
+        assert_eq!(PointerBuf::root(), PointerBuf::new());
+    }
+
+    #[test]
+    fn from_unchecked_pathbuf() {
+        let s = "/foo/bar/0";
+        assert_eq!(
+            unsafe { PointerBuf::new_unchecked(String::from(s)) },
+            PointerBuf::parse(s).unwrap()
+        );
+    }
+
+    #[test]
     fn strip_suffix() {
-        let p = Pointer::new("/example/pointer/to/some/value");
-        let stripped = p.strip_suffix(Pointer::new("/to/some/value")).unwrap();
+        let p = Pointer::from_static("/example/pointer/to/some/value");
+        let stripped = p
+            .strip_suffix(Pointer::from_static("/to/some/value"))
+            .unwrap();
         assert_eq!(stripped, "/example/pointer");
     }
 
     #[test]
     fn strip_prefix() {
-        let p = Pointer::new("/example/pointer/to/some/value");
-        let stripped = p.strip_prefix(Pointer::new("/example/pointer")).unwrap();
+        let p = Pointer::from_static("/example/pointer/to/some/value");
+        let stripped = p
+            .strip_prefix(Pointer::from_static("/example/pointer"))
+            .unwrap();
         assert_eq!(stripped, "/to/some/value");
     }
 
@@ -1434,13 +1514,13 @@ mod tests {
 
             assert_eq!(ptr.tokens().count(), 3);
             let mut token = ptr.pop_front();
-            assert_eq!(token, Some(Token::from_encoded_unchecked("bar")));
+            assert_eq!(token, Some(Token::new("bar")));
             assert_eq!(ptr.tokens().count(), 2);
             token = ptr.pop_front();
-            assert_eq!(token, Some(Token::from_encoded_unchecked("")));
+            assert_eq!(token, Some(Token::new("")));
             assert_eq!(ptr.tokens().count(), 1);
             token = ptr.pop_front();
-            assert_eq!(token, Some(Token::from_encoded_unchecked("")));
+            assert_eq!(token, Some(Token::new("")));
             assert_eq!(ptr.tokens().count(), 0);
             assert_eq!(ptr, Pointer::root());
         }
