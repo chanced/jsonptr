@@ -166,7 +166,16 @@ impl FromStr for Index {
         } else if s.starts_with('0') && s != "0" {
             Err(ParseIndexError::LeadingZeros)
         } else {
-            Ok(s.parse::<usize>().map(Index::Num)?)
+            let idx = s.parse::<usize>().map(Index::Num)?;
+            if s.chars().all(|c| c.is_ascii_digit()) {
+                Ok(idx)
+            } else {
+                // this comes up with the `+` sign which is valid for
+                // representing a `usize` but not allowed in RFC 6901 array
+                // indices
+                let invalid: String = s.chars().filter(|c| !c.is_ascii_digit()).collect();
+                Err(ParseIndexError::InvalidCharacters(invalid))
+            }
         }
     }
 }
@@ -267,6 +276,8 @@ pub enum ParseIndexError {
     InvalidInteger(ParseIntError),
     /// The Token contains leading zeros.
     LeadingZeros,
+    /// The Token contains non-digit characters.
+    InvalidCharacters(String),
 }
 
 impl From<ParseIntError> for ParseIndexError {
@@ -285,6 +296,11 @@ impl fmt::Display for ParseIndexError {
                 f,
                 "token contained leading zeros, which are disallowed by RFC 6901"
             ),
+            ParseIndexError::InvalidCharacters(chars) => write!(
+                f,
+                "token contains non-digit character(s) '{chars}', \
+                which are disallowed by RFC 6901",
+            ),
         }
     }
 }
@@ -294,7 +310,7 @@ impl std::error::Error for ParseIndexError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             ParseIndexError::InvalidInteger(source) => Some(source),
-            ParseIndexError::LeadingZeros => None,
+            ParseIndexError::LeadingZeros | ParseIndexError::InvalidCharacters(_) => None,
         }
     }
 }

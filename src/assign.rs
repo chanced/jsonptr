@@ -767,6 +767,16 @@ mod tests {
                 }),
                 expected_data: json!([]),
             },
+            Test {
+                ptr: "/+23",
+                data: json!([]),
+                assign: json!("foo"),
+                expected: Err(AssignError::FailedToParseIndex {
+                    offset: 0,
+                    source: ParseIndexError::InvalidCharacters("+".into()),
+                }),
+                expected_data: json!([]),
+            },
         ]);
     }
 
