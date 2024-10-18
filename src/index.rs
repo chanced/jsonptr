@@ -36,9 +36,8 @@
 //! ```
 
 use crate::Token;
-use alloc::string::String;
+use alloc::{string::String, vec::Vec};
 use core::{fmt, num::ParseIntError, str::FromStr};
-use std::collections::BTreeSet;
 
 /// Represents an abstract index into an array.
 ///
@@ -174,7 +173,10 @@ impl FromStr for Index {
                 // this comes up with the `+` sign which is valid for
                 // representing a `usize` but not allowed in RFC 6901 array
                 // indices
-                let invalid: BTreeSet<_> = s.chars().filter(|c| !c.is_ascii_digit()).collect();
+                let mut invalid: Vec<_> = s.chars().filter(|c| !c.is_ascii_digit()).collect();
+                // remove duplicate characters
+                invalid.sort_unstable();
+                invalid.dedup();
                 Err(ParseIndexError::InvalidCharacters(
                     invalid.into_iter().collect(),
                 ))
