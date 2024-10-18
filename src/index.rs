@@ -434,6 +434,11 @@ mod tests {
             ParseIndexError::LeadingZeros.to_string(),
             "token contained leading zeros, which are disallowed by RFC 6901"
         );
+        assert_eq!(
+            ParseIndexError::InvalidCharacters("+@".into()).to_string(),
+            "token contains non-digit character(s) '+@', \
+                which are disallowed by RFC 6901"
+        );
     }
 
     #[test]
