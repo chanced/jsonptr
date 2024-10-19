@@ -13,11 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   Adds method `into_buf` for `Box<Pointer>` and `impl From<PathBuf> for Box<Pointer>`. 
 -   Adds unsafe associated methods `Pointer::new_unchecked` and `PointerBuf::new_unchecked` for
     external zero-cost construction.
+-   Adds new `ParseIndexError` variant to express the presence non-digit characters in the token.
 
 ### Changed
 
 -   Changed signature of `PathBuf::parse` to avoid requiring allocation.
 -   Bumps minimum Rust version to 1.79.
+
+### Fixed
+
+-   Make validation of array indices conform to RFC 6901 in the presence of non-digit characters.
 
 ## [0.6.2] 2024-09-30
 
