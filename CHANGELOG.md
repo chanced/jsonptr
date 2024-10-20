@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 -   Changed signature of `PathBuf::parse` to avoid requiring allocation.
 -   Bumps minimum Rust version to 1.79.
+-   `Pointer::get` now accepts ranges and can produce `Pointer` segments as output (similar to
+    `slice::get`).
 
 ## [0.6.2] 2024-09-30
 
