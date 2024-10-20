@@ -34,17 +34,6 @@ jobs:
                   components: rustfmt
             - name: cargo fmt --check
               run: cargo fmt --check
-    toml-fmt:
-        runs-on: ubuntu-latest
-        name: stable / toml-fmt
-        steps:
-            - uses: actions/checkout@v4
-              with:
-                  submodules: true
-            - name: Install taplo
-            - uses: docker://docker.io/tamasfe/taplo:latest
-              with:
-                  args: fmt --check --diff
     clippy:
         runs-on: ubuntu-latest
         name: ${{ matrix.toolchain }} / clippy
@@ -136,3 +125,14 @@ jobs:
                   toolchain: ${{ matrix.msrv }}
             - name: cargo +${{ matrix.msrv }} check
               run: cargo check
+    toml-fmt:
+        runs-on: ubuntu-latest
+        name: toml / fmt
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: true
+            - name: Install taplo
+              uses: docker://docker.io/tamasfe/taplo:latest
+              with:
+                  args: fmt --check --diff
