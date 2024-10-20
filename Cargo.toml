@@ -27,9 +27,10 @@ syn = { version = "1.0.109", optional = true }
 
 [features]
 assign  = []
-default = ["std", "serde", "json", "resolve", "assign", "delete"]
+default = ["std", "serde", "json", "resolve", "assign", "delete", "walk"]
 delete  = ["resolve"]
 json    = ["dep:serde_json", "serde"]
 resolve = []
 std     = ["serde/std", "serde_json?/std"]
 toml    = ["dep:toml", "serde", "std"]
+walk    = ["resolve"]

@@ -209,6 +209,15 @@ impl ResolveError {
     pub fn is_failed_to_parse_index(&self) -> bool {
         matches!(self, Self::FailedToParseIndex { .. })
     }
+
+    pub(crate) fn with_offset(self, offset: usize) -> Self {
+        match self {
+            Self::FailedToParseIndex { source, .. } => Self::FailedToParseIndex { offset, source },
+            Self::OutOfBounds { source, .. } => Self::OutOfBounds { offset, source },
+            Self::NotFound { .. } => Self::NotFound { offset },
+            Self::Unreachable { .. } => Self::Unreachable { offset },
+        }
+    }
 }
 
 impl core::fmt::Display for ResolveError {

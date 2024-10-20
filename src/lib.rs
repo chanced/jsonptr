@@ -64,6 +64,9 @@ pub mod resolve;
 #[cfg(feature = "resolve")]
 pub use resolve::{Resolve, ResolveMut};
 
+#[cfg(feature = "walk")]
+pub mod walk;
+
 mod pointer;
 pub use pointer::{ParseError, Pointer, PointerBuf};
 

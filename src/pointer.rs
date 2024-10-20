@@ -343,13 +343,53 @@ impl Pointer {
     /// [`ResolveError`]: `crate::resolve::ResolveError`
     /// [`Token`]: `crate::Token`
     /// [`Index`]: `crate::index::Index`
-
     #[cfg(feature = "resolve")]
     pub fn resolve_mut<'v, R: crate::ResolveMut>(
         &self,
         value: &'v mut R,
     ) -> Result<&'v mut R::Value, R::Error> {
         value.resolve_mut(self)
+    }
+
+    /// Returns an iterator that walks the path of this `Pointer` in `value`.
+    ///
+    /// ## Examples
+    /// ```
+    /// # use jsonptr::Pointer;
+    /// let data = serde_json::json!({ "foo": { "bar": "baz" } });
+    /// let ptr = jsonptr::Pointer::from_static("/foo/bar");
+    /// let foo = data.get("foo").unwrap();
+    /// let bar = foo.get("bar").unwrap();
+    /// assert_eq!(
+    ///     ptr.walk_to(&data).collect::<Vec<_>>(),
+    ///     vec![
+    ///         Ok((Pointer::from_static(""), &data)),
+    ///         Ok((Pointer::from_static("/foo"), foo)),
+    ///         Ok((Pointer::from_static("/foo/bar"), bar))
+    ///     ],
+    /// );
+    /// ```
+    #[cfg(feature = "resolve")]
+    pub fn walk_to<'v, W: crate::walk::Walk>(&self, value: &'v W) -> W::WalkTo<'v, '_> {
+        value.walk_to(self)
+    }
+
+    /// ```
+    /// # use jsonptr::Pointer;
+    /// let data = serde_json::json!({ "foo": { "bar": "baz" } });
+    /// let ptr = jsonptr::Pointer::from_static("/foo/bar");
+    /// let foo = data.get("foo").unwrap();
+    /// let bar = foo.get("bar").unwrap();
+    /// ```
+    ///
+    /// ## Errors
+    /// Returns [`ResolveError`] if the this pointer fails to resolve in `value`.
+    #[cfg(feature = "resolve")]
+    pub fn walk_from<'v, W: crate::walk::Walk>(
+        &self,
+        value: &'v W,
+    ) -> Result<W::WalkFrom<'v>, W::Error> {
+        value.walk_from(self.to_buf())
     }
 
     /// Finds the commonality between this and another `Pointer`.
