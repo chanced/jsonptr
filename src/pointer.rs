@@ -285,6 +285,8 @@ impl Pointer {
     ///
     /// Returns `None` if the index is out of bounds.
     ///
+    /// Note that this operation is O(n).
+    ///
     /// ## Example
     /// ```rust
     /// use jsonptr::{Pointer, Token};
