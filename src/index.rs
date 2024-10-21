@@ -177,7 +177,7 @@ impl FromStr for Index {
                     // representing a `usize` but not allowed in RFC 6901 array
                     // indices
                     Err(ParseIndexError::InvalidCharacter(InvalidCharacterError {
-                        source: s.to_owned(),
+                        source: String::from(s),
                         offset,
                     }))
                 },
