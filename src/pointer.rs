@@ -280,12 +280,26 @@ impl Pointer {
             .map(|s| unsafe { Self::new_unchecked(s) })
     }
 
-    /// Attempts to get a `Token` or a segment of the `Pointer`, depending on
-    /// the type of index.
+    /// Returns whether `self` has a suffix of `other`.
     ///
-    /// Returns `None` if the index is out of bounds.
+    /// Note that `Pointer::root` is only a valid suffix of itself.
+    pub fn ends_with(&self, other: &Self) -> bool {
+        (self.is_root() && other.is_root())
+            || (!other.is_root() && self.as_str().ends_with(&other.0))
+    }
+
+    /// Returns whether `self` has a prefix of `other.`
     ///
-    /// Note that this operation is O(n).
+    /// Note that `Pointer::root` is a valid prefix of any `Pointer` (including
+    /// itself).
+    pub fn starts_with(&self, other: &Self) -> bool {
+        self.as_str().starts_with(&other.0)
+            // ensure we end at a token boundary
+            && (other.len() == self.len() || self.0.as_bytes()[other.len()] == b'/')
+    }
+
+    /// Attempts to get a `Token` by the index. Returns `None` if the index is
+    /// out of bounds.
     ///
     /// ## Example
     /// ```rust
@@ -1370,6 +1384,58 @@ mod tests {
             .strip_prefix(Pointer::from_static("/example/pointer"))
             .unwrap();
         assert_eq!(stripped, "/to/some/value");
+    }
+
+    #[test]
+    fn ends_with() {
+        // positive cases
+        let p = Pointer::from_static("/foo/bar");
+        let q = Pointer::from_static("/bar");
+        assert!(p.ends_with(q));
+        let q = Pointer::from_static("/foo/bar");
+        assert!(p.ends_with(q));
+
+        // negative cases
+        let q = Pointer::from_static("/barz");
+        assert!(!p.ends_with(q));
+        let q = Pointer::from_static("/");
+        assert!(!p.ends_with(q));
+        let q = Pointer::from_static("");
+        assert!(!p.ends_with(q));
+        let q = Pointer::from_static("/qux/foo/bar");
+        assert!(!p.ends_with(q));
+
+        // edge case - both root
+        let p = Pointer::root();
+        let q = Pointer::root();
+        assert!(p.ends_with(q));
+    }
+
+    #[test]
+    fn starts_with() {
+        // positive cases
+        let p = Pointer::from_static("/foo/bar");
+        let q = Pointer::from_static("/foo");
+        assert!(p.starts_with(q));
+        let q = Pointer::from_static("/foo/bar");
+        assert!(p.starts_with(q));
+
+        // negative cases
+        let q = Pointer::from_static("/");
+        assert!(!p.starts_with(q));
+        let q = Pointer::from_static("/fo");
+        assert!(!p.starts_with(q));
+        let q = Pointer::from_static("/foo/");
+        assert!(!p.starts_with(q));
+
+        // edge cases: other is root
+        let p = Pointer::root();
+        let q = Pointer::root();
+        assert!(p.starts_with(q));
+        let p = Pointer::from_static("/");
+        assert!(p.starts_with(q));
+        let p = Pointer::from_static("/any/thing");
+        assert!(p.starts_with(q));
     }
 
     #[test]

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   Adds method `into_buf` for `Box<Pointer>` and `impl From<PathBuf> for Box<Pointer>`. 
 -   Adds unsafe associated methods `Pointer::new_unchecked` and `PointerBuf::new_unchecked` for
     external zero-cost construction.
+-   Adds `Pointer::starts_with` and `Pointer::ends_with` for prefix and suffix matching.
 -   Adds new `ParseIndexError` variant to express the presence non-digit characters in the token.
 -   Adds `Token::is_next` for checking if a token represents the `-` character.
 
