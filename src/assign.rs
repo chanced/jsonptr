@@ -557,7 +557,6 @@ mod tests {
     };
     use alloc::vec;
     use core::fmt::{Debug, Display};
-    use serde_json::json;
 
     #[derive(Debug)]
     struct Test<V: Assign> {
@@ -606,6 +605,8 @@ mod tests {
     #[test]
     #[cfg(feature = "json")]
     fn assign_json() {
+        use serde_json::json;
+
         Test::all([
             Test {
                 ptr: "/foo",
@@ -794,10 +795,8 @@ mod tests {
     #[test]
     #[cfg(feature = "toml")]
     fn assign_toml() {
-        use alloc::vec;
         use toml::{toml, Table, Value};
 
-        use crate::index::InvalidCharacterError;
         Test::all([
             Test {
                 data: Value::Table(toml::Table::new()),
