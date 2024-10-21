@@ -36,7 +36,7 @@
 //! ```
 
 use crate::Token;
-use alloc::{string::String, vec::Vec};
+use alloc::string::String;
 use core::{fmt, num::ParseIntError, str::FromStr};
 
 /// Represents an abstract index into an array.
@@ -173,13 +173,7 @@ impl FromStr for Index {
                 // this comes up with the `+` sign which is valid for
                 // representing a `usize` but not allowed in RFC 6901 array
                 // indices
-                let mut invalid: Vec<_> = s.chars().filter(|c| !c.is_ascii_digit()).collect();
-                // remove duplicate characters
-                invalid.sort_unstable();
-                invalid.dedup();
-                Err(ParseIndexError::InvalidCharacters(
-                    invalid.into_iter().collect(),
-                ))
+                Err(ParseIndexError::InvalidCharacter)
             }
         }
     }
@@ -281,8 +275,8 @@ pub enum ParseIndexError {
     InvalidInteger(ParseIntError),
     /// The Token contains leading zeros.
     LeadingZeros,
-    /// The Token contains non-digit characters.
-    InvalidCharacters(String),
+    /// The Token contains a non-digit character.
+    InvalidCharacter,
 }
 
 impl From<ParseIntError> for ParseIndexError {
@@ -301,10 +295,10 @@ impl fmt::Display for ParseIndexError {
                 f,
                 "token contained leading zeros, which are disallowed by RFC 6901"
             ),
-            ParseIndexError::InvalidCharacters(chars) => write!(
+            ParseIndexError::InvalidCharacter => write!(
                 f,
-                "token contains non-digit character(s) '{chars}', \
-                which are disallowed by RFC 6901",
+                "token contains the non-digit character '+', \
+                which is disallowed by RFC 6901",
             ),
         }
     }
@@ -315,7 +309,7 @@ impl std::error::Error for ParseIndexError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             ParseIndexError::InvalidInteger(source) => Some(source),
-            ParseIndexError::LeadingZeros | ParseIndexError::InvalidCharacters(_) => None,
+            ParseIndexError::LeadingZeros | ParseIndexError::InvalidCharacter => None,
         }
     }
 }
@@ -435,9 +429,9 @@ mod tests {
             "token contained leading zeros, which are disallowed by RFC 6901"
         );
         assert_eq!(
-            ParseIndexError::InvalidCharacters("+@".into()).to_string(),
-            "token contains non-digit character(s) '+@', \
-                which are disallowed by RFC 6901"
+            ParseIndexError::InvalidCharacter.to_string(),
+            "token contains the non-digit character '+', \
+                which is disallowed by RFC 6901"
         );
     }
 

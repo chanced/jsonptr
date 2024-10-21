@@ -773,7 +773,7 @@ mod tests {
                 assign: json!("foo"),
                 expected: Err(AssignError::FailedToParseIndex {
                     offset: 0,
-                    source: ParseIndexError::InvalidCharacters("+".into()),
+                    source: ParseIndexError::InvalidCharacter,
                 }),
                 expected_data: json!([]),
             },
