@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   Adds unsafe associated methods `Pointer::new_unchecked` and `PointerBuf::new_unchecked` for
     external zero-cost construction.
 -   Adds new `ParseIndexError` variant to express the presence non-digit characters in the token.
+-   Adds `Token::is_next` for checking if a token represents the `-` character.
 
 ### Changed
 

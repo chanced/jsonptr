@@ -251,6 +251,13 @@ impl<'a> Token<'a> {
     pub fn to_index(&self) -> Result<Index, ParseIndexError> {
         self.try_into()
     }
+
+    /// Returns if the `Token` is `-`, which stands for the next array index.
+    ///
+    /// See also [`Self::to_index`].
+    pub fn is_next(&self) -> bool {
+        matches!(self.to_index(), Ok(Index::Next))
+    }
 }
 
 macro_rules! impl_from_num {
@@ -490,5 +497,17 @@ mod tests {
                 Token::from_encoded_unchecked("c"),
             ]
         });
+    }
+
+    #[test]
+    fn is_next() {
+        let token = Token::new("-");
+        assert!(token.is_next());
+        let token = Token::new("0");
+        assert!(!token.is_next());
+        let token = Token::new("a");
+        assert!(!token.is_next());
+        let token = Token::new("");
+        assert!(!token.is_next());
     }
 }
