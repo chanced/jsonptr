@@ -7,6 +7,9 @@ use alloc::{
     vec::Vec,
 };
 use core::{borrow::Borrow, cmp::Ordering, ops::Deref, str::FromStr};
+use slice::SlicePointer;
+
+mod slice;
 
 /*
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -302,16 +305,24 @@ impl Pointer {
     /// ```rust
     /// use jsonptr::{Pointer, Token};
     ///
-    /// let ptr = Pointer::from_static("/foo/bar");
+    /// let ptr = Pointer::from_static("/foo/bar/qux");
     /// assert_eq!(ptr.get(0), Some("foo".into()));
     /// assert_eq!(ptr.get(1), Some("bar".into()));
-    /// assert_eq!(ptr.get(2), None);
+    /// assert_eq!(ptr.get(3), None);
+    /// assert_eq!(ptr.get(..), Some(Pointer::from_static("/foo/bar/qux")));
+    /// assert_eq!(ptr.get(..1), Some(Pointer::from_static("/foo")));
+    /// assert_eq!(ptr.get(1..3), Some(Pointer::from_static("/bar/qux")));
+    /// assert_eq!(ptr.get(1..=2), Some(Pointer::from_static("/bar/qux")));
     ///
     /// let ptr = Pointer::root();
     /// assert_eq!(ptr.get(0), None);
+    /// assert_eq!(ptr.get(..), Some(Pointer::root()));
     /// ```
-    pub fn get(&self, index: usize) -> Option<Token> {
-        self.tokens().nth(index).clone()
+    pub fn get<'p, I>(&'p self, index: I) -> Option<I::Output>
+    where
+        I: SlicePointer<'p>,
+    {
+        index.get(self)
     }
 
     /// Attempts to resolve a [`R::Value`] based on the path in this [`Pointer`].
