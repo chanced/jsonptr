@@ -233,7 +233,37 @@ impl Pointer {
     /// assert_eq!(tail, Pointer::from_static("/bar/baz"));
     /// assert_eq!(ptr.split_at(3), None);
     /// ```
+    #[deprecated(
+        since = "0.8.0",
+        note = "renamed to `split_at_offset` - `split_at` will become position (index) based by 1.0"
+    )]
     pub fn split_at(&self, offset: usize) -> Option<(&Self, &Self)> {
+        self.split_at_offset(offset)
+    }
+
+    /// Splits the `Pointer` at the given offset if the character at the index is
+    /// a separator backslash (`'/'`), returning `Some((head, tail))`. Otherwise,
+    /// returns `None`.
+    ///
+    /// For the following JSON Pointer, the following splits are possible (0, 4, 8):
+    /// ```text
+    /// /foo/bar/baz
+    /// ↑   ↑   ↑
+    /// 0   4   8
+    /// ```
+    /// All other indices will return `None`.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// # use jsonptr::Pointer;
+    /// let ptr = Pointer::from_static("/foo/bar/baz");
+    /// let (head, tail) = ptr.split_at(4).unwrap();
+    /// assert_eq!(head, Pointer::from_static("/foo"));
+    /// assert_eq!(tail, Pointer::from_static("/bar/baz"));
+    /// assert_eq!(ptr.split_at_offset(3), None);
+    /// ```
+    pub fn split_at_offset(&self, offset: usize) -> Option<(&Self, &Self)> {
         if self.0.as_bytes().get(offset).copied() != Some(b'/') {
             return None;
         }
@@ -393,7 +423,7 @@ impl Pointer {
             }
             idx += a.encoded().len() + 1;
         }
-        self.split_at(idx).map_or(self, |(head, _)| head)
+        self.split_at_offset(idx).map_or(self, |(head, _)| head)
     }
 
     /// Attempts to delete a `serde_json::Value` based upon the path in this
