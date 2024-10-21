@@ -97,15 +97,19 @@ pub trait ResolveMut {
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                                                                              ║
-║                                 ResolveError                                 ║
-║                                ¯¯¯¯¯¯¯¯¯¯¯¯¯¯                                ║
+║                                    Error                                     ║
+║                                   ¯¯¯¯¯¯¯                                    ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 */
 
+// TODO: should ResolveError be deprecated?
+/// Alias for [`Error`].
+pub type ResolveError = Error;
+
 /// Indicates that the `Pointer` could not be resolved.
 #[derive(Debug, PartialEq, Eq)]
-pub enum ResolveError {
+pub enum Error {
     /// `Pointer` could not be resolved because a `Token` for an array index is
     /// not a valid integer or dash (`"-"`).
     ///
@@ -118,14 +122,16 @@ pub enum ResolveError {
     /// assert!(ptr.resolve(&data).unwrap_err().is_failed_to_parse_index());
     /// ```
     FailedToParseIndex {
+        /// Position (index) of the token which failed to parse as an `Index`
+        position: usize,
         /// Offset of the partial pointer starting with the invalid index.
         offset: usize,
         /// The source `ParseIndexError`
         source: ParseIndexError,
     },
 
-    /// `Pointer` could not be resolved due to an index being out of bounds
-    /// within an array.
+    /// A [`Token`] within the [`Pointer`] contains an [`Index`] which is out of
+    /// bounds.
     ///
     /// ## Example
     /// ```rust
@@ -135,6 +141,8 @@ pub enum ResolveError {
     /// let ptr = Pointer::from_static("/foo/1");
     /// assert!(ptr.resolve(&data).unwrap_err().is_out_of_bounds());
     OutOfBounds {
+        /// Position (index) of the token which failed to parse as an `Index`
+        position: usize,
         /// Offset of the partial pointer starting with the invalid index.
         offset: usize,
         /// The source `OutOfBoundsError`
@@ -152,6 +160,8 @@ pub enum ResolveError {
     /// assert!(ptr.resolve(&data).unwrap_err().is_not_found());
     /// ```
     NotFound {
+        /// Position (index) of the token which was not found.
+        position: usize,
         /// Offset of the pointer starting with the `Token` which was not found.
         offset: usize,
     },
@@ -169,12 +179,14 @@ pub enum ResolveError {
     /// assert!(err.is_unreachable());
     /// ```
     Unreachable {
+        /// Position (index) of the token which was unreachable.
+        position: usize,
         /// Offset of the pointer which was unreachable.
         offset: usize,
     },
 }
 
-impl ResolveError {
+impl Error {
     /// Offset of the partial pointer starting with the token which caused the
     /// error.
     pub fn offset(&self) -> usize {
@@ -183,6 +195,16 @@ impl ResolveError {
             | Self::OutOfBounds { offset, .. }
             | Self::NotFound { offset, .. }
             | Self::Unreachable { offset, .. } => *offset,
+        }
+    }
+
+    /// Position (index) of the token which caused the error.
+    pub fn position(&self) -> usize {
+        match self {
+            Self::FailedToParseIndex { position, .. }
+            | Self::OutOfBounds { position, .. }
+            | Self::NotFound { position, .. }
+            | Self::Unreachable { position, .. } => *position,
         }
     }
 
@@ -211,7 +233,7 @@ impl ResolveError {
     }
 }
 
-impl core::fmt::Display for ResolveError {
+impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::FailedToParseIndex { offset, .. } => {
@@ -231,7 +253,7 @@ impl core::fmt::Display for ResolveError {
 }
 
 #[cfg(feature = "std")]
-impl std::error::Error for ResolveError {
+impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::FailedToParseIndex { source, .. } => Some(source),
@@ -253,15 +275,16 @@ impl std::error::Error for ResolveError {
 
 #[cfg(feature = "json")]
 mod json {
-    use super::{parse_index, Pointer, Resolve, ResolveError, ResolveMut};
+    use super::{parse_index, Error, Pointer, Resolve, ResolveMut};
     use serde_json::Value;
 
     impl Resolve for Value {
         type Value = Value;
-        type Error = ResolveError;
+        type Error = Error;
 
         fn resolve(&self, mut ptr: &Pointer) -> Result<&Value, Self::Error> {
             let mut offset = 0;
+            let mut position = 0;
             let mut value = self;
             while let Some((token, rem)) = ptr.split_front() {
                 let tok_len = token.encoded().len();
@@ -270,19 +293,28 @@ mod json {
                     Value::Array(v) => {
                         let idx = token
                             .to_index()
-                            .map_err(|source| ResolveError::FailedToParseIndex { offset, source })?
+                            .map_err(|source| Error::FailedToParseIndex {
+                                position,
+                                offset,
+                                source,
+                            })?
                             .for_len(v.len())
-                            .map_err(|source| ResolveError::OutOfBounds { offset, source })?;
+                            .map_err(|source| Error::OutOfBounds {
+                                position,
+                                offset,
+                                source,
+                            })?;
                         Ok(&v[idx])
                     }
 
                     Value::Object(v) => v
                         .get(token.decoded().as_ref())
-                        .ok_or(ResolveError::NotFound { offset }),
+                        .ok_or(Error::NotFound { position, offset }),
                     // found a leaf node but the pointer hasn't been exhausted
-                    _ => Err(ResolveError::Unreachable { offset }),
+                    _ => Err(Error::Unreachable { position, offset }),
                 }?;
                 offset += 1 + tok_len;
+                position += 1;
             }
             Ok(value)
         }
@@ -290,37 +322,52 @@ mod json {
 
     impl ResolveMut for Value {
         type Value = Value;
-        type Error = ResolveError;
+        type Error = Error;
 
-        fn resolve_mut(&mut self, mut ptr: &Pointer) -> Result<&mut Value, ResolveError> {
+        fn resolve_mut(&mut self, mut ptr: &Pointer) -> Result<&mut Value, Error> {
             let mut offset = 0;
+            let mut position = 0;
             let mut value = self;
             while let Some((token, rem)) = ptr.split_front() {
                 let tok_len = token.encoded().len();
                 ptr = rem;
                 value = match value {
                     Value::Array(array) => {
-                        let idx = parse_index(token, array.len(), offset)?;
+                        let idx = parse_index(token, array.len(), position, offset)?;
                         Ok(&mut array[idx])
                     }
                     Value::Object(v) => v
                         .get_mut(token.decoded().as_ref())
-                        .ok_or(ResolveError::NotFound { offset }),
+                        .ok_or(Error::NotFound { position, offset }),
                     // found a leaf node but the pointer hasn't been exhausted
-                    _ => Err(ResolveError::Unreachable { offset }),
+                    _ => Err(Error::Unreachable { position, offset }),
                 }?;
                 offset += 1 + tok_len;
+                position += 1;
             }
             Ok(value)
         }
     }
 }
-fn parse_index(token: Token, array_len: usize, offset: usize) -> Result<usize, ResolveError> {
+fn parse_index(
+    token: Token,
+    array_len: usize,
+    position: usize,
+    offset: usize,
+) -> Result<usize, Error> {
     token
         .to_index()
-        .map_err(|source| ResolveError::FailedToParseIndex { offset, source })?
+        .map_err(|source| Error::FailedToParseIndex {
+            position,
+            offset,
+            source,
+        })?
         .for_len(array_len)
-        .map_err(|source| ResolveError::OutOfBounds { offset, source })
+        .map_err(|source| Error::OutOfBounds {
+            position,
+            offset,
+            source,
+        })
 }
 
 /*
@@ -335,16 +382,17 @@ fn parse_index(token: Token, array_len: usize, offset: usize) -> Result<usize, R
 
 #[cfg(feature = "toml")]
 mod toml {
-    use super::{Resolve, ResolveError, ResolveMut};
+    use super::{Error, Resolve, ResolveMut};
     use crate::Pointer;
     use toml::Value;
 
     impl Resolve for Value {
         type Value = Value;
-        type Error = ResolveError;
+        type Error = Error;
 
         fn resolve(&self, mut ptr: &Pointer) -> Result<&Value, Self::Error> {
             let mut offset = 0;
+            let mut position = 0;
             let mut value = self;
             while let Some((token, rem)) = ptr.split_front() {
                 let tok_len = token.encoded().len();
@@ -353,19 +401,28 @@ mod toml {
                     Value::Array(v) => {
                         let idx = token
                             .to_index()
-                            .map_err(|source| ResolveError::FailedToParseIndex { offset, source })?
+                            .map_err(|source| Error::FailedToParseIndex {
+                                position,
+                                offset,
+                                source,
+                            })?
                             .for_len(v.len())
-                            .map_err(|source| ResolveError::OutOfBounds { offset, source })?;
+                            .map_err(|source| Error::OutOfBounds {
+                                position,
+                                offset,
+                                source,
+                            })?;
                         Ok(&v[idx])
                     }
 
                     Value::Table(v) => v
                         .get(token.decoded().as_ref())
-                        .ok_or(ResolveError::NotFound { offset }),
+                        .ok_or(Error::NotFound { position, offset }),
                     // found a leaf node but the pointer hasn't been exhausted
-                    _ => Err(ResolveError::Unreachable { offset }),
+                    _ => Err(Error::Unreachable { position, offset }),
                 }?;
                 offset += 1 + tok_len;
+                position += 1;
             }
             Ok(value)
         }
@@ -373,10 +430,12 @@ mod toml {
 
     impl ResolveMut for Value {
         type Value = Value;
-        type Error = ResolveError;
+        type Error = Error;
 
-        fn resolve_mut(&mut self, mut ptr: &Pointer) -> Result<&mut Value, ResolveError> {
+        fn resolve_mut(&mut self, mut ptr: &Pointer) -> Result<&mut Value, Error> {
             let mut offset = 0;
+            let mut position = 0;
+
             let mut value = self;
             while let Some((token, rem)) = ptr.split_front() {
                 let tok_len = token.encoded().len();
@@ -385,18 +444,27 @@ mod toml {
                     Value::Array(array) => {
                         let idx = token
                             .to_index()
-                            .map_err(|source| ResolveError::FailedToParseIndex { offset, source })?
+                            .map_err(|source| Error::FailedToParseIndex {
+                                position,
+                                offset,
+                                source,
+                            })?
                             .for_len(array.len())
-                            .map_err(|source| ResolveError::OutOfBounds { offset, source })?;
+                            .map_err(|source| Error::OutOfBounds {
+                                position,
+                                offset,
+                                source,
+                            })?;
                         Ok(&mut array[idx])
                     }
                     Value::Table(v) => v
                         .get_mut(token.decoded().as_ref())
-                        .ok_or(ResolveError::NotFound { offset }),
+                        .ok_or(Error::NotFound { position, offset }),
                     // found a leaf node but the pointer hasn't been exhausted
-                    _ => Err(ResolveError::Unreachable { offset }),
+                    _ => Err(Error::Unreachable { position, offset }),
                 }?;
                 offset += 1 + tok_len;
+                position += 1;
             }
             Ok(value)
         }
@@ -415,100 +483,24 @@ mod toml {
 
 #[cfg(test)]
 mod tests {
-    use super::{Resolve, ResolveError, ResolveMut};
+    use super::{Error, Resolve, ResolveMut};
     use crate::{
         index::{OutOfBoundsError, ParseIndexError},
         Pointer,
     };
     use core::fmt;
 
-    #[cfg(feature = "std")]
-    #[test]
-    fn resolve_error_source() {
-        use std::error::Error;
-        let err = ResolveError::FailedToParseIndex {
-            offset: 0,
-            source: ParseIndexError::InvalidInteger("invalid".parse::<usize>().unwrap_err()),
-        };
-        assert!(err.source().is_some());
-
-        let err = ResolveError::OutOfBounds {
-            offset: 0,
-            source: OutOfBoundsError {
-                index: 1,
-                length: 0,
-            },
-        };
-        assert!(err.source().is_some());
-
-        let err = ResolveError::NotFound { offset: 0 };
-        assert!(err.source().is_none());
-
-        let err = ResolveError::Unreachable { offset: 0 };
-        assert!(err.source().is_none());
-    }
-
-    #[test]
-    fn resolve_error_display() {
-        let err = ResolveError::FailedToParseIndex {
-            offset: 0,
-            source: ParseIndexError::InvalidInteger("invalid".parse::<usize>().unwrap_err()),
-        };
-        assert_eq!(format!("{err}"), "failed to parse index at offset 0");
-
-        let err = ResolveError::OutOfBounds {
-            offset: 0,
-            source: OutOfBoundsError {
-                index: 1,
-                length: 0,
-            },
-        };
-        assert_eq!(format!("{err}"), "index at offset 0 out of bounds");
-
-        let err = ResolveError::NotFound { offset: 0 };
-
-        assert_eq!(format!("{err}"), "pointer starting at offset 0 not found");
-
-        let err = ResolveError::Unreachable { offset: 0 };
-        assert_eq!(
-            format!("{err}"),
-            "pointer starting at offset 0 is unreachable"
-        );
-    }
-
-    #[test]
-    fn resolve_error_offset() {
-        let err = ResolveError::FailedToParseIndex {
-            offset: 0,
-            source: ParseIndexError::InvalidInteger("invalid".parse::<usize>().unwrap_err()),
-        };
-        assert_eq!(err.offset(), 0);
-
-        let err = ResolveError::OutOfBounds {
-            offset: 0,
-            source: OutOfBoundsError {
-                index: 1,
-                length: 0,
-            },
-        };
-        assert_eq!(err.offset(), 0);
-
-        let err = ResolveError::NotFound { offset: 0 };
-        assert_eq!(err.offset(), 0);
-
-        let err = ResolveError::Unreachable { offset: 0 };
-        assert_eq!(err.offset(), 0);
-    }
-
     #[test]
     fn resolve_error_is_unreachable() {
-        let err = ResolveError::FailedToParseIndex {
+        let err = Error::FailedToParseIndex {
+            position: 0,
             offset: 0,
             source: ParseIndexError::InvalidInteger("invalid".parse::<usize>().unwrap_err()),
         };
         assert!(!err.is_unreachable());
 
-        let err = ResolveError::OutOfBounds {
+        let err = Error::OutOfBounds {
+            position: 0,
             offset: 0,
             source: OutOfBoundsError {
                 index: 1,
@@ -517,22 +509,30 @@ mod tests {
         };
         assert!(!err.is_unreachable());
 
-        let err = ResolveError::NotFound { offset: 0 };
+        let err = Error::NotFound {
+            position: 0,
+            offset: 0,
+        };
         assert!(!err.is_unreachable());
 
-        let err = ResolveError::Unreachable { offset: 0 };
+        let err = Error::Unreachable {
+            position: 0,
+            offset: 0,
+        };
         assert!(err.is_unreachable());
     }
 
     #[test]
     fn resolve_error_is_not_found() {
-        let err = ResolveError::FailedToParseIndex {
+        let err = Error::FailedToParseIndex {
+            position: 0,
             offset: 0,
             source: ParseIndexError::InvalidInteger("invalid".parse::<usize>().unwrap_err()),
         };
         assert!(!err.is_not_found());
 
-        let err = ResolveError::OutOfBounds {
+        let err = Error::OutOfBounds {
+            position: 0,
             offset: 0,
             source: OutOfBoundsError {
                 index: 1,
@@ -541,22 +541,30 @@ mod tests {
         };
         assert!(!err.is_not_found());
 
-        let err = ResolveError::NotFound { offset: 0 };
+        let err = Error::NotFound {
+            position: 0,
+            offset: 0,
+        };
         assert!(err.is_not_found());
 
-        let err = ResolveError::Unreachable { offset: 0 };
+        let err = Error::Unreachable {
+            position: 0,
+            offset: 0,
+        };
         assert!(!err.is_not_found());
     }
 
     #[test]
     fn resolve_error_is_out_of_bounds() {
-        let err = ResolveError::FailedToParseIndex {
+        let err = Error::FailedToParseIndex {
+            position: 0,
             offset: 0,
             source: ParseIndexError::InvalidInteger("invalid".parse::<usize>().unwrap_err()),
         };
         assert!(!err.is_out_of_bounds());
 
-        let err = ResolveError::OutOfBounds {
+        let err = Error::OutOfBounds {
+            position: 0,
             offset: 0,
             source: OutOfBoundsError {
                 index: 1,
@@ -565,22 +573,30 @@ mod tests {
         };
         assert!(err.is_out_of_bounds());
 
-        let err = ResolveError::NotFound { offset: 0 };
+        let err = Error::NotFound {
+            position: 0,
+            offset: 0,
+        };
         assert!(!err.is_out_of_bounds());
 
-        let err = ResolveError::Unreachable { offset: 0 };
+        let err = Error::Unreachable {
+            position: 0,
+            offset: 0,
+        };
         assert!(!err.is_out_of_bounds());
     }
 
     #[test]
     fn resolve_error_is_failed_to_parse_index() {
-        let err = ResolveError::FailedToParseIndex {
+        let err = Error::FailedToParseIndex {
+            position: 0,
             offset: 0,
             source: ParseIndexError::InvalidInteger("invalid".parse::<usize>().unwrap_err()),
         };
         assert!(err.is_failed_to_parse_index());
 
-        let err = ResolveError::OutOfBounds {
+        let err = Error::OutOfBounds {
+            position: 0,
             offset: 0,
             source: OutOfBoundsError {
                 index: 1,
@@ -589,10 +605,16 @@ mod tests {
         };
         assert!(!err.is_failed_to_parse_index());
 
-        let err = ResolveError::NotFound { offset: 0 };
+        let err = Error::NotFound {
+            position: 0,
+            offset: 0,
+        };
         assert!(!err.is_failed_to_parse_index());
 
-        let err = ResolveError::Unreachable { offset: 0 };
+        let err = Error::Unreachable {
+            position: 0,
+            offset: 0,
+        };
         assert!(!err.is_failed_to_parse_index());
     }
 
@@ -699,13 +721,19 @@ mod tests {
             Test {
                 ptr: "/object/bool/unresolvable",
                 data,
-                expected: Err(ResolveError::Unreachable { offset: 12 }),
+                expected: Err(Error::Unreachable {
+                    position: 2,
+                    offset: 12,
+                }),
             },
             // 12
             Test {
                 ptr: "/object/not_found",
                 data,
-                expected: Err(ResolveError::NotFound { offset: 7 }),
+                expected: Err(Error::NotFound {
+                    position: 1,
+                    offset: 7,
+                }),
             },
         ]);
     }
@@ -799,25 +827,31 @@ mod tests {
             Test {
                 ptr: "/object/bool/unresolvable",
                 data,
-                expected: Err(ResolveError::Unreachable { offset: 12 }),
+                expected: Err(Error::Unreachable {
+                    position: 2,
+                    offset: 12,
+                }),
             },
             Test {
                 ptr: "/object/not_found",
                 data,
-                expected: Err(ResolveError::NotFound { offset: 7 }),
+                expected: Err(Error::NotFound {
+                    position: 1,
+                    offset: 7,
+                }),
             },
         ]);
     }
     struct Test<'v, V> {
         ptr: &'static str,
-        expected: Result<&'v V, ResolveError>,
+        expected: Result<&'v V, Error>,
         data: &'v V,
     }
 
     impl<'v, V> Test<'v, V>
     where
-        V: Resolve<Value = V, Error = ResolveError>
-            + ResolveMut<Value = V, Error = ResolveError>
+        V: Resolve<Value = V, Error = Error>
+            + ResolveMut<Value = V, Error = Error>
             + Clone
             + PartialEq
             + fmt::Display

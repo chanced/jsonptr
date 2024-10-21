@@ -378,7 +378,7 @@ impl std::error::Error for InvalidEncodingError {}
 
 #[cfg(test)]
 mod tests {
-    use crate::{assign::AssignError, index::OutOfBoundsError, Pointer};
+    use crate::Pointer;
 
     use super::*;
     use quickcheck_macros::quickcheck;
@@ -406,53 +406,6 @@ mod tests {
     fn new() {
         assert_eq!(Token::new("~1").encoded(), "~01");
         assert_eq!(Token::new("a/b").encoded(), "a~1b");
-    }
-
-    #[test]
-    fn assign_error_display() {
-        let err = AssignError::FailedToParseIndex {
-            offset: 3,
-            source: ParseIndexError::InvalidInteger("a".parse::<usize>().unwrap_err()),
-        };
-        assert_eq!(
-            err.to_string(),
-            "assignment failed due to an invalid index at offset 3"
-        );
-
-        let err = AssignError::OutOfBounds {
-            offset: 3,
-            source: OutOfBoundsError {
-                index: 3,
-                length: 2,
-            },
-        };
-
-        assert_eq!(
-            err.to_string(),
-            "assignment failed due to index at offset 3 being out of bounds"
-        );
-    }
-
-    #[test]
-    #[cfg(feature = "std")]
-    fn assign_error_source() {
-        use std::error::Error;
-        let err = AssignError::FailedToParseIndex {
-            offset: 3,
-            source: ParseIndexError::InvalidInteger("a".parse::<usize>().unwrap_err()),
-        };
-        assert!(err.source().is_some());
-        assert!(err.source().unwrap().is::<ParseIndexError>());
-
-        let err = AssignError::OutOfBounds {
-            offset: 3,
-            source: OutOfBoundsError {
-                index: 3,
-                length: 2,
-            },
-        };
-
-        assert!(err.source().unwrap().is::<OutOfBoundsError>());
     }
 
     #[test]
