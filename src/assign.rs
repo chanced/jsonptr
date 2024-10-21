@@ -552,10 +552,12 @@ mod toml {
 mod tests {
     use super::{Assign, AssignError};
     use crate::{
-        index::{OutOfBoundsError, ParseIndexError},
+        index::{InvalidCharacterError, OutOfBoundsError, ParseIndexError},
         Pointer,
     };
+    use alloc::vec;
     use core::fmt::{Debug, Display};
+    use serde_json::json;
 
     #[derive(Debug)]
     struct Test<V: Assign> {
@@ -604,10 +606,6 @@ mod tests {
     #[test]
     #[cfg(feature = "json")]
     fn assign_json() {
-        use alloc::vec;
-        use serde_json::json;
-
-        use crate::index::InvalidCharacterError;
         Test::all([
             Test {
                 ptr: "/foo",
