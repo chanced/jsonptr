@@ -75,5 +75,7 @@ pub mod index;
 mod component;
 pub use component::{Component, Components};
 
+pub mod error;
+
 #[cfg(test)]
 mod arbitrary;
