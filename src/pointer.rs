@@ -7,7 +7,7 @@ use alloc::{
     vec::Vec,
 };
 use core::{borrow::Borrow, cmp::Ordering, ops::Deref, str::FromStr};
-use slice::SlicePointer;
+use slice::PointerIndex;
 
 mod slice;
 
@@ -320,7 +320,7 @@ impl Pointer {
     /// ```
     pub fn get<'p, I>(&'p self, index: I) -> Option<I::Output>
     where
-        I: SlicePointer<'p>,
+        I: PointerIndex<'p>,
     {
         index.get(self)
     }
