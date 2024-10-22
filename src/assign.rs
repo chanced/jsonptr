@@ -37,8 +37,9 @@
 //!
 
 use crate::{
+    error::{Positioned, Span},
     index::{OutOfBoundsError, ParseIndexError},
-    Pointer,
+    Pointer, Token,
 };
 use core::fmt::{self, Debug};
 
@@ -139,12 +140,12 @@ pub trait Assign {
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 */
 
-// TODO: should AssignError be deprecated?
 /// Alias for [`Error`].
 ///
 /// Possible error returned from [`Assign`] implementations for
 /// [`serde_json::Value`] and
 /// [`toml::Value`](https://docs.rs/toml/0.8.14/toml/index.html).
+#[deprecated(since = "0.7")]
 pub type AssignError = Error;
 
 /// Possible error returned from [`Assign`] implementations for
@@ -153,26 +154,52 @@ pub type AssignError = Error;
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error {
     /// A [`Token`] within the [`Pointer`] failed to be parsed as an array index.
-    FailedToParseIndex {
-        /// Position (index) of the token which failed to parse as an `Index`
-        position: usize,
-        /// Offset of the partial pointer starting with the invalid index.
-        offset: usize,
-        /// The source [`ParseIndexError`]
-        source: ParseIndexError,
-    },
+    FailedToParseIndex(Positioned<ParseIndexError>),
 
     /// A [`Token`] within the [`Pointer`] contains an [`Index`] which is out of bounds.
     ///
     /// The current or resulting array's length is less than the index.
-    OutOfBounds {
-        /// Position (index) of the token which failed to parse as an `Index`
+    OutOfBounds(Positioned<OutOfBoundsError>),
+}
+
+impl Error {
+    pub fn offset(&self) -> usize {
+        match self {
+            Self::FailedToParseIndex(spanned) => spanned.offset(),
+            Self::OutOfBounds(spanned) => spanned.offset(),
+        }
+    }
+    pub fn span(&self) -> Span {
+        match self {
+            Self::FailedToParseIndex(spanned) => spanned.span(),
+            Self::OutOfBounds(spanned) => spanned.span(),
+        }
+    }
+
+    pub(crate) fn failed_to_parse_index(
+        source: ParseIndexError,
+        token: &Token,
         position: usize,
-        /// Offset of the partial pointer starting with the invalid index.
         offset: usize,
-        /// The source [`OutOfBoundsError`]
+    ) -> Self {
+        Self::FailedToParseIndex(Positioned::new(
+            source,
+            position,
+            Span::for_token(token, offset),
+        ))
+    }
+    pub(crate) fn out_of_bounds(
         source: OutOfBoundsError,
-    },
+        token: &Token,
+        position: usize,
+        offset: usize,
+    ) -> Self {
+        Self::OutOfBounds(Positioned::new(
+            source,
+            position,
+            Span::for_token(token, offset),
+        ))
+    }
 }
 
 impl fmt::Display for Error {
@@ -182,10 +209,7 @@ impl fmt::Display for Error {
                 write!(f, "assignment failed due to an invalid index")
             }
             Self::OutOfBounds { .. } => {
-                write!(
-                    f,
-                    "assignment failed due to index an index being out of bounds"
-                )
+                write!(f, "assignment failed due to an index being out of bounds")
             }
         }
     }
@@ -195,8 +219,8 @@ impl fmt::Display for Error {
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::FailedToParseIndex { source, .. } => Some(source),
-            Self::OutOfBounds { source, .. } => Some(source),
+            Self::FailedToParseIndex(source) => Some(source),
+            Self::OutOfBounds(source) => Some(source),
         }
     }
 }
@@ -304,17 +328,9 @@ mod json {
         // parsing the index
         let idx = token
             .to_index()
-            .map_err(|source| Error::FailedToParseIndex {
-                position,
-                offset,
-                source,
-            })?
+            .map_err(|source| Error::failed_to_parse_index(source, &token, position, offset))?
             .for_len_incl(array.len())
-            .map_err(|source| Error::OutOfBounds {
-                position,
-                offset,
-                source,
-            })?;
+            .map_err(|source| Error::out_of_bounds(source, &token, position, offset))?;
 
         debug_assert!(idx <= array.len());
 
@@ -487,17 +503,9 @@ mod toml {
         // parsing the index
         let idx = token
             .to_index()
-            .map_err(|source| Error::FailedToParseIndex {
-                position,
-                offset,
-                source,
-            })?
+            .map_err(|source| Error::failed_to_parse_index(source, &token, position, offset))?
             .for_len_incl(array.len())
-            .map_err(|source| Error::OutOfBounds {
-                position,
-                offset,
-                source,
-            })?;
+            .map_err(|source| Error::out_of_bounds(source, &token, position, offset))?;
 
         debug_assert!(idx <= array.len());
 
@@ -637,6 +645,8 @@ mod tests {
     fn assign_json() {
         use alloc::vec;
         use serde_json::json;
+
+        use crate::Token;
         [
             Test {
                 ptr: "/foo",
@@ -761,14 +771,15 @@ mod tests {
                 ptr: "/1",
                 data: json!([]),
                 assign: json!("foo"),
-                expected: Err(Error::OutOfBounds {
-                    position: 0,
-                    offset: 0,
-                    source: OutOfBoundsError {
-                        index: 1,
+                expected: Err(Error::out_of_bounds(
+                    OutOfBoundsError {
                         length: 0,
+                        index: 1,
                     },
-                }),
+                    &Token::new("foo"),
+                    0,
+                    0,
+                )),
                 expected_data: json!([]),
             },
             Test {
@@ -782,22 +793,24 @@ mod tests {
                 ptr: "/a",
                 data: json!([]),
                 assign: json!("foo"),
-                expected: Err(Error::FailedToParseIndex {
-                    position: 0,
-                    offset: 0,
-                    source: ParseIndexError::InvalidInteger(usize::from_str("foo").unwrap_err()),
-                }),
+                expected: Err(Error::failed_to_parse_index(
+                    ParseIndexError::InvalidInteger(usize::from_str("a").unwrap_err()),
+                    &Token::new("a"),
+                    0,
+                    0,
+                )),
                 expected_data: json!([]),
             },
             Test {
                 ptr: "/002",
                 data: json!([]),
                 assign: json!("foo"),
-                expected: Err(Error::FailedToParseIndex {
-                    position: 0,
-                    offset: 0,
-                    source: ParseIndexError::LeadingZeros,
-                }),
+                expected: Err(Error::failed_to_parse_index(
+                    ParseIndexError::LeadingZeros,
+                    &Token::new("002"),
+                    0,
+                    0,
+                )),
                 expected_data: json!([]),
             },
             Test {

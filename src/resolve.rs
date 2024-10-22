@@ -34,6 +34,7 @@
 //!
 //!
 use crate::{
+    error::Positioned,
     index::{OutOfBoundsError, ParseIndexError},
     Pointer, Token,
 };
@@ -121,14 +122,7 @@ pub enum Error {
     /// let ptr = Pointer::from_static("/foo/invalid");
     /// assert!(ptr.resolve(&data).unwrap_err().is_failed_to_parse_index());
     /// ```
-    FailedToParseIndex {
-        /// Position (index) of the token which failed to parse as an `Index`
-        position: usize,
-        /// Offset of the partial pointer starting with the invalid index.
-        offset: usize,
-        /// The source `ParseIndexError`
-        source: ParseIndexError,
-    },
+    FailedToParseIndex(Positioned<ParseIndexError>),
 
     /// A [`Token`] within the [`Pointer`] contains an [`Index`] which is out of
     /// bounds.
