@@ -36,7 +36,7 @@
 //! ```
 
 use crate::Token;
-use alloc::{string::String, vec::Vec};
+use alloc::string::String;
 use core::{fmt, num::ParseIntError, str::FromStr};
 
 /// Represents an abstract index into an array.
@@ -166,21 +166,22 @@ impl FromStr for Index {
         } else if s.starts_with('0') && s != "0" {
             Err(ParseIndexError::LeadingZeros)
         } else {
-            let idx = s.parse::<usize>().map(Index::Num)?;
-            if s.chars().all(|c| c.is_ascii_digit()) {
-                Ok(idx)
-            } else {
-                // this comes up with the `+` sign which is valid for
-                // representing a `usize` but not allowed in RFC 6901 array
-                // indices
-                let mut invalid: Vec<_> = s.chars().filter(|c| !c.is_ascii_digit()).collect();
-                // remove duplicate characters
-                invalid.sort_unstable();
-                invalid.dedup();
-                Err(ParseIndexError::InvalidCharacters(
-                    invalid.into_iter().collect(),
-                ))
-            }
+            s.chars().position(|c| !c.is_ascii_digit()).map_or_else(
+                || {
+                    s.parse::<usize>()
+                        .map(Index::Num)
+                        .map_err(ParseIndexError::from)
+                },
+                |offset| {
+                    // this comes up with the `+` sign which is valid for
+                    // representing a `usize` but not allowed in RFC 6901 array
+                    // indices
+                    Err(ParseIndexError::InvalidCharacter(InvalidCharacterError {
+                        source: String::from(s),
+                        offset,
+                    }))
+                },
+            )
         }
     }
 }
@@ -274,15 +275,15 @@ impl std::error::Error for OutOfBoundsError {}
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 */
 
-/// Indicates that the `Token` could not be parsed as valid RFC 6901 index.
+/// Indicates that the `Token` could not be parsed as valid RFC 6901 array index.
 #[derive(Debug, PartialEq, Eq)]
 pub enum ParseIndexError {
     /// The Token does not represent a valid integer.
     InvalidInteger(ParseIntError),
     /// The Token contains leading zeros.
     LeadingZeros,
-    /// The Token contains non-digit characters.
-    InvalidCharacters(String),
+    /// The Token contains a non-digit character.
+    InvalidCharacter(InvalidCharacterError),
 }
 
 impl From<ParseIntError> for ParseIndexError {
@@ -301,11 +302,7 @@ impl fmt::Display for ParseIndexError {
                 f,
                 "token contained leading zeros, which are disallowed by RFC 6901"
             ),
-            ParseIndexError::InvalidCharacters(chars) => write!(
-                f,
-                "token contains non-digit character(s) '{chars}', \
-                which are disallowed by RFC 6901",
-            ),
+            ParseIndexError::InvalidCharacter(err) => err.fmt(f),
         }
     }
 }
@@ -315,10 +312,55 @@ impl std::error::Error for ParseIndexError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             ParseIndexError::InvalidInteger(source) => Some(source),
-            ParseIndexError::LeadingZeros | ParseIndexError::InvalidCharacters(_) => None,
+            ParseIndexError::InvalidCharacter(source) => Some(source),
+            ParseIndexError::LeadingZeros => None,
         }
     }
 }
+
+/// Indicates that a non-digit character was found when parsing the RFC 6901 array index.
+#[derive(Debug, PartialEq, Eq)]
+pub struct InvalidCharacterError {
+    pub(crate) source: String,
+    pub(crate) offset: usize,
+}
+
+impl InvalidCharacterError {
+    /// Returns the offset of the character in the string.
+    ///
+    /// This offset is given in characters, not in bytes.
+    pub fn offset(&self) -> usize {
+        self.offset
+    }
+
+    /// Returns the source string.
+    pub fn source(&self) -> &str {
+        &self.source
+    }
+
+    /// Returns the offending character.
+    #[allow(clippy::missing_panics_doc)]
+    pub fn char(&self) -> char {
+        self.source
+            .chars()
+            .nth(self.offset)
+            .expect("char was found at offset")
+    }
+}
+
+impl fmt::Display for InvalidCharacterError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "token contains the non-digit character '{}', \
+                which is disallowed by RFC 6901",
+            self.char()
+        )
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for InvalidCharacterError {}
 
 /*
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -435,9 +477,13 @@ mod tests {
             "token contained leading zeros, which are disallowed by RFC 6901"
         );
         assert_eq!(
-            ParseIndexError::InvalidCharacters("+@".into()).to_string(),
-            "token contains non-digit character(s) '+@', \
-                which are disallowed by RFC 6901"
+            ParseIndexError::InvalidCharacter(InvalidCharacterError {
+                source: "+10".into(),
+                offset: 0
+            })
+            .to_string(),
+            "token contains the non-digit character '+', \
+                which is disallowed by RFC 6901"
         );
     }
 
