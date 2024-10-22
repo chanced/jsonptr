@@ -2,13 +2,13 @@ use super::Pointer;
 use crate::Token;
 use core::ops::Bound;
 
-pub trait SlicePointer<'p>: private::Sealed {
+pub trait PointerIndex<'p>: private::Sealed {
     type Output: 'p;
 
     fn get(self, pointer: &'p Pointer) -> Option<Self::Output>;
 }
 
-impl<'p> SlicePointer<'p> for usize {
+impl<'p> PointerIndex<'p> for usize {
     type Output = Token<'p>;
 
     fn get(self, pointer: &'p Pointer) -> Option<Self::Output> {
@@ -16,7 +16,7 @@ impl<'p> SlicePointer<'p> for usize {
     }
 }
 
-impl<'p> SlicePointer<'p> for core::ops::Range<usize> {
+impl<'p> PointerIndex<'p> for core::ops::Range<usize> {
     type Output = &'p Pointer;
 
     fn get(self, pointer: &'p Pointer) -> Option<Self::Output> {
@@ -56,7 +56,7 @@ impl<'p> SlicePointer<'p> for core::ops::Range<usize> {
     }
 }
 
-impl<'p> SlicePointer<'p> for core::ops::RangeFrom<usize> {
+impl<'p> PointerIndex<'p> for core::ops::RangeFrom<usize> {
     type Output = &'p Pointer;
 
     fn get(self, pointer: &'p Pointer) -> Option<Self::Output> {
@@ -81,7 +81,7 @@ impl<'p> SlicePointer<'p> for core::ops::RangeFrom<usize> {
     }
 }
 
-impl<'p> SlicePointer<'p> for core::ops::RangeTo<usize> {
+impl<'p> PointerIndex<'p> for core::ops::RangeTo<usize> {
     type Output = &'p Pointer;
 
     fn get(self, pointer: &'p Pointer) -> Option<Self::Output> {
@@ -114,7 +114,7 @@ impl<'p> SlicePointer<'p> for core::ops::RangeTo<usize> {
     }
 }
 
-impl<'p> SlicePointer<'p> for core::ops::RangeFull {
+impl<'p> PointerIndex<'p> for core::ops::RangeFull {
     type Output = &'p Pointer;
 
     fn get(self, pointer: &'p Pointer) -> Option<Self::Output> {
@@ -122,7 +122,7 @@ impl<'p> SlicePointer<'p> for core::ops::RangeFull {
     }
 }
 
-impl<'p> SlicePointer<'p> for core::ops::RangeInclusive<usize> {
+impl<'p> PointerIndex<'p> for core::ops::RangeInclusive<usize> {
     type Output = &'p Pointer;
 
     fn get(self, pointer: &'p Pointer) -> Option<Self::Output> {
@@ -160,7 +160,7 @@ impl<'p> SlicePointer<'p> for core::ops::RangeInclusive<usize> {
     }
 }
 
-impl<'p> SlicePointer<'p> for core::ops::RangeToInclusive<usize> {
+impl<'p> PointerIndex<'p> for core::ops::RangeToInclusive<usize> {
     type Output = &'p Pointer;
 
     fn get(self, pointer: &'p Pointer) -> Option<Self::Output> {
@@ -190,7 +190,7 @@ impl<'p> SlicePointer<'p> for core::ops::RangeToInclusive<usize> {
     }
 }
 
-impl<'p> SlicePointer<'p> for (Bound<usize>, Bound<usize>) {
+impl<'p> PointerIndex<'p> for (Bound<usize>, Bound<usize>) {
     type Output = &'p Pointer;
 
     fn get(self, pointer: &'p Pointer) -> Option<Self::Output> {
