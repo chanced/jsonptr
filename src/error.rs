@@ -1,22 +1,31 @@
-use core::iter::once;
+use core::{borrow::Borrow, iter::once};
+use std::borrow::Cow;
 
-use crate::Token;
+use serde_json::Value;
+
+use crate::{Pointer, Token};
 
 /// Data structures utilized in errors
 
 /// Represents a span of text within a JSON Pointer
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Span {
     pub offset: usize,
     pub len: usize,
 }
 
 impl Span {
+    pub const fn new(offset: usize, len: usize) -> Self {
+        Self { offset, len }
+    }
     pub fn for_token(token: &Token, offset: usize) -> Self {
         Self {
             offset,
             len: token.encoded().len(),
         }
+    }
+    pub const fn empty() -> Self {
+        Self { offset: 0, len: 0 }
     }
 }
 
@@ -202,4 +211,19 @@ where
     fn diagnostic_source(&self) -> Option<&dyn miette::Diagnostic> {
         self.source.diagnostic_source()
     }
+}
+
+pub struct Report<'a, E, T: ToOwned + ?Sized> {
+    pub source: E,
+    pub source_code: Cow<'a, T>,
+}
+impl<'a, E, T: ToOwned> Report<'a, E, T> {}
+
+pub trait Reporter<T> {
+    type Reporter<'e>
+    where
+        Self: 'e;
+
+    // TODO: naming, alts: report, include_err_report, with_err_report, ???
+    fn report_err(&'_ self) -> Self::Reporter<'_>;
 }

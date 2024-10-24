@@ -1,4 +1,8 @@
-use crate::{token::InvalidEncodingError, Components, Token, Tokens};
+use crate::{
+    error::{Report, Span, Spanned},
+    token::InvalidEncodingError,
+    Components, Token, Tokens,
+};
 use alloc::{
     borrow::ToOwned,
     boxed::Box,
@@ -8,6 +12,7 @@ use alloc::{
 };
 use core::{borrow::Borrow, cmp::Ordering, ops::Deref, str::FromStr};
 use slice::SlicePointer;
+use std::borrow::Cow;
 
 mod slice;
 
@@ -1021,6 +1026,32 @@ impl PointerBuf {
     }
 }
 
+pub struct BufReporter<'p> {
+    ptr: &'p mut PointerBuf,
+}
+
+impl<'p> BufReporter<'p> {
+    /// Attempts to replace a `Token` by the index, returning the replaced
+    /// `Token` if it already exists. Returns `None` otherwise.
+    ///
+    /// ## Errors
+    /// A [`ReplaceError`] is returned if the index is out of bounds.
+    pub fn replace<'t>(
+        mut self,
+        index: usize,
+        token: impl Into<Token<'t>>,
+    ) -> Result<Option<Token<'t>>, Report<'p, ReplaceError, Pointer>>
+    where
+        'p: 't,
+    {
+        let result = self.ptr.replace(index, token);
+        result.map_err(|err| Report {
+            source: err,
+            source_code: Cow::Borrowed(self.ptr.as_ptr()),
+        })
+    }
+}
+
 impl FromStr for PointerBuf {
     type Err = ParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -1131,7 +1162,7 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
     }
     let bytes = value.as_bytes();
     if bytes[0] != b'/' {
-        return Err(ParseError::NoLeadingBackslash);
+        return Err(ParseError::no_leading_backslash());
     }
     let mut ptr_offset = 0; // offset within the pointer of the most recent '/' separator
     let mut tok_offset = 0; // offset within the current token
@@ -1164,10 +1195,12 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
                     //  ptr_offset  |
                     //          tok_offset
                     //
-                    return Err(ParseError::InvalidEncoding {
-                        offset: ptr_offset,
-                        source: InvalidEncodingError { offset: tok_offset },
-                    });
+
+                    return Err(ParseError::invalid_encoding(
+                        InvalidEncodingError { offset: tok_offset },
+                        ptr_offset,
+                        i + 1 < bytes.len(), // whether or not there is a next character
+                    ));
                 }
                 // already checked the next character, so we skip it
                 i += 1;
@@ -1184,6 +1217,17 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
     Ok(value)
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct NoLeadingBackslashError;
+
+impl fmt::Display for NoLeadingBackslashError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("json pointer is malformed as it does not start with a backslash ('/')")
+    }
+}
+#[cfg(feature = "std")]
+impl std::error::Error for NoLeadingBackslashError {}
+
 /*
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 ╔══════════════════════════════════════════════════════════════════════════════╗
@@ -1198,42 +1242,22 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
 #[derive(Debug, PartialEq)]
 pub enum ParseError {
     /// `Pointer` did not start with a backslash (`'/'`).
-    NoLeadingBackslash,
+    NoLeadingBackslash(Spanned<NoLeadingBackslashError>),
 
     /// `Pointer` contained invalid encoding (e.g. `~` not followed by `0` or
     /// `1`).
-    InvalidEncoding {
-        /// Offset of the partial pointer starting with the token that contained
-        /// the invalid encoding
-        offset: usize,
-        /// The source `InvalidEncodingError`
-        source: InvalidEncodingError,
-    },
-}
-
-impl fmt::Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::NoLeadingBackslash { .. } => {
-                write!(
-                    f,
-                    "json pointer is malformed as it does not start with a backslash ('/')"
-                )
-            }
-            Self::InvalidEncoding { source, .. } => write!(f, "{source}"),
-        }
-    }
+    InvalidEncoding(Spanned<InvalidEncodingError>),
 }
 
 impl ParseError {
     /// Returns `true` if this error is `NoLeadingBackslash`
     pub fn is_no_leading_backslash(&self) -> bool {
-        matches!(self, Self::NoLeadingBackslash { .. })
+        matches!(self, Self::NoLeadingBackslash(_))
     }
 
     /// Returns `true` if this error is `InvalidEncoding`    
     pub fn is_invalid_encoding(&self) -> bool {
-        matches!(self, Self::InvalidEncoding { .. })
+        matches!(self, Self::InvalidEncoding(_))
     }
 
     /// Offset of the partial pointer starting with the token which caused the error.
@@ -1249,9 +1273,9 @@ impl ParseError {
     /// assert_eq!(err.pointer_offset(), 4)
     /// ```
     pub fn pointer_offset(&self) -> usize {
-        match *self {
-            Self::NoLeadingBackslash { .. } => 0,
-            Self::InvalidEncoding { offset, .. } => offset,
+        match self {
+            Self::NoLeadingBackslash(_) => 0,
+            Self::InvalidEncoding(e) => e.offset(),
         }
     }
 
@@ -1270,8 +1294,8 @@ impl ParseError {
     /// ```
     pub fn source_offset(&self) -> usize {
         match self {
-            Self::NoLeadingBackslash { .. } => 0,
-            Self::InvalidEncoding { source, .. } => source.offset,
+            Self::NoLeadingBackslash(_) => 0,
+            Self::InvalidEncoding(e) => e.source().offset,
         }
     }
 
@@ -1289,14 +1313,40 @@ impl ParseError {
     pub fn complete_offset(&self) -> usize {
         self.source_offset() + self.pointer_offset()
     }
+
+    const fn invalid_encoding(
+        source: InvalidEncodingError,
+        offset: usize,
+        has_next: bool,
+    ) -> ParseError {
+        let len = if has_next { 2 } else { 1 };
+        Self::InvalidEncoding(Spanned::new(Span::new(offset, len), source))
+    }
+
+    const fn no_leading_backslash() -> ParseError {
+        Self::NoLeadingBackslash(Spanned::new(Span::empty(), NoLeadingBackslashError))
+    }
+}
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NoLeadingBackslash { .. } => {
+                write!(
+                    f,
+                    "json pointer is malformed as it does not start with a backslash ('/')"
+                )
+            }
+            Self::InvalidEncoding(source) => write!(f, "{source}"),
+        }
+    }
 }
 
 #[cfg(feature = "std")]
 impl std::error::Error for ParseError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::InvalidEncoding { source, .. } => Some(source),
-            Self::NoLeadingBackslash => None,
+            Self::InvalidEncoding(source) => Some(source),
+            Self::NoLeadingBackslash(source) => Some(source),
         }
     }
 }
@@ -1439,63 +1489,70 @@ mod tests {
     }
 
     #[test]
-    fn parse_error_is_no_leading_backslash() {
-        let err = ParseError::NoLeadingBackslash;
-        assert!(err.is_no_leading_backslash());
-        assert!(!err.is_invalid_encoding());
-    }
-
-    #[test]
-    fn parse_error_is_invalid_encoding() {
-        let err = ParseError::InvalidEncoding {
-            offset: 0,
-            source: InvalidEncodingError { offset: 1 },
-        };
-        assert!(!err.is_no_leading_backslash());
-        assert!(err.is_invalid_encoding());
-    }
-
-    #[test]
     fn parse() {
-        let tests = [
-            ("", Ok("")),
-            ("/", Ok("/")),
-            ("/foo", Ok("/foo")),
-            ("/foo/bar", Ok("/foo/bar")),
-            ("/foo/bar/baz", Ok("/foo/bar/baz")),
-            ("/foo/bar/baz/~0", Ok("/foo/bar/baz/~0")),
-            ("/foo/bar/baz/~1", Ok("/foo/bar/baz/~1")),
-            ("/foo/bar/baz/~01", Ok("/foo/bar/baz/~01")),
-            ("/foo/bar/baz/~10", Ok("/foo/bar/baz/~10")),
-            ("/foo/bar/baz/~11", Ok("/foo/bar/baz/~11")),
-            ("/foo/bar/baz/~1/~0", Ok("/foo/bar/baz/~1/~0")),
-            ("missing-slash", Err(ParseError::NoLeadingBackslash)),
-            (
-                "/~",
-                Err(ParseError::InvalidEncoding {
-                    offset: 0,
-                    source: InvalidEncodingError { offset: 1 },
-                }),
-            ),
-            (
-                "/~2",
-                Err(ParseError::InvalidEncoding {
-                    offset: 0,
-                    source: InvalidEncodingError { offset: 1 },
-                }),
-            ),
-            (
-                "/~a",
-                Err(ParseError::InvalidEncoding {
-                    offset: 0,
-                    source: InvalidEncodingError { offset: 1 },
-                }),
-            ),
-        ];
-        for (input, expected) in tests {
-            let actual = Pointer::parse(input).map(Pointer::as_str);
-            assert_eq!(actual, expected);
-        }
+        assert_eq!(Pointer::parse("").map(Pointer::as_str), Ok(""));
+        assert_eq!(Pointer::parse("/").map(Pointer::as_str), Ok("/"));
+        assert_eq!(Pointer::parse("/foo").map(Pointer::as_str), Ok("/foo"));
+        assert_eq!(
+            Pointer::parse("/foo/bar").map(Pointer::as_str),
+            Ok("/foo/bar")
+        );
+        assert_eq!(
+            Pointer::parse("/foo/bar/baz").map(Pointer::as_str),
+            Ok("/foo/bar/baz")
+        );
+        assert_eq!(
+            Pointer::parse("/foo/bar/baz/~0").map(Pointer::as_str),
+            Ok("/foo/bar/baz/~0")
+        );
+        assert_eq!(
+            Pointer::parse("/foo/bar/baz/~1").map(Pointer::as_str),
+            Ok("/foo/bar/baz/~1")
+        );
+        assert_eq!(
+            Pointer::parse("/foo/bar/baz/~01").map(Pointer::as_str),
+            Ok("/foo/bar/baz/~01")
+        );
+        assert_eq!(
+            Pointer::parse("/foo/bar/baz/~10").map(Pointer::as_str),
+            Ok("/foo/bar/baz/~10")
+        );
+        assert_eq!(
+            Pointer::parse("/foo/bar/baz/~11").map(Pointer::as_str),
+            Ok("/foo/bar/baz/~11")
+        );
+        assert_eq!(
+            Pointer::parse("/foo/bar/baz/~1/~0").map(Pointer::as_str),
+            Ok("/foo/bar/baz/~1/~0")
+        );
+        assert_eq!(
+            Pointer::parse("missing-slash").map(Pointer::as_str),
+            Err(ParseError::no_leading_backslash())
+        );
+        assert_eq!(
+            Pointer::parse("/~").map(Pointer::as_str),
+            Err(ParseError::invalid_encoding(
+                InvalidEncodingError { offset: 1 },
+                0,
+                false
+            ))
+        );
+        assert_eq!(
+            Pointer::parse("/~2").map(Pointer::as_str),
+            Err(ParseError::invalid_encoding(
+                InvalidEncodingError { offset: 1 },
+                0,
+                true
+            ))
+        );
+        assert_eq!(
+            Pointer::parse("/~a").map(Pointer::as_str),
+            Err(ParseError::invalid_encoding(
+                InvalidEncodingError { offset: 1 },
+                0,
+                true
+            ))
+        );
     }
 
     #[test]
@@ -1508,9 +1565,6 @@ mod tests {
         let err = Pointer::parse("invalid~encoding").unwrap_err();
         assert_eq!(err.pointer_offset(), 0);
         assert_eq!(err.source_offset(), 0);
-
-        let err = Pointer::parse("no-leading/slash").unwrap_err();
-        assert!(err.source().is_none());
     }
 
     #[test]
@@ -1520,10 +1574,7 @@ mod tests {
         let err = Pointer::parse("/foo/invalid~encoding").unwrap_err();
         assert!(err.source().is_some());
         let source = err.source().unwrap();
-        assert!(source.is::<InvalidEncodingError>());
-
-        let err = Pointer::parse("no-leading/slash").unwrap_err();
-        assert!(err.source().is_none());
+        assert!(source.is::<Spanned<InvalidEncodingError>>());
     }
 
     #[test]
@@ -2265,13 +2316,6 @@ mod tests {
             let intersection = a.intersection(&b);
             assert_eq!(intersection, base);
         }
-    }
-    #[test]
-    fn parse_error_display() {
-        assert_eq!(
-            ParseError::NoLeadingBackslash.to_string(),
-            "json pointer is malformed as it does not start with a backslash ('/')"
-        );
     }
 
     #[test]

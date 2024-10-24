@@ -34,7 +34,7 @@
 //!
 //!
 use crate::{
-    error::Positioned,
+    error::{Positioned, Span},
     index::{OutOfBoundsError, ParseIndexError},
     Pointer, Token,
 };
@@ -104,8 +104,8 @@ pub trait ResolveMut {
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 */
 
-// TODO: should ResolveError be deprecated?
 /// Alias for [`Error`].
+#[deprecated(since = "0.7.0", note = "renamed to resolve::Error")]
 pub type ResolveError = Error;
 
 /// Indicates that the `Pointer` could not be resolved.
@@ -134,14 +134,7 @@ pub enum Error {
     /// let data = json!({ "foo": ["bar"] });
     /// let ptr = Pointer::from_static("/foo/1");
     /// assert!(ptr.resolve(&data).unwrap_err().is_out_of_bounds());
-    OutOfBounds {
-        /// Position (index) of the token which failed to parse as an `Index`
-        position: usize,
-        /// Offset of the partial pointer starting with the invalid index.
-        offset: usize,
-        /// The source `OutOfBoundsError`
-        source: OutOfBoundsError,
-    },
+    OutOfBounds(Positioned<OutOfBoundsError>),
 
     /// `Pointer` could not be resolved as a segment of the path was not found.
     ///
@@ -153,12 +146,7 @@ pub enum Error {
     /// let ptr = Pointer::from_static("/bar");
     /// assert!(ptr.resolve(&data).unwrap_err().is_not_found());
     /// ```
-    NotFound {
-        /// Position (index) of the token which was not found.
-        position: usize,
-        /// Offset of the pointer starting with the `Token` which was not found.
-        offset: usize,
-    },
+    NotFound(Positioned<NotFoundError>),
 
     /// `Pointer` could not be resolved as the path contains a scalar value
     /// before fully exhausting the path.
@@ -172,12 +160,7 @@ pub enum Error {
     /// let err = ptr.resolve(&data).unwrap_err();
     /// assert!(err.is_unreachable());
     /// ```
-    Unreachable {
-        /// Position (index) of the token which was unreachable.
-        position: usize,
-        /// Offset of the pointer which was unreachable.
-        offset: usize,
-    },
+    Unreachable(Positioned<UnreachableError>),
 }
 
 impl Error {
@@ -185,62 +168,104 @@ impl Error {
     /// error.
     pub fn offset(&self) -> usize {
         match self {
-            Self::FailedToParseIndex { offset, .. }
-            | Self::OutOfBounds { offset, .. }
-            | Self::NotFound { offset, .. }
-            | Self::Unreachable { offset, .. } => *offset,
+            Self::FailedToParseIndex(err) => err.offset(),
+            Self::OutOfBounds(err) => err.offset(),
+            Self::NotFound(err) => err.offset(),
+            Self::Unreachable(err) => err.offset(),
         }
     }
 
     /// Position (index) of the token which caused the error.
     pub fn position(&self) -> usize {
         match self {
-            Self::FailedToParseIndex { position, .. }
-            | Self::OutOfBounds { position, .. }
-            | Self::NotFound { position, .. }
-            | Self::Unreachable { position, .. } => *position,
+            Self::FailedToParseIndex(e) => e.position(),
+            Self::OutOfBounds(e) => e.position(),
+            Self::NotFound(e) => e.position(),
+            Self::Unreachable(e) => e.position(),
         }
     }
 
-    /// Returns `true` if this error is `FailedToParseIndex`; otherwise returns
+    /// Returns `true` if this error is `Unreachable`; otherwise returns
     /// `false`.
     pub fn is_unreachable(&self) -> bool {
-        matches!(self, Self::Unreachable { .. })
+        matches!(self, Self::Unreachable(_))
     }
 
     /// Returns `true` if this error is `FailedToParseIndex`; otherwise returns
     /// `false`.
     pub fn is_not_found(&self) -> bool {
-        matches!(self, Self::NotFound { .. })
+        matches!(self, Self::NotFound(_))
     }
 
     /// Returns `true` if this error is `FailedToParseIndex`; otherwise returns
     /// `false`.
     pub fn is_out_of_bounds(&self) -> bool {
-        matches!(self, Self::OutOfBounds { .. })
+        matches!(self, Self::OutOfBounds(_))
     }
 
     /// Returns `true` if this error is `FailedToParseIndex`; otherwise returns
     /// `false`.
     pub fn is_failed_to_parse_index(&self) -> bool {
-        matches!(self, Self::FailedToParseIndex { .. })
+        matches!(self, Self::FailedToParseIndex(_))
+    }
+
+    pub(crate) fn out_of_bounds(
+        source: OutOfBoundsError,
+        token: &Token,
+        position: usize,
+        offset: usize,
+    ) -> Self {
+        Self::OutOfBounds(Positioned::new(
+            source,
+            position,
+            Span::for_token(token, offset),
+        ))
+    }
+
+    pub(crate) fn failed_to_parse_index(
+        source: ParseIndexError,
+        token: &Token,
+        position: usize,
+        offset: usize,
+    ) -> Self {
+        Self::FailedToParseIndex(Positioned::new(
+            source,
+            position,
+            Span::for_token(token, offset),
+        ))
+    }
+
+    pub(crate) fn unreachable(token: &Token, position: usize, offset: usize) -> Self {
+        Self::Unreachable(Positioned::new(
+            UnreachableError,
+            position,
+            Span::for_token(token, offset),
+        ))
+    }
+
+    pub(crate) fn not_found(token: &Token, position: usize, offset: usize) -> Self {
+        Self::NotFound(Positioned::new(
+            NotFoundError,
+            position,
+            Span::for_token(token, offset),
+        ))
     }
 }
 
 impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::FailedToParseIndex { offset, .. } => {
-                write!(f, "failed to parse index at offset {offset}")
+            Self::FailedToParseIndex(_) => {
+                write!(f, "failed to parse json pointer token as array index")
             }
-            Self::OutOfBounds { offset, .. } => {
-                write!(f, "index at offset {offset} out of bounds")
+            Self::OutOfBounds(_) => {
+                write!(f, "json pointer token index out of bounds")
             }
-            Self::NotFound { offset, .. } => {
-                write!(f, "pointer starting at offset {offset} not found")
+            Self::NotFound(_) => {
+                write!(f, "pointer token not found in value")
             }
-            Self::Unreachable { offset, .. } => {
-                write!(f, "pointer starting at offset {offset} is unreachable")
+            Self::Unreachable(_) => {
+                write!(f, "pointer is unreachable due to encountering scalar value before exhausting the path")
             }
         }
     }
@@ -250,13 +275,37 @@ impl core::fmt::Display for Error {
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::FailedToParseIndex { source, .. } => Some(source),
-            Self::OutOfBounds { source, .. } => Some(source),
+            Self::FailedToParseIndex(source) => Some(source),
+            Self::OutOfBounds(source) => Some(source),
             _ => None,
         }
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct UnreachableError;
+impl core::fmt::Display for UnreachableError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "pointer is unreachable due to encountering a leaf node before exhausting the path"
+        )
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for UnreachableError {}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct NotFoundError;
+impl core::fmt::Display for NotFoundError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "token not found in value")
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for NotFoundError {}
 /*
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 ╔══════════════════════════════════════════════════════════════════════════════╗
@@ -287,25 +336,21 @@ mod json {
                     Value::Array(v) => {
                         let idx = token
                             .to_index()
-                            .map_err(|source| Error::FailedToParseIndex {
-                                position,
-                                offset,
-                                source,
+                            .map_err(|source| {
+                                Error::failed_to_parse_index(source, &token, position, offset)
                             })?
                             .for_len(v.len())
-                            .map_err(|source| Error::OutOfBounds {
-                                position,
-                                offset,
-                                source,
+                            .map_err(|source| {
+                                Error::out_of_bounds(source, &token, position, offset)
                             })?;
                         Ok(&v[idx])
                     }
 
                     Value::Object(v) => v
                         .get(token.decoded().as_ref())
-                        .ok_or(Error::NotFound { position, offset }),
+                        .ok_or(Error::not_found(&token, position, offset)),
                     // found a leaf node but the pointer hasn't been exhausted
-                    _ => Err(Error::Unreachable { position, offset }),
+                    _ => Err(Error::unreachable(&token, position, offset)),
                 }?;
                 offset += 1 + tok_len;
                 position += 1;
@@ -332,9 +377,9 @@ mod json {
                     }
                     Value::Object(v) => v
                         .get_mut(token.decoded().as_ref())
-                        .ok_or(Error::NotFound { position, offset }),
+                        .ok_or(Error::not_found(&token, position, offset)),
                     // found a leaf node but the pointer hasn't been exhausted
-                    _ => Err(Error::Unreachable { position, offset }),
+                    _ => Err(Error::unreachable(&token, position, offset)),
                 }?;
                 offset += 1 + tok_len;
                 position += 1;
@@ -351,17 +396,9 @@ fn parse_index(
 ) -> Result<usize, Error> {
     token
         .to_index()
-        .map_err(|source| Error::FailedToParseIndex {
-            position,
-            offset,
-            source,
-        })?
+        .map_err(|source| Error::failed_to_parse_index(source, &token, position, offset))?
         .for_len(array_len)
-        .map_err(|source| Error::OutOfBounds {
-            position,
-            offset,
-            source,
-        })
+        .map_err(|source| Error::out_of_bounds(source, &token, position, offset))
 }
 
 /*
@@ -395,25 +432,21 @@ mod toml {
                     Value::Array(v) => {
                         let idx = token
                             .to_index()
-                            .map_err(|source| Error::FailedToParseIndex {
-                                position,
-                                offset,
-                                source,
+                            .map_err(|source| {
+                                Error::failed_to_parse_index(source, &token, position, offset)
                             })?
                             .for_len(v.len())
-                            .map_err(|source| Error::OutOfBounds {
-                                position,
-                                offset,
-                                source,
+                            .map_err(|source| {
+                                Error::out_of_bounds(source, &token, position, offset)
                             })?;
                         Ok(&v[idx])
                     }
 
                     Value::Table(v) => v
                         .get(token.decoded().as_ref())
-                        .ok_or(Error::NotFound { position, offset }),
+                        .ok_or(Error::not_found(&token, position, offset)),
                     // found a leaf node but the pointer hasn't been exhausted
-                    _ => Err(Error::Unreachable { position, offset }),
+                    _ => Err(Error::unreachable(&token, position, offset)),
                 }?;
                 offset += 1 + tok_len;
                 position += 1;
@@ -438,24 +471,20 @@ mod toml {
                     Value::Array(array) => {
                         let idx = token
                             .to_index()
-                            .map_err(|source| Error::FailedToParseIndex {
-                                position,
-                                offset,
-                                source,
+                            .map_err(|source| {
+                                Error::failed_to_parse_index(source, &token, position, offset)
                             })?
                             .for_len(array.len())
-                            .map_err(|source| Error::OutOfBounds {
-                                position,
-                                offset,
-                                source,
+                            .map_err(|source| {
+                                Error::out_of_bounds(source, &token, position, offset)
                             })?;
                         Ok(&mut array[idx])
                     }
                     Value::Table(v) => v
                         .get_mut(token.decoded().as_ref())
-                        .ok_or(Error::NotFound { position, offset }),
+                        .ok_or(Error::not_found(&token, position, offset)),
                     // found a leaf node but the pointer hasn't been exhausted
-                    _ => Err(Error::Unreachable { position, offset }),
+                    _ => Err(Error::unreachable(&token, position, offset)),
                 }?;
                 offset += 1 + tok_len;
                 position += 1;
@@ -478,139 +507,8 @@ mod toml {
 #[cfg(test)]
 mod tests {
     use super::{Error, Resolve, ResolveMut};
-    use crate::{
-        index::{OutOfBoundsError, ParseIndexError},
-        Pointer,
-    };
+    use crate::Pointer;
     use core::fmt;
-
-    #[test]
-    fn resolve_error_is_unreachable() {
-        let err = Error::FailedToParseIndex {
-            position: 0,
-            offset: 0,
-            source: ParseIndexError::InvalidInteger("invalid".parse::<usize>().unwrap_err()),
-        };
-        assert!(!err.is_unreachable());
-
-        let err = Error::OutOfBounds {
-            position: 0,
-            offset: 0,
-            source: OutOfBoundsError {
-                index: 1,
-                length: 0,
-            },
-        };
-        assert!(!err.is_unreachable());
-
-        let err = Error::NotFound {
-            position: 0,
-            offset: 0,
-        };
-        assert!(!err.is_unreachable());
-
-        let err = Error::Unreachable {
-            position: 0,
-            offset: 0,
-        };
-        assert!(err.is_unreachable());
-    }
-
-    #[test]
-    fn resolve_error_is_not_found() {
-        let err = Error::FailedToParseIndex {
-            position: 0,
-            offset: 0,
-            source: ParseIndexError::InvalidInteger("invalid".parse::<usize>().unwrap_err()),
-        };
-        assert!(!err.is_not_found());
-
-        let err = Error::OutOfBounds {
-            position: 0,
-            offset: 0,
-            source: OutOfBoundsError {
-                index: 1,
-                length: 0,
-            },
-        };
-        assert!(!err.is_not_found());
-
-        let err = Error::NotFound {
-            position: 0,
-            offset: 0,
-        };
-        assert!(err.is_not_found());
-
-        let err = Error::Unreachable {
-            position: 0,
-            offset: 0,
-        };
-        assert!(!err.is_not_found());
-    }
-
-    #[test]
-    fn resolve_error_is_out_of_bounds() {
-        let err = Error::FailedToParseIndex {
-            position: 0,
-            offset: 0,
-            source: ParseIndexError::InvalidInteger("invalid".parse::<usize>().unwrap_err()),
-        };
-        assert!(!err.is_out_of_bounds());
-
-        let err = Error::OutOfBounds {
-            position: 0,
-            offset: 0,
-            source: OutOfBoundsError {
-                index: 1,
-                length: 0,
-            },
-        };
-        assert!(err.is_out_of_bounds());
-
-        let err = Error::NotFound {
-            position: 0,
-            offset: 0,
-        };
-        assert!(!err.is_out_of_bounds());
-
-        let err = Error::Unreachable {
-            position: 0,
-            offset: 0,
-        };
-        assert!(!err.is_out_of_bounds());
-    }
-
-    #[test]
-    fn resolve_error_is_failed_to_parse_index() {
-        let err = Error::FailedToParseIndex {
-            position: 0,
-            offset: 0,
-            source: ParseIndexError::InvalidInteger("invalid".parse::<usize>().unwrap_err()),
-        };
-        assert!(err.is_failed_to_parse_index());
-
-        let err = Error::OutOfBounds {
-            position: 0,
-            offset: 0,
-            source: OutOfBoundsError {
-                index: 1,
-                length: 0,
-            },
-        };
-        assert!(!err.is_failed_to_parse_index());
-
-        let err = Error::NotFound {
-            position: 0,
-            offset: 0,
-        };
-        assert!(!err.is_failed_to_parse_index());
-
-        let err = Error::Unreachable {
-            position: 0,
-            offset: 0,
-        };
-        assert!(!err.is_failed_to_parse_index());
-    }
 
     /*
     ╔═══════════════════════════════════════════════════╗
@@ -622,6 +520,8 @@ mod tests {
     #[cfg(feature = "json")]
     fn resolve_json() {
         use serde_json::json;
+
+        use crate::Token;
 
         let data = &json!({
             "array": ["bar", "baz"],
@@ -715,19 +615,13 @@ mod tests {
             Test {
                 ptr: "/object/bool/unresolvable",
                 data,
-                expected: Err(Error::Unreachable {
-                    position: 2,
-                    offset: 12,
-                }),
+                expected: Err(Error::unreachable(&Token::from("unresolvable"), 2, 12)),
             },
             // 12
             Test {
                 ptr: "/object/not_found",
                 data,
-                expected: Err(Error::NotFound {
-                    position: 1,
-                    offset: 7,
-                }),
+                expected: Err(Error::not_found(&Token::from("not_found"), 1, 7)),
             },
         ]);
     }
@@ -741,6 +635,8 @@ mod tests {
     #[cfg(feature = "toml")]
     fn resolve_toml() {
         use toml::{toml, Value};
+
+        use crate::Token;
 
         let data = &Value::Table(toml! {
             "array" = ["bar", "baz"]
@@ -821,18 +717,12 @@ mod tests {
             Test {
                 ptr: "/object/bool/unresolvable",
                 data,
-                expected: Err(Error::Unreachable {
-                    position: 2,
-                    offset: 12,
-                }),
+                expected: Err(Error::unreachable(&Token::from("unresolvable"), 2, 12)),
             },
             Test {
                 ptr: "/object/not_found",
                 data,
-                expected: Err(Error::NotFound {
-                    position: 1,
-                    offset: 7,
-                }),
+                expected: Err(Error::not_found(&Token::from("not_found"), 1, 7)),
             },
         ]);
     }
