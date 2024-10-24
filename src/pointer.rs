@@ -1044,11 +1044,13 @@ impl<'p> BufReporter<'p> {
     where
         'p: 't,
     {
-        let result = self.ptr.replace(index, token);
-        result.map_err(|err| Report {
-            source: err,
-            source_code: Cow::Borrowed(self.ptr.as_ptr()),
-        })
+        match self.ptr.replace(index, token) {
+            Ok(res) => Ok(res),
+            Err(source) => Err(Report {
+                source,
+                source_code: Cow::Borrowed(&*self.ptr),
+            }),
+        }
     }
 }
 
