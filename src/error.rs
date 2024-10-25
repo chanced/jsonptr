@@ -283,7 +283,7 @@ pub trait ReportErr<T> {
     fn report_err(&'_ self) -> Self::Reporter<'_, T>;
 }
 
-pub trait MutReportErr<T> {
+pub trait ReportErrMut<T> {
     type Reporter<'e, E>
     where
         Self: 'e;
