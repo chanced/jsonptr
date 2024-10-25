@@ -40,7 +40,7 @@ impl<'p> Immutable<'p, resolve::Error> {
     }
 }
 
-impl ReportErr<resolve::Error> for &'_ Pointer {
+impl ReportErr<resolve::Error> for Pointer {
     type Reporter<'e, E> = Immutable<'e, resolve::Error> where Self: 'e;
 
     fn report_err(&'_ self) -> Self::Reporter<'_, resolve::Error> {
