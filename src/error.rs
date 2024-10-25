@@ -1,9 +1,9 @@
 use core::{borrow::Borrow, iter::once};
-use std::borrow::Cow;
+use std::{borrow::Cow, path::Display};
 
 use serde_json::Value;
 
-use crate::{Pointer, Token};
+use crate::{Pointer, PointerBuf, Token};
 
 /// Data structures utilized in errors
 
@@ -213,17 +213,79 @@ where
     }
 }
 
-pub struct Report<'a, E, T: ToOwned + ?Sized> {
-    pub source: E,
-    pub source_code: Cow<'a, T>,
+#[derive(Debug, PartialEq, Eq)]
+pub enum Subject {
+    String(String),
+    PointerBuf(PointerBuf),
 }
-impl<'a, E, T: ToOwned> Report<'a, E, T> {}
 
-pub trait Reporter<T> {
-    type Reporter<'e>
+impl From<String> for Subject {
+    fn from(s: String) -> Self {
+        Self::String(s)
+    }
+}
+
+impl From<&Pointer> for Subject {
+    fn from(p: &Pointer) -> Self {
+        Self::PointerBuf(p.to_buf())
+    }
+}
+impl From<&str> for Subject {
+    fn from(s: &str) -> Self {
+        Self::String(s.into())
+    }
+}
+impl From<PointerBuf> for Subject {
+    fn from(p: PointerBuf) -> Self {
+        Self::PointerBuf(p)
+    }
+}
+impl From<&mut PointerBuf> for Subject {
+    fn from(p: &mut PointerBuf) -> Self {
+        Self::PointerBuf(p.clone())
+    }
+}
+
+impl From<&PointerBuf> for Subject {
+    fn from(p: &PointerBuf) -> Self {
+        Self::PointerBuf(p.clone())
+    }
+}
+
+impl core::fmt::Display for Subject {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::String(s) => s.fmt(f),
+            Self::PointerBuf(p) => p.fmt(f),
+        }
+    }
+}
+
+pub struct Report<E> {
+    pub source: E,
+    pub subject: Subject,
+}
+impl<E> Report<E> {
+    pub fn new(source: E, subject: impl Into<Subject>) -> Self {
+        Self {
+            source,
+            subject: subject.into(),
+        }
+    }
+}
+
+pub trait ReportErr<T> {
+    type Reporter<'e, E>
     where
         Self: 'e;
 
     // TODO: naming, alts: report, include_err_report, with_err_report, ???
-    fn report_err(&'_ self) -> Self::Reporter<'_>;
+    fn report_err(&'_ self) -> Self::Reporter<'_, T>;
+}
+
+pub trait MutReportErr<T> {
+    type Reporter<'e, E>
+    where
+        Self: 'e;
+    fn report_err(&'_ mut self) -> Self::Reporter<'_, T>;
 }

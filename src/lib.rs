@@ -77,5 +77,7 @@ pub use component::{Component, Components};
 
 pub mod error;
 
+pub mod reporter;
+
 #[cfg(test)]
 mod arbitrary;

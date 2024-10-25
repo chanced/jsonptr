@@ -1026,34 +1026,6 @@ impl PointerBuf {
     }
 }
 
-pub struct BufReporter<'p> {
-    ptr: &'p mut PointerBuf,
-}
-
-impl<'p> BufReporter<'p> {
-    /// Attempts to replace a `Token` by the index, returning the replaced
-    /// `Token` if it already exists. Returns `None` otherwise.
-    ///
-    /// ## Errors
-    /// A [`ReplaceError`] is returned if the index is out of bounds.
-    pub fn replace<'t>(
-        mut self,
-        index: usize,
-        token: impl Into<Token<'t>>,
-    ) -> Result<Option<Token<'t>>, Report<'p, ReplaceError, Pointer>>
-    where
-        'p: 't,
-    {
-        match self.ptr.replace(index, token) {
-            Ok(res) => Ok(res),
-            Err(source) => Err(Report {
-                source,
-                source_code: Cow::Borrowed(&*self.ptr),
-            }),
-        }
-    }
-}
-
 impl FromStr for PointerBuf {
     type Err = ParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
