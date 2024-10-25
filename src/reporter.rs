@@ -50,6 +50,16 @@ impl ReportErr<resolve::Error> for Pointer {
         }
     }
 }
+impl ReportErr<resolve::Error> for PointerBuf {
+    type Reporter<'e, E> = Immutable<'e, resolve::Error> where Self: 'e;
+
+    fn report_err(&'_ self) -> Self::Reporter<'_, resolve::Error> {
+        Immutable {
+            ptr: self,
+            marker: PhantomData,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct Mutable<'p, E> {

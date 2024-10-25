@@ -65,7 +65,7 @@ pub mod resolve;
 pub use resolve::{Resolve, ResolveMut};
 
 mod pointer;
-pub use pointer::{ParseError, Pointer, PointerBuf};
+pub use pointer::{NoLeadingBackslashError, ParseError, Pointer, PointerBuf, ReplaceError};
 
 mod token;
 pub use token::{InvalidEncodingError, Token, Tokens};
