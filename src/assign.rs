@@ -585,10 +585,10 @@ mod toml {
 mod tests {
     use super::{Assign, Error};
     use crate::{
-        index::{OutOfBoundsError, ParseIndexError},
+        index::{InvalidCharacterError, OutOfBoundsError, ParseIndexError},
         Pointer,
     };
-    use alloc::str::FromStr;
+    use alloc::vec;
     use core::fmt::{Debug, Display};
 
     #[derive(Debug)]
@@ -635,7 +635,6 @@ mod tests {
     #[test]
     #[cfg(feature = "json")]
     fn assign_json() {
-        use alloc::vec;
         use serde_json::json;
         [
             Test {
@@ -779,13 +778,16 @@ mod tests {
                 expected_data: json!(["bar"]),
             },
             Test {
-                ptr: "/a",
+                ptr: "/12a",
                 data: json!([]),
                 assign: json!("foo"),
                 expected: Err(Error::FailedToParseIndex {
                     position: 0,
                     offset: 0,
-                    source: ParseIndexError::InvalidInteger(usize::from_str("foo").unwrap_err()),
+                    source: ParseIndexError::InvalidCharacter(InvalidCharacterError {
+                        source: "12a".into(),
+                        offset: 2,
+                    }),
                 }),
                 expected_data: json!([]),
             },
@@ -807,7 +809,10 @@ mod tests {
                 expected: Err(Error::FailedToParseIndex {
                     position: 0,
                     offset: 0,
-                    source: ParseIndexError::InvalidCharacters("+".into()),
+                    source: ParseIndexError::InvalidCharacter(InvalidCharacterError {
+                        source: "+23".into(),
+                        offset: 0,
+                    }),
                 }),
                 expected_data: json!([]),
             },
@@ -826,7 +831,6 @@ mod tests {
     #[test]
     #[cfg(feature = "toml")]
     fn assign_toml() {
-        use alloc::vec;
         use toml::{toml, Table, Value};
         [
             Test {
@@ -964,7 +968,10 @@ mod tests {
                 expected: Err(Error::FailedToParseIndex {
                     position: 0,
                     offset: 0,
-                    source: ParseIndexError::InvalidInteger(usize::from_str("foo").unwrap_err()),
+                    source: ParseIndexError::InvalidCharacter(InvalidCharacterError {
+                        source: "a".into(),
+                        offset: 0,
+                    }),
                 }),
                 expected_data: Value::Array(vec![]),
             },
