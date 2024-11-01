@@ -68,7 +68,7 @@ mod pointer;
 pub use pointer::{NoLeadingBackslashError, ParseError, Pointer, PointerBuf, ReplaceError};
 
 mod token;
-pub use token::{InvalidEncodingError, Token, Tokens};
+pub use token::{EncodingError, Error as TokenError, Token, Tokens};
 
 pub mod index;
 
@@ -76,8 +76,6 @@ mod component;
 pub use component::{Component, Components};
 
 pub mod error;
-
-pub mod reporter;
 
 #[cfg(test)]
 mod arbitrary;

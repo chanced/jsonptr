@@ -1,8 +1,4 @@
-use crate::{
-    error::{Report, Span, Spanned},
-    token::InvalidEncodingError,
-    Components, Token, Tokens,
-};
+use crate::{token::EncodingError, Components, Token, Tokens};
 use alloc::{
     borrow::ToOwned,
     boxed::Box,
@@ -10,9 +6,13 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use core::{borrow::Borrow, cmp::Ordering, ops::Deref, str::FromStr};
+use core::{
+    borrow::Borrow,
+    cmp::Ordering,
+    ops::{Deref, Range},
+    str::FromStr,
+};
 use slice::SlicePointer;
-use std::borrow::Cow;
 
 mod slice;
 
@@ -1143,6 +1143,7 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
 
     let bytes = value.as_bytes();
     let mut i = 0;
+
     while i < bytes.len() {
         match bytes[i] {
             b'/' => {
@@ -1157,24 +1158,8 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
                 // otherwise the encoding is invalid and `InvalidEncodingError` is returned
                 if i + 1 >= bytes.len() || (bytes[i + 1] != b'0' && bytes[i + 1] != b'1') {
                     // the pointer is not properly encoded
-                    //
-                    // we use the pointer offset, which points to the last
-                    // encountered separator, as the offset of the error.
-                    // The source `InvalidEncodingError` then uses the token
-                    // offset.
-                    //
-                    // "/foo/invalid~encoding"
-                    //      ^       ^
-                    //      |       |
-                    //  ptr_offset  |
-                    //          tok_offset
-                    //
-
-                    return Err(ParseError::invalid_encoding(
-                        InvalidEncodingError { offset: tok_offset },
-                        ptr_offset,
-                        i + 1 < bytes.len(), // whether or not there is a next character
-                    ));
+                    let j = if i + 1 >= bytes.len() { i + 1 } else { i + 2 };
+                    return Err(ParseError::invalid_encoding(i..j));
                 }
                 // already checked the next character, so we skip it
                 i += 1;
@@ -1191,16 +1176,16 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
     Ok(value)
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct NoLeadingBackslashError;
-
-impl fmt::Display for NoLeadingBackslashError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("json pointer is malformed as it does not start with a backslash ('/')")
+const fn find_token_end(bytes: &[u8], start: usize) -> usize {
+    let mut i = start;
+    while i < bytes.len() {
+        if bytes[i] == b'/' {
+            return i - 1;
+        }
+        i += 1;
     }
+    i
 }
-#[cfg(feature = "std")]
-impl std::error::Error for NoLeadingBackslashError {}
 
 /*
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -1212,21 +1197,20 @@ impl std::error::Error for NoLeadingBackslashError {}
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 */
 
-/// Indicates that a `Pointer` was malformed and unable to be parsed.
+/// A `Pointer` could not be parsed due to the input being malformed.
 #[derive(Debug, PartialEq)]
 pub enum ParseError {
-    /// `Pointer` did not start with a backslash (`'/'`).
-    NoLeadingBackslash(Spanned<NoLeadingBackslashError>),
+    /// A json pointer must start with a backslash (`'/'`) if it is not empty.
+    NoLeadingBackslash,
 
-    /// `Pointer` contained invalid encoding (e.g. `~` not followed by `0` or
-    /// `1`).
-    InvalidEncoding(Spanned<InvalidEncodingError>),
+    /// In a json pointer, `~` must be followed by `0` or `1`.
+    InvalidEncoding(EncodingError),
 }
 
 impl ParseError {
     /// Returns `true` if this error is `NoLeadingBackslash`
     pub fn is_no_leading_backslash(&self) -> bool {
-        matches!(self, Self::NoLeadingBackslash(_))
+        matches!(self, Self::NoLeadingBackslash)
     }
 
     /// Returns `true` if this error is `InvalidEncoding`    
@@ -1234,71 +1218,74 @@ impl ParseError {
         matches!(self, Self::InvalidEncoding(_))
     }
 
-    /// Offset of the partial pointer starting with the token which caused the error.
-    ///
-    /// ```text
-    /// "/foo/invalid~tilde/invalid"
-    ///      ↑
-    /// ```
-    ///
-    /// ```
-    /// # use jsonptr::PointerBuf;
-    /// let err = PointerBuf::parse("/foo/invalid~tilde/invalid").unwrap_err();
-    /// assert_eq!(err.pointer_offset(), 4)
-    /// ```
-    pub fn pointer_offset(&self) -> usize {
-        match self {
-            Self::NoLeadingBackslash(_) => 0,
-            Self::InvalidEncoding(e) => e.offset(),
-        }
-    }
+    // TODO: should we just remove this?
 
-    /// Offset of the character index from within the first token of
-    /// [`Self::pointer_offset`])
-    ///
-    /// ```text
-    /// "/foo/invalid~tilde/invalid"
-    ///              ↑
-    ///              8
-    /// ```
-    /// ```
-    /// # use jsonptr::PointerBuf;
-    /// let err = PointerBuf::parse("/foo/invalid~tilde/invalid").unwrap_err();
-    /// assert_eq!(err.source_offset(), 8)
-    /// ```
-    pub fn source_offset(&self) -> usize {
-        match self {
-            Self::NoLeadingBackslash(_) => 0,
-            Self::InvalidEncoding(e) => e.source().offset,
-        }
-    }
+    // /// Offset of the partial pointer starting with the token which caused the error.
+    // ///
+    // /// ```text
+    // /// "/foo/invalid~tilde/invalid"
+    // ///      ↑
+    // /// ```
+    // ///
+    // /// ```
+    // /// # use jsonptr::PointerBuf;
+    // /// let err = PointerBuf::parse("/foo/invalid~tilde/invalid").unwrap_err();
+    // /// assert_eq!(err.pointer_offset(), 4)
+    // /// ```
+    // #[deprecated(since = "0.7.0")]
+    // pub fn pointer_offset(&self) -> usize {
+    //     todo!()
+    //     // match self {
+    //     //     Self::NoLeadingBackslash => 0,
+    //     //     Self::InvalidEncoding(e) => e.token_span.offset,
+    //     // }
+    // }
 
-    /// Offset of the first invalid encoding from within the pointer.
-    /// ```text
-    /// "/foo/invalid~tilde/invalid"
-    ///              ↑
-    ///             12
-    /// ```
-    /// ```
-    /// use jsonptr::PointerBuf;
-    /// let err = PointerBuf::parse("/foo/invalid~tilde/invalid").unwrap_err();
-    /// assert_eq!(err.complete_offset(), 12)
-    /// ```
-    pub fn complete_offset(&self) -> usize {
-        self.source_offset() + self.pointer_offset()
-    }
+    // TODO: should we just remove this?
 
-    const fn invalid_encoding(
-        source: InvalidEncodingError,
-        offset: usize,
-        has_next: bool,
-    ) -> ParseError {
-        let len = if has_next { 2 } else { 1 };
-        Self::InvalidEncoding(Spanned::new(Span::new(offset, len), source))
+    // /// Offset of the character index from within the first token of
+    // /// [`Self::pointer_offset`])
+    // ///
+    // /// ```text
+    // /// "/foo/invalid~tilde/invalid"
+    // ///              ↑
+    // ///              8
+    // /// ```
+    // /// ```
+    // /// # use jsonptr::PointerBuf;
+    // /// let err = PointerBuf::parse("/foo/invalid~tilde/invalid").unwrap_err();
+    // /// assert_eq!(err.source_offset(), 8)
+    // /// ```
+    // #[deprecated]
+    // pub fn source_offset(&self) -> usize {
+    //     todo!()
+    // }
+
+    // TODO: should we just remove this?
+
+    // /// Offset of the first invalid encoding from within the pointer.
+    // /// ```text
+    // /// "/foo/invalid~tilde/invalid"
+    // ///              ↑
+    // ///             12
+    // /// ```
+    // /// ```
+    // /// use jsonptr::PointerBuf;
+    // /// let err = PointerBuf::parse("/foo/invalid~tilde/invalid").unwrap_err();
+    // /// assert_eq!(err.complete_offset(), 12)
+    // /// ```
+    // #[deprecated]
+    // #[allow(deprecated)]
+    // pub fn complete_offset(&self) -> usize {
+    //     self.source_offset() + self.pointer_offset()
+    // }
+
+    const fn invalid_encoding(range: Range<usize>) -> ParseError {
+        Self::InvalidEncoding(EncodingError { range })
     }
 
     const fn no_leading_backslash() -> ParseError {
-        Self::NoLeadingBackslash(Spanned::new(Span::empty(), NoLeadingBackslashError))
+        Self::NoLeadingBackslash
     }
 }
 impl fmt::Display for ParseError {
@@ -1320,7 +1307,7 @@ impl std::error::Error for ParseError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::InvalidEncoding(source) => Some(source),
-            Self::NoLeadingBackslash(source) => Some(source),
+            Self::NoLeadingBackslash => None,
         }
     }
 }
@@ -1366,7 +1353,6 @@ impl std::error::Error for ReplaceError {}
 
 #[cfg(test)]
 mod tests {
-    use std::error::Error;
 
     use super::*;
     use quickcheck::TestResult;
@@ -1505,41 +1491,31 @@ mod tests {
         );
         assert_eq!(
             Pointer::parse("/~").map(Pointer::as_str),
-            Err(ParseError::invalid_encoding(
-                InvalidEncodingError { offset: 1 },
-                0,
-                false
-            ))
+            Err(ParseError::invalid_encoding(1..2))
         );
         assert_eq!(
             Pointer::parse("/~2").map(Pointer::as_str),
-            Err(ParseError::invalid_encoding(
-                InvalidEncodingError { offset: 1 },
-                0,
-                true
-            ))
+            Err(ParseError::invalid_encoding(1..3))
         );
         assert_eq!(
             Pointer::parse("/~a").map(Pointer::as_str),
-            Err(ParseError::invalid_encoding(
-                InvalidEncodingError { offset: 1 },
-                0,
-                true
-            ))
+            Err(ParseError::invalid_encoding(1..3))
         );
     }
 
-    #[test]
-    fn parse_error_offsets() {
-        let err = Pointer::parse("/foo/invalid~encoding").unwrap_err();
-        assert_eq!(err.pointer_offset(), 4);
-        assert_eq!(err.source_offset(), 8);
-        assert_eq!(err.complete_offset(), 12);
+    // TODO: Put these back if we dont remove offset methods
+    // #[test]
+    // #[allow(deprecated)]
+    // fn parse_error_offsets() {
+    //     let err = Pointer::parse("/foo/invalid~encoding").unwrap_err();
+    //     assert_eq!(err.pointer_offset(), 4);
+    //     assert_eq!(err.source_offset(), 8);
+    //     assert_eq!(err.complete_offset(), 12);
 
-        let err = Pointer::parse("invalid~encoding").unwrap_err();
-        assert_eq!(err.pointer_offset(), 0);
-        assert_eq!(err.source_offset(), 0);
-    }
+    //     let err = Pointer::parse("invalid~encoding").unwrap_err();
+    //     assert_eq!(err.pointer_offset(), 0);
+    //     assert_eq!(err.source_offset(), 0);
+    // }
 
     #[test]
     #[cfg(feature = "std")]
@@ -1548,7 +1524,7 @@ mod tests {
         let err = Pointer::parse("/foo/invalid~encoding").unwrap_err();
         assert!(err.source().is_some());
         let source = err.source().unwrap();
-        assert!(source.is::<Spanned<InvalidEncodingError>>());
+        assert!(source.is::<EncodingError>());
     }
 
     #[test]

@@ -37,9 +37,8 @@
 //!
 
 use crate::{
-    error::{Positioned, Span},
     index::{OutOfBoundsError, ParseIndexError},
-    Pointer, Token,
+    token, Pointer, Token,
 };
 use core::fmt::{self, Debug};
 
@@ -164,25 +163,29 @@ pub type AssignError = Error;
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error {
     /// A [`Token`] within the [`Pointer`] failed to be parsed as an array index.
-    FailedToParseIndex(Positioned<ParseIndexError>),
+    FailedToParseIndex(token::Error<ParseIndexError>),
 
     /// A [`Token`] within the [`Pointer`] contains an [`Index`] which is out of bounds.
     ///
     /// The current or resulting array's length is less than the index.
-    OutOfBounds(Positioned<OutOfBoundsError>),
+    OutOfBounds(token::Error<OutOfBoundsError>),
 }
 
 impl Error {
+    /// Offset in bytes for where this error originated.
     pub fn offset(&self) -> usize {
         match self {
-            Self::FailedToParseIndex(spanned) => spanned.offset(),
-            Self::OutOfBounds(spanned) => spanned.offset(),
+            Self::FailedToParseIndex(err) => err.range().start,
+            Self::OutOfBounds(err) => err.range().start,
         }
     }
-    pub fn span(&self) -> Span {
+
+    /// Returns position (index) of the [`Token`] within the
+    /// [`Pointer`](crate::Pointer) which caused the error.
+    pub fn position(&self) -> usize {
         match self {
-            Self::FailedToParseIndex(spanned) => spanned.span(),
-            Self::OutOfBounds(spanned) => spanned.span(),
+            Self::FailedToParseIndex(spanned) => spanned.position(),
+            Self::OutOfBounds(spanned) => spanned.position(),
         }
     }
 
@@ -192,10 +195,10 @@ impl Error {
         position: usize,
         offset: usize,
     ) -> Self {
-        Self::FailedToParseIndex(Positioned::new(
+        Self::FailedToParseIndex(token::Error::new(
             source,
             position,
-            Span::for_token(token, offset),
+            offset..offset + token.encoded().len(),
         ))
     }
     pub(crate) fn out_of_bounds(
@@ -204,15 +207,15 @@ impl Error {
         position: usize,
         offset: usize,
     ) -> Self {
-        Self::OutOfBounds(Positioned::new(
+        Self::OutOfBounds(token::Error::new(
             source,
             position,
-            Span::for_token(token, offset),
+            offset..offset + token.encoded().len(),
         ))
     }
 }
 
-impl fmt::Display for Error {
+impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::FailedToParseIndex { .. } => {

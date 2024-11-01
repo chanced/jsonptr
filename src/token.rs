@@ -1,4 +1,4 @@
-use core::str::Split;
+use core::{ops::Range, str::Split};
 
 use crate::index::{Index, ParseIndexError};
 use alloc::{
@@ -63,18 +63,21 @@ impl<'a> Token<'a> {
     /// ```
     /// # use jsonptr::Token;
     /// assert_eq!(Token::from_encoded("~1foo~1~0bar").unwrap().decoded(), "/foo/~bar");
+    ///
     /// let err = Token::from_encoded("foo/oops~bar").unwrap_err();
-    /// assert_eq!(err.offset, 3);
+    /// assert_eq!(err.range.start, 3);
     /// ```
     ///
     /// ## Errors
     /// Returns `InvalidEncodingError` if the input string is not a valid RFC
     /// 6901 (`~` must be followed by `0` or `1`)
-    pub fn from_encoded(s: &'a str) -> Result<Self, InvalidEncodingError> {
+    pub fn from_encoded(s: &'a str) -> Result<Self, EncodingError> {
         let mut escaped = false;
         for (offset, b) in s.bytes().enumerate() {
             match b {
-                b'/' => return Err(InvalidEncodingError { offset }),
+                b'/' => {
+                    return Err(EncodingError::new(offset..offset + 1));
+                }
                 ENC_PREFIX => {
                     escaped = true;
                 }
@@ -83,13 +86,15 @@ impl<'a> Token<'a> {
                 }
                 _ => {
                     if escaped {
-                        return Err(InvalidEncodingError { offset });
+                        #[allow(clippy::range_plus_one)]
+                        return Err(EncodingError::new(offset..offset + 1));
                     }
                 }
             }
         }
         if escaped {
-            return Err(InvalidEncodingError { offset: s.len() });
+            let len = s.len();
+            return Err(EncodingError::new(len - 1..len));
         }
         Ok(Self { inner: s.into() })
     }
@@ -339,6 +344,90 @@ impl<'t> Tokens<'t> {
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                                                                              ║
+║                                    Error                                     ║
+║                                   ¯¯¯¯¯¯¯                                    ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
+/// A generic error pertaining to a specific `Token`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Error<S> {
+    /// The source of the error.
+    source: S,
+    /// The erroneous `Token` position (index) in the [`Pointer`].
+    position: usize,
+    /// The range in bytes of the token.
+    range: Range<usize>,
+}
+
+impl<S> Error<S>
+where
+    S: fmt::Debug,
+{
+    /// Constructs a new `Error` with the given position and span.
+    pub const fn new(source: S, position: usize, range: Range<usize>) -> Self {
+        Self {
+            source,
+            position,
+            range,
+        }
+    }
+
+    /// Returns the source of the error.
+    pub const fn source(&self) -> &S {
+        &self.source
+    }
+
+    /// Returns position (index) of the [`Token`] within the
+    /// [`Pointer`](crate::Pointer) which caused the error.
+    pub const fn position(&self) -> usize {
+        self.position
+    }
+
+    /// The range, in bytes, of the token which caused the error.
+    ///
+    /// For example, using `"/foo/bar/baz"`:
+    /// - An error occurring for the token `"foo"` would be `1..5` (`"foo"`)
+    /// - An error occurring for the token `"bar"` would be `6..9` (`"bar"`)
+    pub const fn range(&self) -> Range<usize> {
+        Range {
+            start: self.range.start,
+            end: self.range.end,
+        }
+    }
+}
+
+impl<S> fmt::Display for Error<S>
+where
+    S: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.source)
+    }
+}
+
+#[cfg(feature = "std")]
+impl<S> std::error::Error for Error<S>
+where
+    S: 'static + std::error::Error,
+{
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        Some(&self.source)
+    }
+}
+
+/// Alias for [`EncodingError`]
+///
+/// A token within a json pointer contained invalid encoding (`~` not followed
+/// by `0` or `1`).
+///
+#[deprecated(since = "0.7.0", note = "use `EncodingError` instead")]
+pub type InvalidEncodingError = EncodingError;
+
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
 ║                             InvalidEncodingError                             ║
 ║                            ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯                            ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
@@ -347,14 +436,21 @@ impl<'t> Tokens<'t> {
 
 /// A token within a json pointer contained invalid encoding (`~` not followed
 /// by `0` or `1`).
-///
 #[derive(Debug, PartialEq, Eq)]
-pub struct InvalidEncodingError {
-    /// offset of the erroneous `~` from within the `Token`
-    pub offset: usize,
+pub struct EncodingError {
+    /// The range in bytes of the invalid encoding from within the `Token`.
+    pub range: Range<usize>,
 }
-
-impl fmt::Display for InvalidEncodingError {
+impl EncodingError {
+    /// Constructs a new `EncodingError` with the given range.
+    pub const fn new(range: Range<usize>) -> Self {
+        Self { range }
+    }
+    pub(crate) const fn err<T>(range: Range<usize>) -> Result<T, Self> {
+        Err(Self::new(range))
+    }
+}
+impl fmt::Display for EncodingError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -363,8 +459,14 @@ impl fmt::Display for InvalidEncodingError {
     }
 }
 
+impl From<Range<usize>> for EncodingError {
+    fn from(range: Range<usize>) -> Self {
+        Self { range }
+    }
+}
+
 #[cfg(feature = "std")]
-impl std::error::Error for InvalidEncodingError {}
+impl std::error::Error for EncodingError {}
 
 /*
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -429,14 +531,6 @@ mod tests {
         let token = Token::new(s);
         let decoded = Token::from_encoded(token.encoded()).unwrap();
         token == decoded
-    }
-
-    #[test]
-    fn invalid_encoding_error_display() {
-        assert_eq!(
-            Token::from_encoded("~").unwrap_err().to_string(),
-            "json pointer is malformed due to invalid encoding ('~' not followed by '0' or '1')"
-        );
     }
 
     #[test]

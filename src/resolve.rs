@@ -34,9 +34,8 @@
 //!
 //!
 use crate::{
-    error::{Positioned, Span},
     index::{OutOfBoundsError, ParseIndexError},
-    Pointer, Token,
+    token, Pointer, Token,
 };
 
 /*
@@ -108,6 +107,14 @@ pub trait ResolveMut {
 #[deprecated(since = "0.7.0", note = "renamed to resolve::Error")]
 pub type ResolveError = Error;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Cause {
+    FailedToParseIndex,
+    OutofBounds,
+    NotFound,
+    Unreachable,
+}
+
 /// Indicates that the `Pointer` could not be resolved.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error {
@@ -122,7 +129,7 @@ pub enum Error {
     /// let ptr = Pointer::from_static("/foo/invalid");
     /// assert!(ptr.resolve(&data).unwrap_err().is_failed_to_parse_index());
     /// ```
-    FailedToParseIndex(Positioned<ParseIndexError>),
+    FailedToParseIndex(token::Error<ParseIndexError>),
 
     /// A [`Token`] within the [`Pointer`] contains an [`Index`] which is out of
     /// bounds.
@@ -134,7 +141,7 @@ pub enum Error {
     /// let data = json!({ "foo": ["bar"] });
     /// let ptr = Pointer::from_static("/foo/1");
     /// assert!(ptr.resolve(&data).unwrap_err().is_out_of_bounds());
-    OutOfBounds(Positioned<OutOfBoundsError>),
+    OutOfBounds(token::Error<OutOfBoundsError>),
 
     /// `Pointer` could not be resolved as a segment of the path was not found.
     ///
@@ -146,7 +153,7 @@ pub enum Error {
     /// let ptr = Pointer::from_static("/bar");
     /// assert!(ptr.resolve(&data).unwrap_err().is_not_found());
     /// ```
-    NotFound(Positioned<NotFoundError>),
+    NotFound(token::Error<NotFoundError>),
 
     /// `Pointer` could not be resolved as the path contains a scalar value
     /// before fully exhausting the path.
@@ -160,18 +167,19 @@ pub enum Error {
     /// let err = ptr.resolve(&data).unwrap_err();
     /// assert!(err.is_unreachable());
     /// ```
-    Unreachable(Positioned<UnreachableError>),
+    Unreachable(token::Error<UnreachableError>),
 }
 
 impl Error {
     /// Offset of the partial pointer starting with the token which caused the
     /// error.
+    #[deprecated]
     pub fn offset(&self) -> usize {
         match self {
-            Self::FailedToParseIndex(err) => err.offset(),
-            Self::OutOfBounds(err) => err.offset(),
-            Self::NotFound(err) => err.offset(),
-            Self::Unreachable(err) => err.offset(),
+            Self::FailedToParseIndex(err) => err.range().start - 1,
+            Self::OutOfBounds(err) => err.range().start - 1,
+            Self::NotFound(err) => err.range().start - 1,
+            Self::Unreachable(err) => err.range().start - 1,
         }
     }
 
@@ -215,10 +223,10 @@ impl Error {
         position: usize,
         offset: usize,
     ) -> Self {
-        Self::OutOfBounds(Positioned::new(
+        Self::OutOfBounds(token::Error::new(
             source,
             position,
-            Span::for_token(token, offset),
+            offset..token.encoded().len(),
         ))
     }
 
@@ -228,26 +236,26 @@ impl Error {
         position: usize,
         offset: usize,
     ) -> Self {
-        Self::FailedToParseIndex(Positioned::new(
+        Self::FailedToParseIndex(token::Error::new(
             source,
             position,
-            Span::for_token(token, offset),
+            offset..token.encoded().len(),
         ))
     }
 
     pub(crate) fn unreachable(token: &Token, position: usize, offset: usize) -> Self {
-        Self::Unreachable(Positioned::new(
+        Self::Unreachable(token::Error::new(
             UnreachableError,
             position,
-            Span::for_token(token, offset),
+            offset..offset + token.encoded().len(),
         ))
     }
 
     pub(crate) fn not_found(token: &Token, position: usize, offset: usize) -> Self {
-        Self::NotFound(Positioned::new(
+        Self::NotFound(token::Error::new(
             NotFoundError,
             position,
-            Span::for_token(token, offset),
+            offset..offset + token.encoded().len(),
         ))
     }
 }
