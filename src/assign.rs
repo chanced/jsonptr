@@ -162,7 +162,7 @@ pub type AssignError = Error;
 pub enum Error {
     /// A [`Token`] within the [`Pointer`] failed to be parsed as an array index.
     FailedToParseIndex {
-        /// Position (index) of the token which failed to parse as an `Index`
+        /// Position (index) of the token which failed to parse as an [`Index`](crate::index::Index)
         position: usize,
         /// Offset of the partial pointer starting with the invalid index.
         offset: usize,
@@ -174,7 +174,7 @@ pub enum Error {
     ///
     /// The current or resulting array's length is less than the index.
     OutOfBounds {
-        /// Position (index) of the token which failed to parse as an `Index`
+        /// Position (index) of the token which failed to parse as an [`Index`](crate::index::Index)
         position: usize,
         /// Offset of the partial pointer starting with the invalid index.
         offset: usize,

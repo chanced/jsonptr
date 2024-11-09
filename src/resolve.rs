@@ -122,7 +122,7 @@ pub enum Error {
     /// assert!(ptr.resolve(&data).unwrap_err().is_failed_to_parse_index());
     /// ```
     FailedToParseIndex {
-        /// Position (index) of the token which failed to parse as an `Index`
+        /// Position (index) of the token which failed to parse as an [`Index`](crate::index::Index)
         position: usize,
         /// Offset of the partial pointer starting with the invalid index.
         offset: usize,
@@ -141,7 +141,7 @@ pub enum Error {
     /// let ptr = Pointer::from_static("/foo/1");
     /// assert!(ptr.resolve(&data).unwrap_err().is_out_of_bounds());
     OutOfBounds {
-        /// Position (index) of the token which failed to parse as an `Index`
+        /// Position (index) of the token which failed to parse as an [`Index`](crate::index::Index)
         position: usize,
         /// Offset of the partial pointer starting with the invalid index.
         offset: usize,
