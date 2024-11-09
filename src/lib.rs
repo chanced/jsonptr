@@ -64,6 +64,8 @@ pub mod resolve;
 #[cfg(feature = "resolve")]
 pub use resolve::{Resolve, ResolveMut};
 
+pub mod report;
+
 mod pointer;
 pub use pointer::{ParseError, Pointer, PointerBuf};
 

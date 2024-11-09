@@ -133,19 +133,27 @@ pub trait Assign {
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                                                                              ║
+║                                 AssignError                                  ║
+║                                ¯¯¯¯¯¯¯¯¯¯¯¯¯                                 ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
+
+/// Alias for [`Error`] - indicates a value assignment failed.
+#[deprecated(since = "0.7.0", note = "renamed to `AssignError`")]
+pub type AssignError = Error; 
+
+
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
 ║                                    Error                                     ║
 ║                                   ¯¯¯¯¯¯¯                                    ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 */
 
-// TODO: should AssignError be deprecated?
-/// Alias for [`Error`].
-///
-/// Possible error returned from [`Assign`] implementations for
-/// [`serde_json::Value`] and
-/// [`toml::Value`](https://docs.rs/toml/0.8.14/toml/index.html).
-pub type AssignError = Error;
 
 /// Possible error returned from [`Assign`] implementations for
 /// [`serde_json::Value`] and
@@ -178,13 +186,17 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::FailedToParseIndex { .. } => {
-                write!(f, "assignment failed due to an invalid index")
-            }
-            Self::OutOfBounds { .. } => {
+            Self::FailedToParseIndex {..} => {
                 write!(
                     f,
-                    "assignment failed due to index an index being out of bounds"
+                    "value failed to be assigned by json pointer because an array index is not a valid integer or or '-'"
+                )
+            }
+            Self::OutOfBounds {..} => {
+                write!(
+                    f,
+                    "value failed to be assigned by json pointer because array index is out of bounds",
+                    
                 )
             }
         }

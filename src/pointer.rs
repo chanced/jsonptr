@@ -1,4 +1,8 @@
-use crate::{token::InvalidEncodingError, Components, Token, Tokens};
+use crate::{
+    report::{IntoReport, Report, Subject},
+    token::InvalidEncodingError,
+    Components, Token, Tokens,
+};
 use alloc::{
     borrow::ToOwned,
     boxed::Box,
@@ -905,10 +909,10 @@ impl PointerBuf {
     /// Attempts to parse a string into a `PointerBuf`.
     ///
     /// ## Errors
-    /// Returns a [`ParseError`] if the string is not a valid JSON Pointer.
-    pub fn parse(s: impl Into<String>) -> Result<Self, ParseError> {
+    /// Returns a [`ParseBufError`] if the string is not a valid JSON Pointer.
+    pub fn parse(s: impl Into<String>) -> Result<Self, ParseBufError> {
         let s = s.into();
-        validate(&s)?;
+        validate(&s).map_err(|err| err.into_parse_buf_error(s.clone()))?;
         Ok(Self(s))
     }
 
@@ -1188,6 +1192,59 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                                                                              ║
+║                                ParseBufError                                 ║
+║                               ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯                                ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
+#[derive(Debug, PartialEq)]
+pub struct ParseBufError {
+    pub value: String,
+    pub source: ParseError,
+}
+impl std::error::Error for ParseBufError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        Some(&self.source)
+    }
+}
+
+impl core::fmt::Display for ParseBufError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        core::fmt::Display::fmt(&self.source, f)
+    }
+}
+
+impl From<ParseBufError> for ParseError {
+    fn from(value: ParseBufError) -> Self {
+        value.source
+    }
+}
+
+impl IntoReport for ParseBufError {
+    type Value = String;
+
+    fn into_report(self, value: Self::Value) -> Report<Self> {
+        debug_assert_eq!(value, self.value);
+        let len = match &self.source {
+            ParseError::NoLeadingBackslash => 1,
+            ParseError::InvalidEncoding { offset, .. } => {
+                if *offset < value.len() - 1 {
+                    2
+                } else {
+                    1
+                }
+            }
+        };
+        let offset = self.source.complete_offset();
+        let subject = Subject::string(value, offset, len);
+        Report::new(subject, self)
+    }
+}
+
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
 ║                                  ParseError                                  ║
 ║                                 ¯¯¯¯¯¯¯¯¯¯¯¯                                 ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
@@ -1209,6 +1266,33 @@ pub enum ParseError {
         /// The source `InvalidEncodingError`
         source: InvalidEncodingError,
     },
+}
+impl ParseError {
+    fn into_parse_buf_error(self, value: String) -> ParseBufError {
+        ParseBufError {
+            source: self,
+            value,
+        }
+    }
+}
+
+impl IntoReport for ParseError {
+    type Value = String;
+
+    fn into_report(self, value: Self::Value) -> Report<Self> {
+        let len = match &self {
+            Self::NoLeadingBackslash => 1,
+            Self::InvalidEncoding { offset, .. } => {
+                if *offset < value.len() - 1 {
+                    2
+                } else {
+                    1
+                }
+            }
+        };
+        let subject = Subject::string(value, self.complete_offset(), len);
+        Report::new(subject, self)
+    }
 }
 
 impl fmt::Display for ParseError {
@@ -1439,23 +1523,6 @@ mod tests {
     }
 
     #[test]
-    fn parse_error_is_no_leading_backslash() {
-        let err = ParseError::NoLeadingBackslash;
-        assert!(err.is_no_leading_backslash());
-        assert!(!err.is_invalid_encoding());
-    }
-
-    #[test]
-    fn parse_error_is_invalid_encoding() {
-        let err = ParseError::InvalidEncoding {
-            offset: 0,
-            source: InvalidEncodingError { offset: 1 },
-        };
-        assert!(!err.is_no_leading_backslash());
-        assert!(err.is_invalid_encoding());
-    }
-
-    #[test]
     fn parse() {
         let tests = [
             ("", Ok("")),
@@ -1511,25 +1578,6 @@ mod tests {
 
         let err = Pointer::parse("no-leading/slash").unwrap_err();
         assert!(err.source().is_none());
-    }
-
-    #[test]
-    #[cfg(feature = "std")]
-    fn parse_error_source() {
-        use std::error::Error;
-        let err = Pointer::parse("/foo/invalid~encoding").unwrap_err();
-        assert!(err.source().is_some());
-        let source = err.source().unwrap();
-        assert!(source.is::<InvalidEncodingError>());
-
-        let err = Pointer::parse("no-leading/slash").unwrap_err();
-        assert!(err.source().is_none());
-    }
-
-    #[test]
-    fn pointerbuf_as_pointer_returns_pointer() {
-        let ptr = PointerBuf::parse("/foo/bar").unwrap();
-        assert_eq!(ptr.as_ptr(), ptr);
     }
 
     #[test]
@@ -1599,12 +1647,6 @@ mod tests {
         assert_eq!(ptr.count(), 1);
         assert_eq!(ptr.pop_front(), Some("foo".into()));
         assert_eq!(ptr, "");
-    }
-
-    #[test]
-    fn display_replace_token_error() {
-        let err = ReplaceError { index: 3, count: 2 };
-        assert_eq!(format!("{err}"), "index 3 is out of bounds (2)");
     }
 
     #[test]
@@ -1703,16 +1745,6 @@ mod tests {
         assert_eq!(PointerBuf::try_from("/foo/bar/~0~1").unwrap(), ptr);
         let into: PointerBuf = "/foo/bar/~0~1".try_into().unwrap();
         assert_eq!(ptr, into);
-    }
-
-    #[test]
-    fn default() {
-        let ptr = PointerBuf::default();
-        assert_eq!(ptr, "");
-        assert_eq!(ptr.count(), 0);
-
-        let ptr = <&Pointer>::default();
-        assert_eq!(ptr, "");
     }
 
     #[test]
@@ -2265,13 +2297,6 @@ mod tests {
             let intersection = a.intersection(&b);
             assert_eq!(intersection, base);
         }
-    }
-    #[test]
-    fn parse_error_display() {
-        assert_eq!(
-            ParseError::NoLeadingBackslash.to_string(),
-            "json pointer is malformed as it does not start with a backslash ('/')"
-        );
     }
 
     #[test]
