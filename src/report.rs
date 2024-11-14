@@ -1,12 +1,12 @@
 //! Error reporting data structures and miette integration.
 
+use core::iter::once;
+
 use crate::{Pointer, PointerBuf, Token};
 
 /// Implemented by errors which can be converted into a [`Report`].
 pub trait Diagnostic: Sized {
     /// The value which caused the error.
-    ///
-    /// Depending on the error, this may be [`String`], [`PointerBuf`], or `()`
     type Subject;
 
     /// Convert the error into a [`Report`].
@@ -44,7 +44,18 @@ impl Label {
         let len = text.len();
         Some(Self { text, offset, len })
     }
+    #[cfg(feature = "miette")]
+    pub fn into_miette_labeled_span(self) -> miette::LabeledSpan {
+        miette::LabeledSpan::new(Some(self.text), self.offset, self.len)
+    }
 }
+#[cfg(feature = "miette")]
+impl From<Label> for miette::LabeledSpan {
+    fn from(label: Label) -> Self {
+        label.into_miette_labeled_span()
+    }
+}
+
 /// An error wrapper which includes the [`String`] which failed to parse or the
 /// [`PointerBuf`] being used.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -55,10 +66,14 @@ pub struct Report<E> {
     pub subject: Subject,
 }
 
-impl<E> Report<E> {
+impl<E: Diagnostic> Report<E> {
     /// Create a new `Report` with the given subject and error.
     pub fn new(error: E, subject: Subject) -> Self {
         Self { error, subject }
+    }
+
+    pub fn label(&self) -> Option<Label> {
+        self.error.label(&self.subject)
     }
 }
 
@@ -83,7 +98,7 @@ impl<E> std::error::Error for Report<E> where E: std::error::Error {}
 #[cfg(feature = "miette")]
 impl<E> miette::Diagnostic for Report<E>
 where
-    E: Diagnostic + Diagnostic + std::error::Error,
+    E: Diagnostic + std::error::Error,
 {
     fn url<'a>(&'a self) -> Option<Box<dyn core::fmt::Display + 'a>> {
         Some(Box::new(Self::url()))
@@ -94,7 +109,7 @@ where
     }
 
     fn labels(&self) -> Option<Box<dyn Iterator<Item = miette::LabeledSpan> + '_>> {
-        todo!()
+        Some(Box::new(once(self.label()?.into())))
     }
 }
 
@@ -246,11 +261,18 @@ impl From<String> for Subject {
 
 pub trait Diagnose<T> {
     type Error: Diagnostic;
+
     #[allow(clippy::missing_errors_doc)]
     fn diagnose(
         self,
-        value: impl Into<<Self::Error as Diagnostic>::Subject>,
+        subject: impl Into<<Self::Error as Diagnostic>::Subject>,
     ) -> Result<T, Report<Self::Error>>;
+
+    #[allow(clippy::missing_errors_doc)]
+    fn diagnose_with<F, S>(self, f: F) -> Result<T, Report<Self::Error>>
+    where
+        F: FnOnce() -> S,
+        S: Into<<Self::Error as Diagnostic>::Subject>;
 }
 
 impl<T, E> Diagnose<T> for Result<T, E>
@@ -261,9 +283,17 @@ where
 
     fn diagnose(
         self,
-        value: impl Into<<Self::Error as Diagnostic>::Subject>,
+        subject: impl Into<<Self::Error as Diagnostic>::Subject>,
     ) -> Result<T, Report<Self::Error>> {
-        self.map_err(|error| error.into_report(value.into()))
+        self.map_err(|error| error.into_report(subject.into()))
+    }
+
+    fn diagnose_with<F, S>(self, f: F) -> Result<T, Report<Self::Error>>
+    where
+        F: FnOnce() -> S,
+        S: Into<<Self::Error as Diagnostic>::Subject>,
+    {
+        self.diagnose(f())
     }
 }
 
@@ -305,6 +335,7 @@ pub(crate) use impl_diagnostic_url;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pointer::ParseBufError;
 
     #[test]
     #[cfg(all(
@@ -314,11 +345,18 @@ mod tests {
         feature = "json"
     ))]
     fn assign_error() {
-        use serde_json::json;
-        let ptr = PointerBuf::parse("/3").unwrap();
-        let mut value = json!(["baz"]);
-        ptr.assign(&mut value, json!("qux"))
-            .map_err(|e| miette::Report::new(e.into_report(ptr)))
-            .unwrap();
+        use crate::assign::Error;
+
+        fn assign_fail() -> Result<(), Report<Error>> {
+            let ptr = PointerBuf::parse("/foo/bar/invalid/cannot/reach").unwrap();
+            let mut value = serde_json::json!({"foo": {"bar": ["0"]}});
+            ptr.assign(&mut value, serde_json::json!("qux"))
+                .diagnose_with(|| ptr)?;
+            Ok(())
+        }
+        let report = assign_fail().unwrap_err();
+        println!("{:?}", report.label());
+        let m_rep = miette::Report::from(report);
+        println!("{m_rep}");
     }
 }

@@ -910,7 +910,7 @@ impl PointerBuf {
     ///
     /// ## Errors
     /// Returns a [`ParseBufError`] if the string is not a valid JSON Pointer.
-    pub fn parse(s: impl Into<String>) -> Result<Self, TopicalParseError> {
+    pub fn parse(s: impl Into<String>) -> Result<Self, ParseBufError> {
         let s = s.into();
         validate(&s).map_err(|err| err.with_subject(s.clone()))?;
         Ok(Self(s))
@@ -1198,30 +1198,30 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 */
 #[derive(Debug, PartialEq)]
-pub struct TopicalParseError {
+pub struct ParseBufError {
     pub value: String,
     pub source: ParseError,
 }
-impl std::error::Error for TopicalParseError {
+impl std::error::Error for ParseBufError {
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         Some(&self.source)
     }
 }
 
-impl core::fmt::Display for TopicalParseError {
+impl core::fmt::Display for ParseBufError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         core::fmt::Display::fmt(&self.source, f)
     }
 }
 
-impl From<TopicalParseError> for ParseError {
-    fn from(value: TopicalParseError) -> Self {
+impl From<ParseBufError> for ParseError {
+    fn from(value: ParseBufError) -> Self {
         value.source
     }
 }
-impl_diagnostic_url!(struct TopicalParseError);
+impl_diagnostic_url!(struct ParseBufError);
 
-impl Diagnostic for TopicalParseError {
+impl Diagnostic for ParseBufError {
     type Subject = ();
 
     fn into_report(self, (): Self::Subject) -> Report<Self> {
@@ -1272,8 +1272,8 @@ impl ParseError {
         }
     }
 
-    pub fn with_subject(self, value: String) -> TopicalParseError {
-        TopicalParseError {
+    pub fn with_subject(self, value: String) -> ParseBufError {
+        ParseBufError {
             source: self,
             value,
         }
@@ -1836,7 +1836,7 @@ mod tests {
     #[test]
     fn into_report() {
         let report = Pointer::parse("invalid~encoding")
-            .diagnose("invalid~encoding")
+            .diagnose_with(|| "invalid~encoding")
             .unwrap_err();
         assert_eq!(report.subject.as_str(), "invalid~encoding");
     }
