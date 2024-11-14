@@ -1,5 +1,5 @@
 use crate::{
-    report::{reportable, IntoReport, Report, Subject},
+    report::{impl_diagnostic_url, Diagnostic, Label, Report, Subject},
     token::InvalidEncodingError,
     Components, Token, Tokens,
 };
@@ -910,9 +910,9 @@ impl PointerBuf {
     ///
     /// ## Errors
     /// Returns a [`ParseBufError`] if the string is not a valid JSON Pointer.
-    pub fn parse(s: impl Into<String>) -> Result<Self, ParseBufError> {
+    pub fn parse(s: impl Into<String>) -> Result<Self, TopicalParseError> {
         let s = s.into();
-        validate(&s).map_err(|err| err.into_parse_buf_error(s.clone()))?;
+        validate(&s).map_err(|err| err.with_subject(s.clone()))?;
         Ok(Self(s))
     }
 
@@ -1192,52 +1192,49 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                                                                              ║
-║                                ParseBufError                                 ║
-║                               ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯                                ║
+║                              TopicalParseError                               ║
+║                             ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 */
 #[derive(Debug, PartialEq)]
-pub struct ParseBufError {
+pub struct TopicalParseError {
     pub value: String,
     pub source: ParseError,
 }
-impl std::error::Error for ParseBufError {
+impl std::error::Error for TopicalParseError {
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         Some(&self.source)
     }
 }
 
-impl core::fmt::Display for ParseBufError {
+impl core::fmt::Display for TopicalParseError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         core::fmt::Display::fmt(&self.source, f)
     }
 }
 
-impl From<ParseBufError> for ParseError {
-    fn from(value: ParseBufError) -> Self {
+impl From<TopicalParseError> for ParseError {
+    fn from(value: TopicalParseError) -> Self {
         value.source
     }
 }
+impl_diagnostic_url!(struct TopicalParseError);
 
-impl IntoReport for ParseBufError {
-    type Subject = String;
+impl Diagnostic for TopicalParseError {
+    type Subject = ();
 
-    fn into_report(self, value: Self::Subject) -> Report<Self> {
-        debug_assert_eq!(value, self.value);
-        let len = match &self.source {
-            ParseError::NoLeadingBackslash => 1,
-            ParseError::InvalidEncoding { offset, .. } => {
-                if *offset < value.len() - 1 {
-                    2
-                } else {
-                    1
-                }
-            }
-        };
-        let offset = self.source.complete_offset();
-        let subject = Subject::string(value, offset, len);
-        Report::new(subject, self)
+    fn into_report(self, (): Self::Subject) -> Report<Self> {
+        let subject = Subject::String(self.value.clone());
+        Report::new(self, subject)
+    }
+
+    fn url() -> &'static str {
+        Self::url()
+    }
+
+    fn label(&self, subject: &Subject) -> Option<Label> {
+        self.source.label(subject)
     }
 }
 
@@ -1268,32 +1265,50 @@ pub enum ParseError {
     },
 }
 impl ParseError {
-    fn into_parse_buf_error(self, value: String) -> ParseBufError {
-        ParseBufError {
+    pub fn offset(&self) -> usize {
+        match self {
+            Self::NoLeadingBackslash => 0,
+            Self::InvalidEncoding { offset, .. } => *offset,
+        }
+    }
+
+    pub fn with_subject(self, value: String) -> TopicalParseError {
+        TopicalParseError {
             source: self,
             value,
         }
     }
-}
 
-reportable!(struct ParseError);
-
-impl IntoReport for ParseError {
-    type Subject = String;
-
-    fn into_report(self, value: Self::Subject) -> Report<Self> {
-        let len = match &self {
-            Self::NoLeadingBackslash => 1,
+    pub fn invalid_encoding_len(&self, subject: &Pointer) -> usize {
+        match self {
+            Self::NoLeadingBackslash => 0,
             Self::InvalidEncoding { offset, .. } => {
-                if *offset < value.len() - 1 {
+                if *offset < subject.len() - 1 {
                     2
                 } else {
                     1
                 }
             }
-        };
-        let subject = Subject::string(value, self.complete_offset(), len);
-        Report::new(subject, self)
+        }
+    }
+}
+
+impl_diagnostic_url!(struct ParseError);
+
+impl Diagnostic for ParseError {
+    type Subject = String;
+
+    fn into_report(self, subject: Self::Subject) -> Report<Self> {
+        Report::new(self, subject.into())
+    }
+
+    fn url() -> &'static str {
+        Self::url()
+    }
+
+    fn label(&self, subject: &Subject) -> Option<crate::report::Label> {
+        let ptr = subject.as_pointer_buf()?;
+        Label::for_string(subject, self.offset(), self.invalid_encoding_len(ptr))
     }
 }
 
@@ -1430,7 +1445,7 @@ impl std::error::Error for ReplaceError {}
 mod tests {
     use std::error::Error;
 
-    use crate::report::ReportErr;
+    use crate::report::Diagnose;
 
     use super::*;
     use quickcheck::TestResult;
@@ -1821,7 +1836,7 @@ mod tests {
     #[test]
     fn into_report() {
         let report = Pointer::parse("invalid~encoding")
-            .report_err("invalid~encoding")
+            .diagnose("invalid~encoding")
             .unwrap_err();
         assert_eq!(report.subject.as_str(), "invalid~encoding");
     }

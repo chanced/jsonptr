@@ -1,19 +1,50 @@
 //! Error reporting data structures and miette integration.
 
-use core::iter::once;
-
-use crate::{Pointer, PointerBuf};
+use crate::{Pointer, PointerBuf, Token};
 
 /// Implemented by errors which can be converted into a [`Report`].
-pub trait IntoReport: Sized {
+pub trait Diagnostic: Sized {
     /// The value which caused the error.
     ///
-    /// Depending on the error, this may be either [`String`] or [`PointerBuf`]
+    /// Depending on the error, this may be [`String`], [`PointerBuf`], or `()`
     type Subject;
+
     /// Convert the error into a [`Report`].
-    fn into_report(self, value: Self::Subject) -> Report<Self>;
+    fn into_report(self, subject: Self::Subject) -> Report<Self>;
+
+    /// The docs.rs URL for this error
+    fn url() -> &'static str;
+
+    /// Returns the label for the given [`Subject`] if applicable.
+    fn label(&self, subject: &Subject) -> Option<Label>;
 }
 
+/// A label for a span within a json pointer or malformed string.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Label {
+    /// The text for the label.
+    pub text: String,
+    /// The offset of the label.
+    pub offset: usize,
+    /// The length of the label.
+    pub len: usize,
+}
+
+impl Label {
+    pub fn for_pointer_buf(subject: &Subject, position: usize) -> Option<Self> {
+        let offset = subject.offset_for_position(position)?;
+        let token = subject.token(position)?;
+        let text = token.decoded().to_string();
+        let len = text.len();
+        Some(Self { text, offset, len })
+    }
+    pub fn for_string(subject: &Subject, offset: usize, len: usize) -> Option<Self> {
+        let string = subject.as_string()?;
+        let text = string.get(offset..offset + len)?.to_string();
+        let len = text.len();
+        Some(Self { text, offset, len })
+    }
+}
 /// An error wrapper which includes the [`String`] which failed to parse or the
 /// [`PointerBuf`] being used.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,12 +57,12 @@ pub struct Report<E> {
 
 impl<E> Report<E> {
     /// Create a new `Report` with the given subject and error.
-    pub fn new(subject: Subject, error: E) -> Self {
+    pub fn new(error: E, subject: Subject) -> Self {
         Self { error, subject }
     }
 }
 
-impl<E: Reportable> Report<E> {
+impl<E: Diagnostic> Report<E> {
     /// The docs.rs URL for the error of this [`Report`].
     fn url() -> &'static str {
         E::url()
@@ -46,12 +77,13 @@ where
         std::fmt::Display::fmt(&self.error, f)
     }
 }
+
 impl<E> std::error::Error for Report<E> where E: std::error::Error {}
 
 #[cfg(feature = "miette")]
 impl<E> miette::Diagnostic for Report<E>
 where
-    E: Reportable + IntoReport + std::error::Error,
+    E: Diagnostic + Diagnostic + std::error::Error,
 {
     fn url<'a>(&'a self) -> Option<Box<dyn core::fmt::Display + 'a>> {
         Some(Box::new(Self::url()))
@@ -61,39 +93,88 @@ where
         Some(&self.subject)
     }
 
-    fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
-        match &self.subject {
-            Subject::String {
-                string,
-                offset,
-                len,
-            } => {
-                let span = LabeledSpan::new(Some(string.to_string()), *offset, *len);
-                Some(Box::new(once(span)))
-            }
-            Subject::PointerBuf { pointer, position } => {
-                let offset = pointer.get(0..*position).unwrap().as_str().len();
-                let token = pointer.get(*position).unwrap();
-                let decoded = token.decoded();
-                let len = decoded.len();
-                let span = LabeledSpan::new(Some(decoded.to_string()), offset, len);
-                Some(Box::new(once(span)))
-            }
-        }
+    fn labels(&self) -> Option<Box<dyn Iterator<Item = miette::LabeledSpan> + '_>> {
+        todo!()
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Subject {
-    String {
-        string: String,
-        offset: usize,
-        len: usize,
-    },
-    PointerBuf {
-        pointer: PointerBuf,
-        position: usize,
-    },
+    String(String),
+    PointerBuf(PointerBuf),
+}
+
+impl Subject {
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::String(s) => s.as_str(),
+            Self::PointerBuf(p) => p.as_str(),
+        }
+    }
+    /// Returns a reference to the string if this `Subject` is a `String`.
+    /// Returns `None` if  is a `PointerBuf`.
+    pub fn as_string(&self) -> Option<&String> {
+        match self {
+            Self::String(s) => Some(s),
+            Self::PointerBuf(_) => None,
+        }
+    }
+
+    /// Returns a reference to the [`PointerBuf`] if this `Subject` is a `PointerBuf`.
+    pub fn as_pointer_buf(&self) -> Option<&PointerBuf> {
+        match self {
+            Self::PointerBuf(p) => Some(p),
+            Self::String(_) => None,
+        }
+    }
+
+    /// If this `Source` is a `PointerBuf`, returns the offset of the given
+    /// token position (index).
+    pub fn offset_for_position(&self, position: usize) -> Option<usize> {
+        let ptr = self.as_pointer_buf()?;
+        ptr.get(0..position).map(|s| s.as_str().len())
+    }
+
+    /// If this `Source` is a `PointerBuf`, returns the token at
+    /// the given position (index), if it exists.
+    pub fn token(&self, position: usize) -> Option<Token> {
+        self.as_pointer_buf().and_then(|ptr| ptr.get(position))
+    }
+
+    /// Returns `true` if the subject is [`String`].
+    ///
+    /// [`String`]: Subject::String
+    #[must_use]
+    pub fn is_string(&self) -> bool {
+        matches!(self, Self::String(..))
+    }
+
+    /// Returns `true` if the subject is [`PointerBuf`].
+    ///
+    /// [`PointerBuf`]: Subject::PointerBuf
+    #[must_use]
+    pub fn is_pointer_buf(&self) -> bool {
+        matches!(self, Self::PointerBuf(..))
+    }
+
+    /// ## Errors
+    /// Returns `Self` if the [`Subject`] is not a `String`.
+    pub fn try_into_string(self) -> Result<String, Self> {
+        if let Self::String(v) = self {
+            Ok(v)
+        } else {
+            Err(self)
+        }
+    }
+    /// ## Errors
+    /// Returns `Self` if the [`Subject`] is not a `PointerBuf`.
+    pub fn try_into_pointer_buf(self) -> Result<PointerBuf, Self> {
+        if let Self::PointerBuf(v) = self {
+            Ok(v)
+        } else {
+            Err(self)
+        }
+    }
 }
 
 #[cfg(feature = "miette")]
@@ -109,92 +190,95 @@ impl miette::SourceCode for Subject {
     }
 }
 
-impl Subject {
-    pub(crate) fn string(value: String, offset: usize, len: usize) -> Self {
-        Self::String {
-            string: value,
-            offset,
-            len,
-        }
-    }
-    pub(crate) fn pointer(value: PointerBuf, position: usize) -> Self {
-        Self::PointerBuf {
-            pointer: value,
-            position,
-        }
-    }
-    pub fn as_str(&self) -> &str {
-        match self {
-            Self::String { string: value, .. } => value,
-            Self::PointerBuf { pointer: value, .. } => value.as_str(),
-        }
-    }
-}
 impl PartialEq<str> for Subject {
     fn eq(&self, other: &str) -> bool {
         match self {
-            Self::String { string: value, .. } => value == other,
-            Self::PointerBuf { pointer: value, .. } => value.as_str() == other,
+            Self::String(this) => this == other,
+            Self::PointerBuf(this) => this.as_str() == other,
         }
+    }
+}
+impl PartialEq<Subject> for str {
+    fn eq(&self, other: &Subject) -> bool {
+        other == self
     }
 }
 impl PartialEq<Pointer> for Subject {
     fn eq(&self, other: &Pointer) -> bool {
-        match self {
-            Self::String { string: value, .. } => other.as_str() == value,
-            Self::PointerBuf { pointer: value, .. } => value == other,
-        }
+        self == other.as_str()
+    }
+}
+impl PartialEq<Subject> for String {
+    fn eq(&self, other: &Subject) -> bool {
+        self == other.as_str()
+    }
+}
+impl PartialEq<String> for Subject {
+    fn eq(&self, other: &String) -> bool {
+        self == other.as_str()
+    }
+}
+impl PartialEq<Subject> for Pointer {
+    fn eq(&self, other: &Subject) -> bool {
+        self.as_str() == other
     }
 }
 impl From<&str> for Subject {
     fn from(value: &str) -> Self {
-        Self::String {
-            string: value.to_string(),
-            offset: 0,
-            len: value.len(),
-        }
+        Self::String(value.to_string())
+    }
+}
+impl From<&Pointer> for Subject {
+    fn from(value: &Pointer) -> Self {
+        Self::PointerBuf(value.to_buf())
+    }
+}
+impl From<PointerBuf> for Subject {
+    fn from(value: PointerBuf) -> Self {
+        Self::PointerBuf(value)
+    }
+}
+impl From<String> for Subject {
+    fn from(value: String) -> Self {
+        Self::String(value)
     }
 }
 
-pub trait ReportErr<T> {
-    type Error: IntoReport;
+pub trait Diagnose<T> {
+    type Error: Diagnostic;
     #[allow(clippy::missing_errors_doc)]
-    fn report_err(
+    fn diagnose(
         self,
-        value: impl Into<<Self::Error as IntoReport>::Subject>,
+        value: impl Into<<Self::Error as Diagnostic>::Subject>,
     ) -> Result<T, Report<Self::Error>>;
 }
 
-impl<T, E> ReportErr<T> for Result<T, E>
+impl<T, E> Diagnose<T> for Result<T, E>
 where
-    E: IntoReport,
+    E: Diagnostic,
 {
     type Error = E;
 
-    fn report_err(
+    fn diagnose(
         self,
-        value: impl Into<<Self::Error as IntoReport>::Subject>,
+        value: impl Into<<Self::Error as Diagnostic>::Subject>,
     ) -> Result<T, Report<Self::Error>> {
         self.map_err(|error| error.into_report(value.into()))
     }
 }
-pub trait Reportable {
-    /// The docs.rs URL for this error
-    fn url() -> &'static str;
-}
 
-macro_rules! reportable {
+macro_rules! impl_diagnostic_url {
     (enum $type:ident) => {
-        crate::report::reportable!("enum", "", $type);
+        crate::report::impl_diagnostic_url!("enum", "", $type);
     };
     (struct $type:ident) => {
-        crate::report::reportable!("struct", "", $type);
+        crate::report::impl_diagnostic_url!("struct", "", $type);
     };
     (enum $mod:ident::$type:ident) => {
-        crate::report::reportable!("enum", concat!("/", stringify!($mod)), $type);
+        crate::report::impl_diagnostic_url!("enum", concat!("/", stringify!($mod)), $type);
     };
     (struct $mod:ident::$type:ident) => {
-        crate::report::reportable!("struct", concat!("/", stringify!($mod)), $type);
+        crate::report::impl_diagnostic_url!("struct", concat!("/", stringify!($mod)), $type);
     };
     ($kind:literal, $mod:expr, $type:ident) => {
         impl $type {
@@ -214,16 +298,9 @@ macro_rules! reportable {
                 )
             }
         }
-        impl crate::report::Reportable for $type {
-            fn url() -> &'static str {
-                $type::url()
-            }
-        }
     };
 }
-
-use miette::LabeledSpan;
-pub(crate) use reportable;
+pub(crate) use impl_diagnostic_url;
 
 #[cfg(test)]
 mod tests {
@@ -237,12 +314,11 @@ mod tests {
         feature = "json"
     ))]
     fn assign_error() {
-        use miette::Diagnostic;
         use serde_json::json;
         let ptr = PointerBuf::parse("/3").unwrap();
         let mut value = json!(["baz"]);
-        let error = ptr.assign(&mut value, json!("qux")).unwrap_err();
-        let report = error.into_report(ptr);
-        println!("{report}");
+        ptr.assign(&mut value, json!("qux"))
+            .map_err(|e| miette::Report::new(e.into_report(ptr)))
+            .unwrap();
     }
 }

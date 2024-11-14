@@ -37,7 +37,7 @@
 //!
 
 use crate::{
-    index::{OutOfBoundsError, ParseIndexError}, report::{reportable, IntoReport, Report, Subject}, Pointer, PointerBuf
+    index::{OutOfBoundsError, ParseIndexError}, report::{impl_diagnostic_url, Diagnostic, Label, Report, Subject}, Pointer, PointerBuf
 };
 use core::fmt::{self, Debug};
 
@@ -182,8 +182,6 @@ pub enum Error {
     },
 }
 
-reportable!(enum Error);
-
 impl Error {
     /// Returns the position (index) of the [`Token`](crate::Token) which was out of bounds
     pub fn position(&self) -> usize {
@@ -214,10 +212,22 @@ impl fmt::Display for Error {
     }
 }
 
-impl IntoReport for Error {
+impl_diagnostic_url!(enum assign::Error);
+
+
+impl Diagnostic for Error {
     type Subject = PointerBuf;
-    fn into_report(self, value: Self::Subject) -> Report<Self> {
-        Report::new(Subject::PointerBuf { pointer: value, position: self.position() }, self)
+
+    fn into_report(self, source: Self::Subject) -> Report<Self> {
+        Report::new(self, source.into())
+    }
+    
+    fn url() -> &'static str {
+        Self::url()
+    }
+    
+    fn label(&self, subject: &Subject) -> Option<crate::report::Label> {
+        Label::for_pointer_buf(subject, self.position())
     }
     
 }
