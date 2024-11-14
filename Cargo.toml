@@ -16,6 +16,7 @@ rust-version = "1.79.0"
 version = "0.6.3"
 
 [dependencies]
+miette     = { version = "7.2.0", optional = true }
 serde      = { version = "1.0.203", optional = true, features = ["alloc"] }
 serde_json = { version = "1.0.119", optional = true, features = ["alloc"] }
 toml       = { version = "0.8", optional = true }
@@ -30,10 +31,20 @@ quickcheck_macros = "1.0.0"
 syn = { version = "1.0.109", optional = true }
 
 [features]
-assign  = []
-default = ["std", "serde", "json", "toml", "resolve", "assign", "delete"]
-delete  = ["resolve"]
-json    = ["dep:serde_json", "serde"]
+assign = []
+default = [
+  "std",
+  "serde",
+  "json",
+  "toml",    # TODO: remove
+  "resolve",
+  "assign",
+  "delete",
+  "miette",  # TODO: remove
+]
+delete = ["resolve"]
+json = ["dep:serde_json", "serde"]
+miette = ["dep:miette", "std"]
 resolve = []
-std     = ["serde/std", "serde_json?/std"]
-toml    = ["dep:toml", "serde", "std"]
+std = ["serde/std", "serde_json?/std"]
+toml = ["dep:toml", "serde", "std"]

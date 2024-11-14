@@ -1,5 +1,5 @@
 use crate::{
-    report::{IntoReport, Report, Subject},
+    report::{reportable, IntoReport, Report, Subject},
     token::InvalidEncodingError,
     Components, Token, Tokens,
 };
@@ -1221,9 +1221,9 @@ impl From<ParseBufError> for ParseError {
 }
 
 impl IntoReport for ParseBufError {
-    type Value = String;
+    type Subject = String;
 
-    fn into_report(self, value: Self::Value) -> Report<Self> {
+    fn into_report(self, value: Self::Subject) -> Report<Self> {
         debug_assert_eq!(value, self.value);
         let len = match &self.source {
             ParseError::NoLeadingBackslash => 1,
@@ -1276,10 +1276,12 @@ impl ParseError {
     }
 }
 
-impl IntoReport for ParseError {
-    type Value = String;
+reportable!(struct ParseError);
 
-    fn into_report(self, value: Self::Value) -> Report<Self> {
+impl IntoReport for ParseError {
+    type Subject = String;
+
+    fn into_report(self, value: Self::Subject) -> Report<Self> {
         let len = match &self {
             Self::NoLeadingBackslash => 1,
             Self::InvalidEncoding { offset, .. } => {
@@ -1427,6 +1429,8 @@ impl std::error::Error for ReplaceError {}
 #[cfg(test)]
 mod tests {
     use std::error::Error;
+
+    use crate::report::ReportErr;
 
     use super::*;
     use quickcheck::TestResult;
@@ -1812,6 +1816,14 @@ mod tests {
                 }
             })
         );
+    }
+
+    #[test]
+    fn into_report() {
+        let report = Pointer::parse("invalid~encoding")
+            .report_err("invalid~encoding")
+            .unwrap_err();
+        assert_eq!(report.subject.as_str(), "invalid~encoding");
     }
 
     #[test]

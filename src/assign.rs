@@ -37,8 +37,7 @@
 //!
 
 use crate::{
-    index::{OutOfBoundsError, ParseIndexError},
-    Pointer,
+    index::{OutOfBoundsError, ParseIndexError}, report::{reportable, IntoReport, Report, Subject}, Pointer, PointerBuf
 };
 use core::fmt::{self, Debug};
 
@@ -183,6 +182,18 @@ pub enum Error {
     },
 }
 
+reportable!(enum Error);
+
+impl Error {
+    /// Returns the position (index) of the [`Token`](crate::Token) which was out of bounds
+    pub fn position(&self) -> usize {
+        match self {
+            Self::OutOfBounds { position, .. } | Self::FailedToParseIndex { position, .. } => *position,
+        }
+    }
+}
+
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -203,6 +214,14 @@ impl fmt::Display for Error {
     }
 }
 
+impl IntoReport for Error {
+    type Subject = PointerBuf;
+    fn into_report(self, value: Self::Subject) -> Report<Self> {
+        Report::new(Subject::PointerBuf { pointer: value, position: self.position() }, self)
+    }
+    
+}
+
 #[cfg(feature = "std")]
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
@@ -211,11 +230,6 @@ impl std::error::Error for Error {
             Self::OutOfBounds { source, .. } => Some(source),
         }
     }
-}
-
-enum Assigned<'v, V> {
-    Done(Option<V>),
-    Continue { next_dest: &'v mut V, same_value: V },
 }
 
 /*
@@ -581,6 +595,12 @@ mod toml {
         Assigned::Done(Some(mem::replace(scalar, expand(remaining, value))))
     }
 }
+
+enum Assigned<'v, V> {
+    Done(Option<V>),
+    Continue { next_dest: &'v mut V, same_value: V },
+}
+
 
 /*
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
