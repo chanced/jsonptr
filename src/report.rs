@@ -351,12 +351,17 @@ mod tests {
             let ptr = PointerBuf::parse("/foo/bar/invalid/cannot/reach").unwrap();
             let mut value = serde_json::json!({"foo": {"bar": ["0"]}});
             ptr.assign(&mut value, serde_json::json!("qux"))
-                .diagnose_with(|| ptr)?;
+                .diagnose(ptr)?;
             Ok(())
         }
         let report = assign_fail().unwrap_err();
+        // ensuring i have a label..
         println!("{:?}", report.label());
+        println!("{report:?}");
+        // trying to force it here to see if i can get a fancy display
         let m_rep = miette::Report::from(report);
+
+        println!("{m_rep:?}");
         println!("{m_rep}");
     }
 }
