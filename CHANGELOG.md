@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   Adds `Pointer::starts_with` and `Pointer::ends_with` for prefix and suffix matching.
 -   Adds new `ParseIndexError` variant to express the presence non-digit characters in the token.
 -   Adds `Token::is_next` for checking if a token represents the `-` character.
--   Adds `ParseBufError`, returned as the `Err` side of `PointerBuf::parse`, which includes the input `String`.
+-   Adds `ParseBufError`, returned as the `Err` variant of `PointerBuf::parse`, which includes the input `String`.
 
 ### Changed
 
