@@ -81,12 +81,12 @@ impl<E: Diagnostic> Report<E> {
     }
 }
 
-impl<E> std::fmt::Display for Report<E>
+impl<E> core::fmt::Display for Report<E>
 where
-    E: std::fmt::Display,
+    E: core::fmt::Display,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Display::fmt(&self.source, f)
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        core::fmt::Display::fmt(&self.source, f)
     }
 }
 
@@ -342,8 +342,9 @@ mod tests {
     fn assign_error() {
         use crate::assign::Error;
 
-        let ptr = PointerBuf::parse("/foo/bar/invalid/cannot/reach").unwrap();
         let mut v = serde_json::json!({"foo": {"bar": ["0"]}});
+
+        let ptr = PointerBuf::parse("/foo/bar/invalid/cannot/reach").unwrap();
         let report = ptr.assign(&mut v, "qux").diagnose(ptr).unwrap_err();
         println!("{:?}", miette::Report::from(report));
 

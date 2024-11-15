@@ -144,7 +144,7 @@ pub trait Assign {
 */
 
 /// Alias for [`Error`] - indicates a value assignment failed.
-#[deprecated(since = "0.7.0", note = "renamed to `AssignError`")]
+#[deprecated(since = "0.7.0", note = "renamed to `Error`")]
 pub type AssignError = Error;
 
 /*

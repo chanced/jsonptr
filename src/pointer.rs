@@ -909,7 +909,7 @@ impl PointerBuf {
     /// Attempts to parse a string into a `PointerBuf`.
     ///
     /// ## Errors
-    /// Returns a [`ParseBufError`] if the string is not a valid JSON Pointer.
+    /// Returns a [`RichParseError`] if the string is not a valid JSON Pointer.
     pub fn parse(s: impl Into<String>) -> Result<Self, RichParseError> {
         let s = s.into();
         validate(&s).map_err(|err| err.with_subject(s.clone()))?;
@@ -1218,9 +1218,25 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
 */
 #[derive(Debug, PartialEq)]
 pub struct RichParseError {
-    pub value: String,
-    pub source: ParseError,
+    value: String,
+    source: ParseError,
 }
+
+impl RichParseError {
+    pub fn new(value: String, source: ParseError) -> Self {
+        Self { value, source }
+    }
+
+    pub fn value(&self) -> &str {
+        &self.value
+    }
+
+    pub fn source(&self) -> &ParseError {
+        &self.source
+    }
+}
+
+#[cfg(feature = "std")]
 impl std::error::Error for RichParseError {
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         Some(&self.source)
