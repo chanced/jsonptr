@@ -342,14 +342,41 @@ mod tests {
     fn assign_error() {
         use crate::assign::Error;
 
-        fn assign_fail() -> Result<(), Report<Error>> {
+        fn invalid_index() -> Result<(), Report<Error>> {
             let ptr = PointerBuf::parse("/foo/bar/invalid/cannot/reach").unwrap();
             let mut value = serde_json::json!({"foo": {"bar": ["0"]}});
             ptr.assign(&mut value, serde_json::json!("qux"))
                 .diagnose(ptr)?;
             Ok(())
         }
-        let report = miette::Report::from(assign_fail().unwrap_err());
+
+        fn out_of_bounds() -> Result<(), Report<Error>> {
+            let ptr = PointerBuf::parse("/foo/bar/3/cannot/reach").unwrap();
+            let mut value = serde_json::json!({"foo": {"bar": ["0"]}});
+            ptr.assign(&mut value, serde_json::json!("qux"))
+                .diagnose(ptr)?;
+            Ok(())
+        }
+
+        let report = miette::Report::from(invalid_index().unwrap_err());
+        println!("{report:?}");
+
+        let report = miette::Report::from(out_of_bounds().unwrap_err());
+        println!("{report:?}");
+    }
+
+    #[test]
+    fn parse_error() {
+        let invalid = "/foo/bar/invalid~3~encoding/cannot/reach";
+        let report = Pointer::parse(invalid).diagnose(invalid).unwrap_err();
+        println!("{:?}", miette::Report::from(report));
+
+        // TODO: impl `miette::Diagnostic` for `RichParseError`
+        let report = PointerBuf::parse("/foo/bar/invalid~3~encoding/cannot/reach")
+            .diagnose(())
+            .unwrap_err();
+
+        let report = miette::Report::from(report);
         println!("{report:?}");
     }
 }
