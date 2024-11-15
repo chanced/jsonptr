@@ -356,10 +356,7 @@ pub struct InvalidEncodingError {
 
 impl fmt::Display for InvalidEncodingError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "json pointer is malformed due to invalid encoding ('~' not followed by '0' or '1')"
-        )
+        write!(f, "json pointer is malformed due to invalid encoding")
     }
 }
 

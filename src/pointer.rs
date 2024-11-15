@@ -1347,7 +1347,7 @@ impl fmt::Display for ParseError {
                     "json pointer is malformed as it does not start with a backslash ('/') and is not empty"
                 )
             }
-            Self::InvalidEncoding { source, .. } => write!(f, "{source}"),
+            Self::InvalidEncoding { source, .. } => fmt::Display::fmt(source, f),
         }
     }
 }
