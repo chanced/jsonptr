@@ -233,7 +233,7 @@ impl Diagnostic for Error {
     type Subject = PointerBuf;
 
     fn into_report(self, source: Self::Subject) -> Report<Self> {
-        Report::new(self, source.into())
+        Report::new(self, source)
     }
 
     fn url() -> &'static str {

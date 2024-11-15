@@ -1218,21 +1218,26 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
 */
 #[derive(Debug, PartialEq)]
 pub struct RichParseError {
-    value: String,
+    subject: String,
     source: ParseError,
 }
 
 impl RichParseError {
-    pub fn new(value: String, source: ParseError) -> Self {
-        Self { value, source }
+    pub fn new(subject: String, source: ParseError) -> Self {
+        Self { subject, source }
     }
 
-    pub fn value(&self) -> &str {
-        &self.value
+    pub fn subject(&self) -> &str {
+        &self.subject
     }
 
     pub fn source(&self) -> &ParseError {
         &self.source
+    }
+
+    // TODO: should this be pub?
+    pub(crate) fn take(self) -> (ParseError, String) {
+        (self.source, self.subject)
     }
 }
 
@@ -1240,6 +1245,23 @@ impl RichParseError {
 impl std::error::Error for RichParseError {
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         Some(&self.source)
+    }
+}
+
+#[cfg(feature = "miette")]
+impl miette::Diagnostic for RichParseError {
+    fn url<'a>(&'a self) -> Option<Box<dyn core::fmt::Display + 'a>> {
+        Some(Box::new(Self::url()))
+    }
+
+    fn source_code(&self) -> Option<&dyn miette::SourceCode> {
+        Some(&self.subject)
+    }
+
+    fn labels(&self) -> Option<Box<dyn Iterator<Item = miette::LabeledSpan> + '_>> {
+        Some(Box::new(
+            self.source.create_labels(&self.subject).map(Into::into),
+        ))
     }
 }
 
@@ -1254,13 +1276,41 @@ impl From<RichParseError> for ParseError {
         value.source
     }
 }
+
+impl From<Report<ParseError>> for RichParseError {
+    fn from(value: Report<ParseError>) -> Self {
+        let (err, subj) = value.take();
+        Self::new(subj.to_string(), err)
+    }
+}
+
+impl From<Report<RichParseError>> for RichParseError {
+    fn from(value: Report<RichParseError>) -> Self {
+        let (err, _) = value.take();
+        err
+    }
+}
+impl From<RichParseError> for Report<RichParseError> {
+    fn from(err: RichParseError) -> Self {
+        let subj = err.subject().to_string();
+        Report::new(err, subj)
+    }
+}
+
+impl From<RichParseError> for Report<ParseError> {
+    fn from(err: RichParseError) -> Self {
+        let (err, subj) = err.take();
+        Report::new(err, subj)
+    }
+}
+
 impl_diagnostic_url!(struct RichParseError);
 
 impl Diagnostic for RichParseError {
     type Subject = ();
 
     fn into_report(self, (): Self::Subject) -> Report<Self> {
-        let subject = Subject::String(self.value.clone());
+        let subject = Subject::String(self.subject.clone());
         Report::new(self, subject)
     }
 
@@ -1309,7 +1359,7 @@ impl ParseError {
     pub fn with_subject(self, value: String) -> RichParseError {
         RichParseError {
             source: self,
-            value,
+            subject: value,
         }
     }
 
@@ -1333,7 +1383,7 @@ impl Diagnostic for ParseError {
     type Subject = String;
 
     fn into_report(self, subject: Self::Subject) -> Report<Self> {
-        Report::new(self, subject.into())
+        Report::new(self, subject)
     }
 
     fn url() -> &'static str {
@@ -1342,7 +1392,12 @@ impl Diagnostic for ParseError {
 
     fn labels(&self, subject: &Subject) -> Option<Box<dyn Iterator<Item = Label>>> {
         // TODO: considering searching the pointer for all invalid encodings
-        let subject = subject.as_string()?;
+        Some(self.create_labels(subject.as_string()?))
+    }
+}
+
+impl ParseError {
+    fn create_labels(&self, subject: &str) -> Box<dyn Iterator<Item = Label>> {
         let offset = self.complete_offset();
         let len = self.invalid_encoding_len(subject);
         let text = match self {
@@ -1350,10 +1405,9 @@ impl Diagnostic for ParseError {
             ParseError::InvalidEncoding { .. } => "'~' must be followed by '0' or '1'",
         }
         .to_string();
-        Some(Box::new(once(Label { text, offset, len })))
+        Box::new(once(Label { text, offset, len }))
     }
 }
-
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -2413,5 +2467,11 @@ mod tests {
         let boxed: Box<Pointer> = subjectal.clone().into();
         let unboxed = boxed.into_buf();
         assert_eq!(subjectal, unboxed);
+    }
+
+    #[test]
+    fn quick_miette_spike() {
+        let err = PointerBuf::parse("hello-world").unwrap_err();
+        println!("{:?}", miette::Report::from(err));
     }
 }

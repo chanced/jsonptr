@@ -54,10 +54,10 @@ pub struct Report<E> {
 
 impl<E: Diagnostic> Report<E> {
     /// Create a new `Report` with the given subject and error.
-    pub fn new(error: E, subject: Subject) -> Self {
+    pub fn new(error: E, subject: impl Into<Subject>) -> Self {
         Self {
             source: error,
-            subject,
+            subject: subject.into(),
         }
     }
 
@@ -71,6 +71,11 @@ impl<E: Diagnostic> Report<E> {
 
     pub fn source(&self) -> &E {
         &self.source
+    }
+
+    // TODO: should this be pub?
+    pub(crate) fn take(self) -> (E, Subject) {
+        (self.source, self.subject)
     }
 }
 
@@ -114,6 +119,14 @@ where
 pub enum Subject {
     String(String),
     PointerBuf(PointerBuf),
+}
+impl core::fmt::Display for Subject {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::String(s) => core::fmt::Display::fmt(s, f),
+            Self::PointerBuf(p) => core::fmt::Display::fmt(p, f),
+        }
+    }
 }
 
 impl Subject {
