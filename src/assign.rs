@@ -37,9 +37,14 @@
 //!
 
 use crate::{
-    index::{OutOfBoundsError, ParseIndexError}, report::{impl_diagnostic_url, Diagnostic, Label, Report, Subject}, Pointer, PointerBuf
+    index::{OutOfBoundsError, ParseIndexError},
+    report::{impl_diagnostic_url, Diagnostic, Label, Report, Subject},
+    Pointer, PointerBuf,
 };
-use core::fmt::{self, Debug};
+use core::{
+    fmt::{self, Debug},
+    iter::once,
+};
 
 /*
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -140,8 +145,7 @@ pub trait Assign {
 
 /// Alias for [`Error`] - indicates a value assignment failed.
 #[deprecated(since = "0.7.0", note = "renamed to `AssignError`")]
-pub type AssignError = Error; 
-
+pub type AssignError = Error;
 
 /*
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -153,13 +157,13 @@ pub type AssignError = Error;
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 */
 
-
 /// Possible error returned from [`Assign`] implementations for
 /// [`serde_json::Value`] and
 /// [`toml::Value`](https://docs.rs/toml/0.8.14/toml/index.html).
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error {
-    /// A [`Token`] within the [`Pointer`] failed to be parsed as an array index.
+    /// A [`Token`](crate::Token) within the [`Pointer`] failed to be parsed as
+    /// an array index.
     FailedToParseIndex {
         /// Position (index) of the token which failed to parse as an [`Index`](crate::index::Index)
         position: usize,
@@ -169,7 +173,8 @@ pub enum Error {
         source: ParseIndexError,
     },
 
-    /// A [`Token`] within the [`Pointer`] contains an [`Index`] which is out of bounds.
+    /// A [`Token`](crate::Token) within the [`Pointer`] contains an
+    /// [`Index`](crate::index::Index) which is out of bounds.
     ///
     /// The current or resulting array's length is less than the index.
     OutOfBounds {
@@ -186,26 +191,36 @@ impl Error {
     /// Returns the position (index) of the [`Token`](crate::Token) which was out of bounds
     pub fn position(&self) -> usize {
         match self {
-            Self::OutOfBounds { position, .. } | Self::FailedToParseIndex { position, .. } => *position,
+            Self::OutOfBounds { position, .. } | Self::FailedToParseIndex { position, .. } => {
+                *position
+            }
+        }
+    }
+
+    pub fn offset(&self) -> usize {
+        match self {
+            Self::OutOfBounds { offset, .. } | Self::FailedToParseIndex { offset, .. } => *offset,
         }
     }
 }
 
-
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::FailedToParseIndex {..} => {
+            Self::FailedToParseIndex { .. } => {
                 write!(
                     f,
-                    "value failed to be assigned by json pointer because an array index is not a valid integer or or '-'"
+                    "value failed to be assigned by json pointer; \
+                    array index for token at offset {} is not a valid integer or '-'",
+                    self.offset()
                 )
             }
-            Self::OutOfBounds {..} => {
+            Self::OutOfBounds { .. } => {
                 write!(
                     f,
-                    "value failed to be assigned by json pointer because array index is out of bounds",
-                    
+                    "value failed to be assigned by json pointer; \
+                    array index for token at offset {} is out of bounds",
+                    self.offset()
                 )
             }
         }
@@ -214,22 +229,40 @@ impl fmt::Display for Error {
 
 impl_diagnostic_url!(enum assign::Error);
 
-
 impl Diagnostic for Error {
     type Subject = PointerBuf;
 
     fn into_report(self, source: Self::Subject) -> Report<Self> {
         Report::new(self, source.into())
     }
-    
+
     fn url() -> &'static str {
         Self::url()
     }
-    
-    fn label(&self, subject: &Subject) -> Option<crate::report::Label> {
-        Label::for_pointer_buf(subject, self.position())
+
+    fn labels(&self, origin: &Subject) -> Option<Box<dyn Iterator<Item = Label>>> {
+        let ptr = origin.as_pointer_buf()?;
+        let position = self.position();
+        let token = ptr.get(position)?;
+        let offset = if self.offset() + 1 < ptr.as_str().len() {
+            self.offset() + 1
+        } else {
+            self.offset()
+        };
+        let len = token.encoded().len();
+        Some(match self {
+            Error::FailedToParseIndex { .. } => Box::new(once(Label {
+                len,
+                offset,
+                text: format!("\"{}\" is an invalid array index", token.decoded()),
+            })),
+            Error::OutOfBounds { source, .. } => Box::new(once(Label {
+                offset,
+                len,
+                text: format!("{} is out of bounds (len: {})", source.index, source.length),
+            })),
+        })
     }
-    
 }
 
 #[cfg(feature = "std")]
@@ -610,7 +643,6 @@ enum Assigned<'v, V> {
     Done(Option<V>),
     Continue { next_dest: &'v mut V, same_value: V },
 }
-
 
 /*
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░

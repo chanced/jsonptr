@@ -1,7 +1,5 @@
 //! Error reporting data structures and miette integration.
 
-use core::iter::once;
-
 use crate::{Pointer, PointerBuf, Token};
 
 /// Implemented by errors which can be converted into a [`Report`].
@@ -16,7 +14,7 @@ pub trait Diagnostic: Sized {
     fn url() -> &'static str;
 
     /// Returns the label for the given [`Subject`] if applicable.
-    fn label(&self, subject: &Subject) -> Option<Label>;
+    fn labels(&self, subject: &Subject) -> Option<Box<dyn Iterator<Item = Label>>>;
 }
 
 /// A label for a span within a json pointer or malformed string.
@@ -31,24 +29,12 @@ pub struct Label {
 }
 
 impl Label {
-    pub fn for_pointer_buf(subject: &Subject, position: usize) -> Option<Self> {
-        let offset = subject.offset_for_position(position)?;
-        let token = subject.token(position)?;
-        let text = token.decoded().to_string();
-        let len = text.len();
-        Some(Self { text, offset, len })
-    }
-    pub fn for_string(subject: &Subject, offset: usize, len: usize) -> Option<Self> {
-        let string = subject.as_string()?;
-        let text = string.get(offset..offset + len)?.to_string();
-        let len = text.len();
-        Some(Self { text, offset, len })
-    }
     #[cfg(feature = "miette")]
     pub fn into_miette_labeled_span(self) -> miette::LabeledSpan {
         miette::LabeledSpan::new(Some(self.text), self.offset, self.len)
     }
 }
+
 #[cfg(feature = "miette")]
 impl From<Label> for miette::LabeledSpan {
     fn from(label: Label) -> Self {
@@ -61,19 +47,30 @@ impl From<Label> for miette::LabeledSpan {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Report<E> {
     /// The error which occurred.
-    pub error: E,
+    source: E,
     /// The value which caused the error.
-    pub subject: Subject,
+    subject: Subject,
 }
 
 impl<E: Diagnostic> Report<E> {
     /// Create a new `Report` with the given subject and error.
     pub fn new(error: E, subject: Subject) -> Self {
-        Self { error, subject }
+        Self {
+            source: error,
+            subject,
+        }
     }
 
-    pub fn label(&self) -> Option<Label> {
-        self.error.label(&self.subject)
+    pub fn labels(&self) -> Option<Box<dyn Iterator<Item = Label>>> {
+        self.source.labels(&self.subject)
+    }
+
+    pub fn subject(&self) -> &Subject {
+        &self.subject
+    }
+
+    pub fn source(&self) -> &E {
+        &self.source
     }
 }
 
@@ -89,7 +86,7 @@ where
     E: std::fmt::Display,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Display::fmt(&self.error, f)
+        std::fmt::Display::fmt(&self.source, f)
     }
 }
 
@@ -109,7 +106,7 @@ where
     }
 
     fn labels(&self) -> Option<Box<dyn Iterator<Item = miette::LabeledSpan> + '_>> {
-        Some(Box::new(once(self.label()?.into())))
+        Some(Box::new(self.labels()?.map(Into::into)))
     }
 }
 
@@ -314,7 +311,6 @@ macro_rules! impl_diagnostic_url {
         impl $type {
             #[doc = "The docs.rs URL for this error"]
             pub const fn url() -> &'static str {
-                // https://docs.rs/jsonptr/{VERSION}/jsonptr{}/{}.{}.html
                 concat!(
                     "https://docs.rs/jsonptr/",
                     env!("CARGO_PKG_VERSION"),
@@ -335,7 +331,6 @@ pub(crate) use impl_diagnostic_url;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pointer::ParseBufError;
 
     #[test]
     #[cfg(all(
@@ -354,14 +349,7 @@ mod tests {
                 .diagnose(ptr)?;
             Ok(())
         }
-        let report = assign_fail().unwrap_err();
-        // ensuring i have a label..
-        println!("{:?}", report.label());
+        let report = miette::Report::from(assign_fail().unwrap_err());
         println!("{report:?}");
-        // trying to force it here to see if i can get a fancy display
-        let m_rep = miette::Report::from(report);
-
-        println!("{m_rep:?}");
-        println!("{m_rep}");
     }
 }

@@ -10,7 +10,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use core::{borrow::Borrow, cmp::Ordering, ops::Deref, str::FromStr};
+use core::{borrow::Borrow, cmp::Ordering, iter::once, ops::Deref, str::FromStr};
 use slice::PointerIndex;
 
 mod slice;
@@ -910,7 +910,7 @@ impl PointerBuf {
     ///
     /// ## Errors
     /// Returns a [`ParseBufError`] if the string is not a valid JSON Pointer.
-    pub fn parse(s: impl Into<String>) -> Result<Self, ParseBufError> {
+    pub fn parse(s: impl Into<String>) -> Result<Self, RichParseError> {
         let s = s.into();
         validate(&s).map_err(|err| err.with_subject(s.clone()))?;
         Ok(Self(s))
@@ -1022,6 +1022,25 @@ impl PointerBuf {
     /// Clears the `Pointer`, setting it to root (`""`).
     pub fn clear(&mut self) {
         self.0.clear();
+    }
+
+    pub fn offset_for_position(&self, position: usize) -> Option<usize> {
+        if position == 0 {
+            return Some(0);
+        }
+        let bytes = self.0.as_bytes();
+        let mut i = 0;
+        let mut current = 0;
+        while i < bytes.len() && current <= position {
+            if bytes[i] == b'/' {
+                current += 1;
+                if current == position {
+                    return Some(i + 1);
+                }
+            }
+            i += 1;
+        }
+        None
     }
 }
 
@@ -1198,30 +1217,30 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 */
 #[derive(Debug, PartialEq)]
-pub struct ParseBufError {
+pub struct RichParseError {
     pub value: String,
     pub source: ParseError,
 }
-impl std::error::Error for ParseBufError {
+impl std::error::Error for RichParseError {
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         Some(&self.source)
     }
 }
 
-impl core::fmt::Display for ParseBufError {
+impl core::fmt::Display for RichParseError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         core::fmt::Display::fmt(&self.source, f)
     }
 }
 
-impl From<ParseBufError> for ParseError {
-    fn from(value: ParseBufError) -> Self {
+impl From<RichParseError> for ParseError {
+    fn from(value: RichParseError) -> Self {
         value.source
     }
 }
-impl_diagnostic_url!(struct ParseBufError);
+impl_diagnostic_url!(struct RichParseError);
 
-impl Diagnostic for ParseBufError {
+impl Diagnostic for RichParseError {
     type Subject = ();
 
     fn into_report(self, (): Self::Subject) -> Report<Self> {
@@ -1232,9 +1251,8 @@ impl Diagnostic for ParseBufError {
     fn url() -> &'static str {
         Self::url()
     }
-
-    fn label(&self, subject: &Subject) -> Option<Label> {
-        self.source.label(subject)
+    fn labels(&self, subject: &Subject) -> Option<Box<dyn Iterator<Item = Label>>> {
+        self.source.labels(subject)
     }
 }
 
@@ -1272,14 +1290,14 @@ impl ParseError {
         }
     }
 
-    pub fn with_subject(self, value: String) -> ParseBufError {
-        ParseBufError {
+    pub fn with_subject(self, value: String) -> RichParseError {
+        RichParseError {
             source: self,
             value,
         }
     }
 
-    pub fn invalid_encoding_len(&self, subject: &Pointer) -> usize {
+    pub fn invalid_encoding_len(&self, subject: &str) -> usize {
         match self {
             Self::NoLeadingBackslash => 0,
             Self::InvalidEncoding { offset, .. } => {
@@ -1306,9 +1324,17 @@ impl Diagnostic for ParseError {
         Self::url()
     }
 
-    fn label(&self, subject: &Subject) -> Option<crate::report::Label> {
-        let ptr = subject.as_pointer_buf()?;
-        Label::for_string(subject, self.offset(), self.invalid_encoding_len(ptr))
+    fn labels(&self, subject: &Subject) -> Option<Box<dyn Iterator<Item = Label>>> {
+        // TODO: considering searching the pointer for all invalid encodings
+        let subject = subject.as_string()?;
+        let offset = self.complete_offset();
+        let len = self.invalid_encoding_len(subject);
+        let text = match self {
+            ParseError::NoLeadingBackslash => "must start with a backslash ('/')",
+            ParseError::InvalidEncoding { .. } => "'~' must be followed by '0' or '1'",
+        }
+        .to_string();
+        Some(Box::new(once(Label { text, offset, len })))
     }
 }
 
@@ -1838,7 +1864,7 @@ mod tests {
         let report = Pointer::parse("invalid~encoding")
             .diagnose_with(|| "invalid~encoding")
             .unwrap_err();
-        assert_eq!(report.subject.as_str(), "invalid~encoding");
+        assert_eq!(report.subject(), "invalid~encoding");
     }
 
     #[test]
@@ -1866,7 +1892,7 @@ mod tests {
     fn replace_token_out_of_bounds() {
         let mut ptr = PointerBuf::from_tokens(["foo", "bar"]);
         assert!(ptr.replace(2, "baz").is_err());
-        assert_eq!(ptr, PointerBuf::from_tokens(["foo", "bar"])); // Ensure original pointer is unchanged
+        assert_eq!(ptr, PointerBuf::from_tokens(["foo", "bar"])); // Ensure subjectal pointer is unchanged
     }
 
     #[test]
@@ -1989,7 +2015,7 @@ mod tests {
 
     #[quickcheck]
     fn qc_pop_and_push(mut ptr: PointerBuf) -> bool {
-        let original_ptr = ptr.clone();
+        let subjectal_ptr = ptr.clone();
         let mut tokens = Vec::with_capacity(ptr.count());
         while let Some(token) = ptr.pop_back() {
             tokens.push(token);
@@ -2000,7 +2026,7 @@ mod tests {
         for token in tokens.drain(..) {
             ptr.push_front(token);
         }
-        if ptr != original_ptr {
+        if ptr != subjectal_ptr {
             return false;
         }
         while let Some(token) = ptr.pop_front() {
@@ -2012,7 +2038,7 @@ mod tests {
         for token in tokens {
             ptr.push_back(token);
         }
-        ptr == original_ptr
+        ptr == subjectal_ptr
     }
 
     #[quickcheck]
@@ -2367,9 +2393,9 @@ mod tests {
 
     #[test]
     fn from_box_to_buf() {
-        let original = PointerBuf::parse("/foo/bar/0").unwrap();
-        let boxed: Box<Pointer> = original.clone().into();
+        let subjectal = PointerBuf::parse("/foo/bar/0").unwrap();
+        let boxed: Box<Pointer> = subjectal.clone().into();
         let unboxed = boxed.into_buf();
-        assert_eq!(original, unboxed);
+        assert_eq!(subjectal, unboxed);
     }
 }
