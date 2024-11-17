@@ -12,6 +12,7 @@ use alloc::{
 };
 use core::{borrow::Borrow, cmp::Ordering, iter::once, ops::Deref, str::FromStr};
 use slice::PointerIndex;
+use std::borrow::Cow;
 
 mod slice;
 
@@ -910,10 +911,12 @@ impl PointerBuf {
     ///
     /// ## Errors
     /// Returns a [`RichParseError`] if the string is not a valid JSON Pointer.
-    pub fn parse(s: impl Into<String>) -> Result<Self, RichParseError> {
+    pub fn parse(s: impl Into<String>) -> Result<Self, ParseError<'static>> {
         let s = s.into();
-        validate(&s).map_err(|err| err.with_subject(s.clone()))?;
-        Ok(Self(s))
+        match validate(&s) {
+            Ok(_) => Ok(Self(s)),
+            Err(err) => Err(err.with_subject(s)),
+        }
     }
 
     /// Creates a new `PointerBuf` from a slice of non-encoded strings.
@@ -1023,29 +1026,10 @@ impl PointerBuf {
     pub fn clear(&mut self) {
         self.0.clear();
     }
-
-    pub fn offset_for_position(&self, position: usize) -> Option<usize> {
-        if position == 0 {
-            return Some(0);
-        }
-        let bytes = self.0.as_bytes();
-        let mut i = 0;
-        let mut current = 0;
-        while i < bytes.len() && current <= position {
-            if bytes[i] == b'/' {
-                current += 1;
-                if current == position {
-                    return Some(i + 1);
-                }
-            }
-            i += 1;
-        }
-        None
-    }
 }
 
 impl FromStr for PointerBuf {
-    type Err = ParseError;
+    type Err = ParseError<'static>;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::try_from(s)
     }
@@ -1102,7 +1086,7 @@ impl From<Token<'_>> for PointerBuf {
 }
 
 impl TryFrom<String> for PointerBuf {
-    type Error = ParseError;
+    type Error = ParseError<'static>;
     fn try_from(value: String) -> Result<Self, Self::Error> {
         let _ = validate(&value)?;
         Ok(Self(value))
@@ -1154,7 +1138,9 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
     }
     let bytes = value.as_bytes();
     if bytes[0] != b'/' {
-        return Err(ParseError::NoLeadingBackslash);
+        return Err(ParseError::NoLeadingBackslash {
+            subject: Cow::Borrowed(value),
+        });
     }
     let mut ptr_offset = 0; // offset within the pointer of the most recent '/' separator
     let mut tok_offset = 0; // offset within the current token
@@ -1188,6 +1174,7 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
                     //          tok_offset
                     //
                     return Err(ParseError::InvalidEncoding {
+                        subject: Cow::Borrowed(value),
                         offset: ptr_offset,
                         source: InvalidEncodingError { offset: tok_offset },
                     });
@@ -1211,136 +1198,28 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                                                                              ║
-║                              TopicalParseError                               ║
-║                             ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-*/
-#[derive(Debug, PartialEq)]
-pub struct RichParseError {
-    subject: String,
-    source: ParseError,
-}
-
-impl RichParseError {
-    pub fn new(subject: String, source: ParseError) -> Self {
-        Self { subject, source }
-    }
-
-    pub fn subject(&self) -> &str {
-        &self.subject
-    }
-
-    pub fn source(&self) -> &ParseError {
-        &self.source
-    }
-
-    // TODO: should this be pub?
-    pub(crate) fn take(self) -> (ParseError, String) {
-        (self.source, self.subject)
-    }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for RichParseError {
-    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
-        Some(&self.source)
-    }
-}
-
-#[cfg(feature = "miette")]
-impl miette::Diagnostic for RichParseError {
-    fn url<'a>(&'a self) -> Option<Box<dyn core::fmt::Display + 'a>> {
-        Some(Box::new(Self::url()))
-    }
-
-    fn source_code(&self) -> Option<&dyn miette::SourceCode> {
-        Some(&self.subject)
-    }
-
-    fn labels(&self) -> Option<Box<dyn Iterator<Item = miette::LabeledSpan> + '_>> {
-        Some(Box::new(
-            self.source.create_labels(&self.subject).map(Into::into),
-        ))
-    }
-}
-
-impl core::fmt::Display for RichParseError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        core::fmt::Display::fmt(&self.source, f)
-    }
-}
-
-impl From<RichParseError> for ParseError {
-    fn from(value: RichParseError) -> Self {
-        value.source
-    }
-}
-
-impl From<Report<ParseError>> for RichParseError {
-    fn from(value: Report<ParseError>) -> Self {
-        let (err, subj) = value.take();
-        Self::new(subj.to_string(), err)
-    }
-}
-
-impl From<Report<RichParseError>> for RichParseError {
-    fn from(value: Report<RichParseError>) -> Self {
-        let (err, _) = value.take();
-        err
-    }
-}
-impl From<RichParseError> for Report<RichParseError> {
-    fn from(err: RichParseError) -> Self {
-        let subj = err.subject().to_string();
-        Report::new(err, subj)
-    }
-}
-
-impl From<RichParseError> for Report<ParseError> {
-    fn from(err: RichParseError) -> Self {
-        let (err, subj) = err.take();
-        Report::new(err, subj)
-    }
-}
-
-impl_diagnostic_url!(struct RichParseError);
-
-impl Diagnostic for RichParseError {
-    type Subject = ();
-
-    fn into_report(self, (): Self::Subject) -> Report<Self> {
-        let subject = Subject::String(self.subject.clone());
-        Report::new(self, subject)
-    }
-
-    fn url() -> &'static str {
-        Self::url()
-    }
-    fn labels(&self, subject: &Subject) -> Option<Box<dyn Iterator<Item = Label>>> {
-        self.source.labels(subject)
-    }
-}
-
-/*
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
 ║                                  ParseError                                  ║
 ║                                 ¯¯¯¯¯¯¯¯¯¯¯¯                                 ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 */
 
+// TODO: should this be refactored into a struct with Cow<str> + a new enum `Cause`?
+
 /// Indicates that a `Pointer` was malformed and unable to be parsed.
 #[derive(Debug, PartialEq)]
-pub enum ParseError {
+pub enum ParseError<'s> {
     /// `Pointer` did not start with a backslash (`'/'`).
-    NoLeadingBackslash,
+    NoLeadingBackslash {
+        /// The string which failed to parse as a [`Pointer`] or [`PointerBuf`]
+        subject: Cow<'s, str>,
+    },
 
     /// `Pointer` contained invalid encoding (e.g. `~` not followed by `0` or
     /// `1`).
     InvalidEncoding {
+        /// The string which failed to parse as a [`Pointer`] or [`PointerBuf`]
+        subject: Cow<'s, str>,
         /// Offset of the partial pointer starting with the token that contained
         /// the invalid encoding
         offset: usize,
@@ -1348,24 +1227,47 @@ pub enum ParseError {
         source: InvalidEncodingError,
     },
 }
-impl ParseError {
+
+impl<'s> ParseError<'s> {
     pub fn offset(&self) -> usize {
         match self {
-            Self::NoLeadingBackslash => 0,
+            Self::NoLeadingBackslash { .. } => 0,
             Self::InvalidEncoding { offset, .. } => *offset,
         }
     }
 
-    pub fn with_subject(self, value: String) -> RichParseError {
-        RichParseError {
-            source: self,
-            subject: value,
+    pub fn into_owned(self) -> ParseError<'static> {
+        match self {
+            ParseError::NoLeadingBackslash { subject } => ParseError::NoLeadingBackslash {
+                subject: Cow::Owned(subject.into_owned()),
+            },
+            ParseError::InvalidEncoding {
+                subject,
+                offset,
+                source,
+            } => ParseError::InvalidEncoding {
+                subject: Cow::Owned(subject.into_owned()),
+                offset,
+                source,
+            },
+        }
+    }
+
+    fn with_subject(self, subject: String) -> ParseError<'static> {
+        let subject = Cow::Owned(subject);
+        match self {
+            ParseError::NoLeadingBackslash { .. } => ParseError::NoLeadingBackslash { subject },
+            ParseError::InvalidEncoding { offset, source, .. } => ParseError::InvalidEncoding {
+                subject,
+                offset,
+                source,
+            },
         }
     }
 
     pub fn invalid_encoding_len(&self, subject: &str) -> usize {
         match self {
-            Self::NoLeadingBackslash => 0,
+            Self::NoLeadingBackslash { .. } => 0,
             Self::InvalidEncoding { offset, .. } => {
                 if *offset < subject.len() - 1 {
                     2
@@ -1379,7 +1281,7 @@ impl ParseError {
 
 impl_diagnostic_url!(struct ParseError);
 
-impl Diagnostic for ParseError {
+impl<'s> Diagnostic for ParseError<'s> {
     type Subject = String;
 
     fn into_report(self, subject: Self::Subject) -> Report<Self> {
@@ -1396,19 +1298,20 @@ impl Diagnostic for ParseError {
     }
 }
 
-impl ParseError {
+impl<'s> ParseError<'s> {
     fn create_labels(&self, subject: &str) -> Box<dyn Iterator<Item = Label>> {
         let offset = self.complete_offset();
         let len = self.invalid_encoding_len(subject);
         let text = match self {
-            ParseError::NoLeadingBackslash => "must start with a backslash ('/')",
+            ParseError::NoLeadingBackslash { .. } => "must start with a backslash ('/')",
             ParseError::InvalidEncoding { .. } => "'~' must be followed by '0' or '1'",
         }
         .to_string();
         Box::new(once(Label { text, offset, len }))
     }
 }
-impl fmt::Display for ParseError {
+
+impl<'s> fmt::Display for ParseError<'s> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::NoLeadingBackslash { .. } => {
@@ -1422,7 +1325,7 @@ impl fmt::Display for ParseError {
     }
 }
 
-impl ParseError {
+impl<'s> ParseError<'s> {
     /// Returns `true` if this error is `NoLeadingBackslash`
     pub fn is_no_leading_backslash(&self) -> bool {
         matches!(self, Self::NoLeadingBackslash { .. })
@@ -2472,6 +2375,8 @@ mod tests {
     #[test]
     fn quick_miette_spike() {
         let err = PointerBuf::parse("hello-world").unwrap_err();
-        println!("{:?}", miette::Report::from(err));
+        // println!("{:?}", miette::Report::from(err));
+        // println!("{}", miette::Report::from(err));
+        println!("{}", err.source());
     }
 }
