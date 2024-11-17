@@ -1088,7 +1088,7 @@ impl From<Token<'_>> for PointerBuf {
 impl TryFrom<String> for PointerBuf {
     type Error = ParseError<'static>;
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        let _ = validate(&value)?;
+        let _ = validate(&value).map_err(|err| err.into_owned())?;
         Ok(Self(value))
     }
 }
@@ -1108,9 +1108,11 @@ impl<'a> IntoIterator for &'a PointerBuf {
 }
 
 impl TryFrom<&str> for PointerBuf {
-    type Error = ParseError;
+    type Error = ParseError<'static>;
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        Pointer::parse(value).map(Pointer::to_buf)
+        Pointer::parse(value)
+            .map(Pointer::to_buf)
+            .map_err(|err| err.into_owned())
     }
 }
 
@@ -1392,11 +1394,11 @@ impl<'s> ParseError<'s> {
 }
 
 #[cfg(feature = "std")]
-impl std::error::Error for ParseError {
+impl<'s> std::error::Error for ParseError<'s> {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::InvalidEncoding { source, .. } => Some(source),
-            Self::NoLeadingBackslash => None,
+            Self::NoLeadingBackslash { .. } => None,
         }
     }
 }
@@ -1554,12 +1556,18 @@ mod tests {
             ("/foo/bar/baz/~10", Ok("/foo/bar/baz/~10")),
             ("/foo/bar/baz/~11", Ok("/foo/bar/baz/~11")),
             ("/foo/bar/baz/~1/~0", Ok("/foo/bar/baz/~1/~0")),
-            ("missing-slash", Err(ParseError::NoLeadingBackslash)),
+            (
+                "missing-slash",
+                Err(ParseError::NoLeadingBackslash {
+                    subject: Cow::Borrowed("missing-slash"),
+                }),
+            ),
             (
                 "/~",
                 Err(ParseError::InvalidEncoding {
                     offset: 0,
                     source: InvalidEncodingError { offset: 1 },
+                    subject: Cow::Borrowed("/~"),
                 }),
             ),
             (
@@ -1567,6 +1575,7 @@ mod tests {
                 Err(ParseError::InvalidEncoding {
                     offset: 0,
                     source: InvalidEncodingError { offset: 1 },
+                    subject: Cow::Borrowed("/~2"),
                 }),
             ),
             (
@@ -1574,6 +1583,7 @@ mod tests {
                 Err(ParseError::InvalidEncoding {
                     offset: 0,
                     source: InvalidEncodingError { offset: 1 },
+                    subject: Cow::Borrowed("/~a"),
                 }),
             ),
         ];
