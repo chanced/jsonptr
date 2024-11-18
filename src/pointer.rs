@@ -1,10 +1,10 @@
 use crate::{
-    report::{impl_diagnostic_url, Diagnostic, Label, Report, Subject},
+    report::{impl_diagnostic_url, Enrich, Enriched, Label},
     token::InvalidEncodingError,
     Components, Token, Tokens,
 };
 use alloc::{
-    borrow::ToOwned,
+    borrow::{Cow, ToOwned},
     boxed::Box,
     fmt,
     string::{String, ToString},
@@ -215,6 +215,7 @@ impl Pointer {
             )
             .into()
     }
+
     /// Splits the `Pointer` at the given index if the character at the index is
     /// a separator backslash (`'/'`), returning `Some((head, tail))`. Otherwise,
     /// returns `None`.
@@ -910,10 +911,12 @@ impl PointerBuf {
     ///
     /// ## Errors
     /// Returns a [`RichParseError`] if the string is not a valid JSON Pointer.
-    pub fn parse(s: impl Into<String>) -> Result<Self, RichParseError> {
+    pub fn parse<'s>(s: impl Into<Cow<'s, str>>) -> Result<Self, Enriched<'s, ParseError>> {
         let s = s.into();
-        validate(&s).map_err(|err| err.with_subject(s.clone()))?;
-        Ok(Self(s))
+        match validate(&s) {
+            Ok(_) => Ok(Self(s.into_owned())),
+            Err(err) => Err(err.enrich(s)),
+        }
     }
 
     /// Creates a new `PointerBuf` from a slice of non-encoded strings.
@@ -1022,25 +1025,6 @@ impl PointerBuf {
     /// Clears the `Pointer`, setting it to root (`""`).
     pub fn clear(&mut self) {
         self.0.clear();
-    }
-
-    pub fn offset_for_position(&self, position: usize) -> Option<usize> {
-        if position == 0 {
-            return Some(0);
-        }
-        let bytes = self.0.as_bytes();
-        let mut i = 0;
-        let mut current = 0;
-        while i < bytes.len() && current <= position {
-            if bytes[i] == b'/' {
-                current += 1;
-                if current == position {
-                    return Some(i + 1);
-                }
-            }
-            i += 1;
-        }
-        None
     }
 }
 
@@ -1211,121 +1195,6 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                                                                              ║
-║                              TopicalParseError                               ║
-║                             ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-*/
-#[derive(Debug, PartialEq)]
-pub struct RichParseError {
-    subject: String,
-    source: ParseError,
-}
-
-impl RichParseError {
-    pub fn new(subject: String, source: ParseError) -> Self {
-        Self { subject, source }
-    }
-
-    pub fn subject(&self) -> &str {
-        &self.subject
-    }
-
-    pub fn source(&self) -> &ParseError {
-        &self.source
-    }
-
-    // TODO: should this be pub?
-    pub(crate) fn take(self) -> (ParseError, String) {
-        (self.source, self.subject)
-    }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for RichParseError {
-    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
-        Some(&self.source)
-    }
-}
-
-#[cfg(feature = "miette")]
-impl miette::Diagnostic for RichParseError {
-    fn url<'a>(&'a self) -> Option<Box<dyn core::fmt::Display + 'a>> {
-        Some(Box::new(Self::url()))
-    }
-
-    fn source_code(&self) -> Option<&dyn miette::SourceCode> {
-        Some(&self.subject)
-    }
-
-    fn labels(&self) -> Option<Box<dyn Iterator<Item = miette::LabeledSpan> + '_>> {
-        Some(Box::new(
-            self.source.create_labels(&self.subject).map(Into::into),
-        ))
-    }
-}
-
-impl core::fmt::Display for RichParseError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        core::fmt::Display::fmt(&self.source, f)
-    }
-}
-
-impl From<RichParseError> for ParseError {
-    fn from(value: RichParseError) -> Self {
-        value.source
-    }
-}
-
-impl From<Report<ParseError>> for RichParseError {
-    fn from(value: Report<ParseError>) -> Self {
-        let (err, subj) = value.take();
-        Self::new(subj.to_string(), err)
-    }
-}
-
-impl From<Report<RichParseError>> for RichParseError {
-    fn from(value: Report<RichParseError>) -> Self {
-        let (err, _) = value.take();
-        err
-    }
-}
-impl From<RichParseError> for Report<RichParseError> {
-    fn from(err: RichParseError) -> Self {
-        let subj = err.subject().to_string();
-        Report::new(err, subj)
-    }
-}
-
-impl From<RichParseError> for Report<ParseError> {
-    fn from(err: RichParseError) -> Self {
-        let (err, subj) = err.take();
-        Report::new(err, subj)
-    }
-}
-
-impl_diagnostic_url!(struct RichParseError);
-
-impl Diagnostic for RichParseError {
-    type Subject = ();
-
-    fn into_report(self, (): Self::Subject) -> Report<Self> {
-        let subject = Subject::String(self.subject.clone());
-        Report::new(self, subject)
-    }
-
-    fn url() -> &'static str {
-        Self::url()
-    }
-    fn labels(&self, subject: &Subject) -> Option<Box<dyn Iterator<Item = Label>>> {
-        self.source.labels(subject)
-    }
-}
-
-/*
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
 ║                                  ParseError                                  ║
 ║                                 ¯¯¯¯¯¯¯¯¯¯¯¯                                 ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
@@ -1348,18 +1217,12 @@ pub enum ParseError {
         source: InvalidEncodingError,
     },
 }
+
 impl ParseError {
     pub fn offset(&self) -> usize {
         match self {
             Self::NoLeadingBackslash => 0,
             Self::InvalidEncoding { offset, .. } => *offset,
-        }
-    }
-
-    pub fn with_subject(self, value: String) -> RichParseError {
-        RichParseError {
-            source: self,
-            subject: value,
         }
     }
 
@@ -1377,27 +1240,15 @@ impl ParseError {
     }
 }
 
-impl_diagnostic_url!(struct ParseError);
-
-impl Diagnostic for ParseError {
-    type Subject = String;
-
-    fn into_report(self, subject: Self::Subject) -> Report<Self> {
-        Report::new(self, subject)
-    }
+impl<'s> Enrich<'s> for ParseError {
+    type Subject = Cow<'s, str>;
 
     fn url() -> &'static str {
-        Self::url()
+        impl_diagnostic_url!(struct ParseError)
     }
 
-    fn labels(&self, subject: &Subject) -> Option<Box<dyn Iterator<Item = Label>>> {
+    fn labels(&self, subject: &Self::Subject) -> Option<Box<dyn Iterator<Item = Label>>> {
         // TODO: considering searching the pointer for all invalid encodings
-        Some(self.create_labels(subject.as_string()?))
-    }
-}
-
-impl ParseError {
-    fn create_labels(&self, subject: &str) -> Box<dyn Iterator<Item = Label>> {
         let offset = self.complete_offset();
         let len = self.invalid_encoding_len(subject);
         let text = match self {
@@ -1405,9 +1256,10 @@ impl ParseError {
             ParseError::InvalidEncoding { .. } => "'~' must be followed by '0' or '1'",
         }
         .to_string();
-        Box::new(once(Label { text, offset, len }))
+        Some(Box::new(once(Label::new(text, offset, len))))
     }
 }
+
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -1540,8 +1392,6 @@ impl std::error::Error for ReplaceError {}
 #[cfg(test)]
 mod tests {
     use std::error::Error;
-
-    use crate::report::Diagnose;
 
     use super::*;
     use quickcheck::TestResult;
@@ -1927,14 +1777,6 @@ mod tests {
                 }
             })
         );
-    }
-
-    #[test]
-    fn into_report() {
-        let report = Pointer::parse("invalid~encoding")
-            .diagnose_with(|| "invalid~encoding")
-            .unwrap_err();
-        assert_eq!(report.subject(), "invalid~encoding");
     }
 
     #[test]

@@ -38,9 +38,10 @@
 
 use crate::{
     index::{OutOfBoundsError, ParseIndexError},
-    report::{impl_diagnostic_url, Diagnostic, Label, Report, Subject},
-    Pointer, PointerBuf,
+    report::{impl_diagnostic_url, Enrich, Label},
+    Pointer,
 };
+use alloc::borrow::Cow;
 use core::{
     fmt::{self, Debug},
     iter::once,
@@ -227,40 +228,33 @@ impl fmt::Display for Error {
     }
 }
 
-impl_diagnostic_url!(enum assign::Error);
-
-impl Diagnostic for Error {
-    type Subject = PointerBuf;
-
-    fn into_report(self, source: Self::Subject) -> Report<Self> {
-        Report::new(self, source)
-    }
+impl<'s> Enrich<'s> for Error {
+    type Subject = Cow<'s, Pointer>;
 
     fn url() -> &'static str {
-        Self::url()
+        impl_diagnostic_url!(enum assign::Error)
     }
 
-    fn labels(&self, origin: &Subject) -> Option<Box<dyn Iterator<Item = Label>>> {
-        let ptr = origin.as_pointer_buf()?;
+    fn labels(&self, origin: &Self::Subject) -> Option<Box<dyn Iterator<Item = Label>>> {
         let position = self.position();
-        let token = ptr.get(position)?;
-        let offset = if self.offset() + 1 < ptr.as_str().len() {
+        let token = origin.get(position)?;
+        let offset = if self.offset() + 1 < origin.as_str().len() {
             self.offset() + 1
         } else {
             self.offset()
         };
         let len = token.encoded().len();
         Some(match self {
-            Error::FailedToParseIndex { .. } => Box::new(once(Label {
-                len,
-                offset,
-                text: format!("\"{}\" is an invalid array index", token.decoded()),
-            })),
-            Error::OutOfBounds { source, .. } => Box::new(once(Label {
+            Error::FailedToParseIndex { .. } => Box::new(once(Label::new(
+                format!("\"{}\" is an invalid array index", token.decoded()),
                 offset,
                 len,
-                text: format!("{} is out of bounds (len: {})", source.index, source.length),
-            })),
+            ))),
+            Error::OutOfBounds { source, .. } => Box::new(once(Label::new(
+                format!("{} is out of bounds (len: {})", source.index, source.length),
+                offset,
+                len,
+            ))),
         })
     }
 }
