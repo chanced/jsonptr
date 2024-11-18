@@ -9,7 +9,10 @@ pub trait Diagnostic<'s>: Sized + private::Sealed {
 
     /// Combine the error with its subject to generate a [`Report`].
     fn into_report(self, subject: impl Into<Self::Subject>) -> Report<Self, Self::Subject> {
-        Report::new(self, subject)
+        Report {
+            source: self,
+            subject: subject.into(),
+        }
     }
 
     /// The docs.rs URL for this error
@@ -49,14 +52,6 @@ pub struct Report<SRC, SUB> {
 }
 
 impl<SRC, SUB> Report<SRC, SUB> {
-    /// Create a new `Report` with the given subject and error.
-    fn new(source: SRC, subject: impl Into<SUB>) -> Self {
-        Self {
-            source,
-            subject: subject.into(),
-        }
-    }
-
     /// The value which caused the error.
     pub fn subject(&self) -> &SUB {
         &self.subject
