@@ -644,6 +644,37 @@ impl<'de: 'p, 'p> serde::Deserialize<'de> for &'p Pointer {
     }
 }
 
+macro_rules! impl_source_code {
+    ($($ty:ty),+) => {
+        $(
+            #[cfg(feature = "miette")]
+            impl miette::SourceCode for $ty {
+                fn read_span<'a>(
+                    &'a self,
+                    span: &miette::SourceSpan,
+                    context_lines_before: usize,
+                    context_lines_after: usize,
+                ) -> Result<Box<dyn miette::SpanContents<'a> + 'a>, miette::MietteError> {
+                    miette::SourceCode::read_span(
+                        self.0.as_bytes(),
+                        span,
+                        context_lines_before,
+                        context_lines_after,
+                    )
+                }
+            }
+        )*
+    };
+}
+
+impl_source_code!(Pointer, &Pointer);
+
+impl<'p> From<&'p Pointer> for Cow<'p, Pointer> {
+    fn from(value: &'p Pointer) -> Self {
+        Cow::Borrowed(value)
+    }
+}
+
 impl ToOwned for Pointer {
     type Owned = PointerBuf;
 
@@ -1076,6 +1107,12 @@ impl serde::Serialize for PointerBuf {
         S: serde::Serializer,
     {
         String::serialize(&self.0, serializer)
+    }
+}
+
+impl From<PointerBuf> for Cow<'static, Pointer> {
+    fn from(value: PointerBuf) -> Self {
+        Cow::Owned(value)
     }
 }
 

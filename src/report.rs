@@ -8,7 +8,7 @@ pub trait Enrich<'s>: Sized + private::Sealed {
     type Subject;
 
     /// Enrich the error with its subject.
-    fn enrich(self, subject: Self::Subject) -> Enriched<'s, Self> {
+    fn enrich(self, subject: impl Into<Self::Subject>) -> Enriched<'s, Self> {
         Enriched::new(self, subject)
     }
 
@@ -166,44 +166,78 @@ mod private {
     impl Sealed for crate::assign::Error {}
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
+pub trait Diagnose<'s, T> {
+    type Error: Enrich<'s>;
 
-//     #[test]
-//     #[cfg(all(
-//         feature = "assign",
-//         feature = "miette",
-//         feature = "serde",
-//         feature = "json"
-//     ))]
-//     fn assign_error() {
-//         use crate::assign::Error;
+    #[allow(clippy::missing_errors_doc)]
+    fn diagnose(
+        self,
+        subject: impl Into<<Self::Error as Enrich<'s>>::Subject>,
+    ) -> Result<T, Enriched<'s, Self::Error>>;
 
-//         let mut v = serde_json::json!({"foo": {"bar": ["0"]}});
+    #[allow(clippy::missing_errors_doc)]
+    fn diagnose_with<F, S>(self, f: F) -> Result<T, Enriched<'s, Self::Error>>
+    where
+        F: FnOnce() -> S,
+        S: Into<<Self::Error as Enrich<'s>>::Subject>;
+}
 
-//         let ptr = PointerBuf::parse("/foo/bar/invalid/cannot/reach").unwrap();
-//         let report = ptr.assign(&mut v, "qux").diagnose(ptr).unwrap_err();
-//         println!("{:?}", miette::Report::from(report));
+impl<'s, T, E> Diagnose<'s, T> for Result<T, E>
+where
+    E: Enrich<'s>,
+{
+    type Error = E;
 
-//         let ptr = PointerBuf::parse("/foo/bar/3/cannot/reach").unwrap();
-//         let report = ptr.assign(&mut v, "qux").diagnose(ptr).unwrap_err();
-//         println!("{:?}", miette::Report::from(report));
-//     }
+    fn diagnose(
+        self,
+        subject: impl Into<<Self::Error as Enrich<'s>>::Subject>,
+    ) -> Result<T, Enriched<'s, Self::Error>> {
+        self.map_err(|error| error.enrich(subject.into()))
+    }
 
-//     #[test]
-//     fn parse_error() {
-//         let invalid = "/foo/bar/invalid~3~encoding/cannot/reach";
-//         let report = Pointer::parse(invalid).diagnose(invalid).unwrap_err();
+    fn diagnose_with<F, S>(self, f: F) -> Result<T, Enriched<'s, Self::Error>>
+    where
+        F: FnOnce() -> S,
+        S: Into<<Self::Error as Enrich<'s>>::Subject>,
+    {
+        self.diagnose(f())
+    }
+}
 
-//         println!("{:?}", miette::Report::from(report));
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Pointer, PointerBuf};
 
-//         // TODO: impl `miette::Diagnostic` for `RichParseError`
-//         let report = PointerBuf::parse("/foo/bar/invalid~3~encoding/cannot/reach")
-//             .diagnose(())
-//             .unwrap_err();
+    #[test]
+    #[cfg(all(
+        feature = "assign",
+        feature = "miette",
+        feature = "serde",
+        feature = "json"
+    ))]
+    fn assign_error() {
+        let mut v = serde_json::json!({"foo": {"bar": ["0"]}});
 
-//         let report = miette::Report::from(report);
-//         println!("{report:?}");
-//     }
-// }
+        let ptr = PointerBuf::parse("/foo/bar/invalid/cannot/reach").unwrap();
+        let report = ptr.assign(&mut v, "qux").diagnose(ptr).unwrap_err();
+        println!("{:?}", miette::Report::from(report));
+
+        let ptr = PointerBuf::parse("/foo/bar/3/cannot/reach").unwrap();
+        let report = ptr.assign(&mut v, "qux").diagnose(ptr).unwrap_err();
+        println!("{:?}", miette::Report::from(report));
+    }
+
+    #[test]
+    fn parse_error() {
+        let invalid = "/foo/bar/invalid~3~encoding/cannot/reach";
+        let report = Pointer::parse(invalid).diagnose(invalid).unwrap_err();
+
+        println!("{:?}", miette::Report::from(report));
+
+        let report = PointerBuf::parse("/foo/bar/invalid~3~encoding/cannot/reach").unwrap_err();
+
+        let report = miette::Report::from(report);
+        println!("{report:?}");
+    }
+}
