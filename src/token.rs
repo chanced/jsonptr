@@ -432,7 +432,7 @@ mod tests {
     fn invalid_encoding_error_display() {
         assert_eq!(
             Token::from_encoded("~").unwrap_err().to_string(),
-            "json pointer is malformed due to invalid encoding ('~' not followed by '0' or '1')"
+            "json pointer is malformed due to invalid encoding"
         );
     }
 
