@@ -37,7 +37,7 @@
 //!
 
 use crate::{
-    diagnostic::{impl_diagnostic_url, IntoDiagnostic, Label},
+    diagnostic::{impl_diagnostic_url, Diagnostic, Label},
     index::{OutOfBoundsError, ParseIndexError},
     Pointer,
 };
@@ -228,7 +228,7 @@ impl fmt::Display for Error {
     }
 }
 
-impl<'s> IntoDiagnostic<'s> for Error {
+impl<'s> Diagnostic<'s> for Error {
     type Subject = Cow<'s, Pointer>;
 
     fn url() -> &'static str {

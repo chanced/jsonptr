@@ -1,5 +1,5 @@
 use crate::{
-    diagnostic::{impl_diagnostic_url, Diagnostic, IntoDiagnostic, Label},
+    diagnostic::{impl_diagnostic_url, Diagnostic, Label, Report},
     token::InvalidEncodingError,
     Components, Token, Tokens,
 };
@@ -942,11 +942,11 @@ impl PointerBuf {
     ///
     /// ## Errors
     /// Returns a [`RichParseError`] if the string is not a valid JSON Pointer.
-    pub fn parse<'s>(s: impl Into<Cow<'s, str>>) -> Result<Self, Diagnostic<'s, ParseError>> {
+    pub fn parse<'s>(s: impl Into<Cow<'s, str>>) -> Result<Self, RichParseError<'s>> {
         let s = s.into();
         match validate(&s) {
             Ok(_) => Ok(Self(s.into_owned())),
-            Err(err) => Err(err.enrich(s)),
+            Err(err) => Err(err.into_report(s)),
         }
     }
 
@@ -1277,7 +1277,7 @@ impl ParseError {
     }
 }
 
-impl<'s> IntoDiagnostic<'s> for ParseError {
+impl<'s> Diagnostic<'s> for ParseError {
     type Subject = Cow<'s, str>;
 
     fn url() -> &'static str {
@@ -1386,6 +1386,8 @@ impl std::error::Error for ParseError {
         }
     }
 }
+
+pub type RichParseError<'s> = Report<'s, ParseError>;
 
 /*
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
