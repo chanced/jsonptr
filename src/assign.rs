@@ -37,8 +37,8 @@
 //!
 
 use crate::{
+    diagnostic::{impl_diagnostic_url, IntoDiagnostic, Label},
     index::{OutOfBoundsError, ParseIndexError},
-    report::{impl_diagnostic_url, Enrich, Label},
     Pointer,
 };
 use alloc::borrow::Cow;
@@ -228,7 +228,7 @@ impl fmt::Display for Error {
     }
 }
 
-impl<'s> Enrich<'s> for Error {
+impl<'s> IntoDiagnostic<'s> for Error {
     type Subject = Cow<'s, Pointer>;
 
     fn url() -> &'static str {

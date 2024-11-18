@@ -2,14 +2,14 @@
 
 use core::fmt;
 
-/// Implemented by errors which can be converted into a [`Report`].
-pub trait Enrich<'s>: Sized + private::Sealed {
+/// Implemented by errors which can be converted into a [`Diagnostic`].
+pub trait IntoDiagnostic<'s>: Sized + private::Sealed {
     /// The value which caused the error.
     type Subject;
 
     /// Enrich the error with its subject.
-    fn enrich(self, subject: impl Into<Self::Subject>) -> Enriched<'s, Self> {
-        Enriched::new(self, subject)
+    fn enrich(self, subject: impl Into<Self::Subject>) -> Diagnostic<'s, Self> {
+        Diagnostic::new(self, subject)
     }
 
     /// The docs.rs URL for this error
@@ -44,23 +44,18 @@ impl From<Label> for miette::LabeledSpan {
 /// An error wrapper which includes the [`String`] which failed to parse or the
 /// [`PointerBuf`] being used.
 #[derive(Clone, PartialEq, Eq)]
-pub struct Enriched<'s, S: Enrich<'s>> {
+pub struct Diagnostic<'s, S: IntoDiagnostic<'s>> {
     source: S,
     subject: S::Subject,
 }
 
-impl<'s, S: Enrich<'s>> Enriched<'s, S> {
+impl<'s, S: IntoDiagnostic<'s>> Diagnostic<'s, S> {
     /// Create a new `Report` with the given subject and error.
     fn new(source: S, subject: impl Into<S::Subject>) -> Self {
         Self {
             source,
             subject: subject.into(),
         }
-    }
-
-    /// Returns labels associated with spans where the error occurs.
-    pub fn labels(&self) -> Option<Box<dyn Iterator<Item = Label>>> {
-        self.source.labels(&self.subject)
     }
 
     /// The value which caused the error.
@@ -73,15 +68,15 @@ impl<'s, S: Enrich<'s>> Enriched<'s, S> {
         &self.source
     }
 
-    /// The docs.rs URL for the error of this [`Report`].
-    pub fn url() -> &'static str {
-        S::url()
+    /// The original parts of the [`Diagnostic`].
+    pub fn decompose(self) -> (S, S::Subject) {
+        (self.source, self.subject)
     }
 }
 
-impl<'s, S> core::ops::Deref for Enriched<'s, S>
+impl<'s, S> core::ops::Deref for Diagnostic<'s, S>
 where
-    S: Enrich<'s>,
+    S: IntoDiagnostic<'s>,
 {
     type Target = S;
 
@@ -90,18 +85,18 @@ where
     }
 }
 
-impl<'s, S> fmt::Display for Enriched<'s, S>
+impl<'s, S> fmt::Display for Diagnostic<'s, S>
 where
-    S: Enrich<'s> + fmt::Display,
+    S: IntoDiagnostic<'s> + fmt::Display,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         fmt::Display::fmt(&self.source, f)
     }
 }
 
-impl<'s, S> fmt::Debug for Enriched<'s, S>
+impl<'s, S> fmt::Debug for Diagnostic<'s, S>
 where
-    S: Enrich<'s> + fmt::Debug,
+    S: IntoDiagnostic<'s> + fmt::Debug,
     S::Subject: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -113,9 +108,9 @@ where
 }
 
 #[cfg(feature = "std")]
-impl<'s, S> std::error::Error for Enriched<'s, S>
+impl<'s, S> std::error::Error for Diagnostic<'s, S>
 where
-    S: Enrich<'s> + fmt::Debug + std::error::Error + 'static,
+    S: IntoDiagnostic<'s> + fmt::Debug + std::error::Error + 'static,
     S::Subject: fmt::Debug,
 {
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
@@ -124,13 +119,13 @@ where
 }
 
 #[cfg(feature = "miette")]
-impl<'s, S> miette::Diagnostic for Enriched<'s, S>
+impl<'s, S> miette::Diagnostic for Diagnostic<'s, S>
 where
-    S: Enrich<'s> + fmt::Debug + std::error::Error + 'static,
+    S: IntoDiagnostic<'s> + fmt::Debug + std::error::Error + 'static,
     S::Subject: fmt::Debug + miette::SourceCode,
 {
     fn url<'a>(&'a self) -> Option<Box<dyn core::fmt::Display + 'a>> {
-        Some(Box::new(Self::url()))
+        Some(Box::new(S::url()))
     }
 
     fn source_code(&self) -> Option<&dyn miette::SourceCode> {
@@ -138,22 +133,22 @@ where
     }
 
     fn labels(&self) -> Option<Box<dyn Iterator<Item = miette::LabeledSpan> + '_>> {
-        Some(Box::new(self.labels()?.map(Into::into)))
+        Some(Box::new(S::labels(self, &self.subject)?.map(Into::into)))
     }
 }
 
 macro_rules! impl_diagnostic_url {
     (enum $type:ident) => {
-        $crate::report::impl_diagnostic_url!("enum", "", $type)
+        $crate::diagnostic::impl_diagnostic_url!("enum", "", $type)
     };
     (struct $type:ident) => {
-        $crate::report::impl_diagnostic_url!("struct", "", $type)
+        $crate::diagnostic::impl_diagnostic_url!("struct", "", $type)
     };
     (enum $mod:ident::$type:ident) => {
-        $crate::report::impl_diagnostic_url!("enum", concat!("/", stringify!($mod)), $type)
+        $crate::diagnostic::impl_diagnostic_url!("enum", concat!("/", stringify!($mod)), $type)
     };
     (struct $mod:ident::$type:ident) => {
-        $crate::report::impl_diagnostic_url!("struct", concat!("/", stringify!($mod)), $type)
+        $crate::diagnostic::impl_diagnostic_url!("struct", concat!("/", stringify!($mod)), $type)
     };
     ($kind:literal, $mod:expr, $type:ident) => {
         concat!(
@@ -178,38 +173,38 @@ mod private {
 }
 
 pub trait Diagnose<'s, T> {
-    type Error: Enrich<'s>;
+    type Error: IntoDiagnostic<'s>;
 
     #[allow(clippy::missing_errors_doc)]
     fn diagnose(
         self,
-        subject: impl Into<<Self::Error as Enrich<'s>>::Subject>,
-    ) -> Result<T, Enriched<'s, Self::Error>>;
+        subject: impl Into<<Self::Error as IntoDiagnostic<'s>>::Subject>,
+    ) -> Result<T, Diagnostic<'s, Self::Error>>;
 
     #[allow(clippy::missing_errors_doc)]
-    fn diagnose_with<F, S>(self, f: F) -> Result<T, Enriched<'s, Self::Error>>
+    fn diagnose_with<F, S>(self, f: F) -> Result<T, Diagnostic<'s, Self::Error>>
     where
         F: FnOnce() -> S,
-        S: Into<<Self::Error as Enrich<'s>>::Subject>;
+        S: Into<<Self::Error as IntoDiagnostic<'s>>::Subject>;
 }
 
 impl<'s, T, E> Diagnose<'s, T> for Result<T, E>
 where
-    E: Enrich<'s>,
+    E: IntoDiagnostic<'s>,
 {
     type Error = E;
 
     fn diagnose(
         self,
-        subject: impl Into<<Self::Error as Enrich<'s>>::Subject>,
-    ) -> Result<T, Enriched<'s, Self::Error>> {
+        subject: impl Into<<Self::Error as IntoDiagnostic<'s>>::Subject>,
+    ) -> Result<T, Diagnostic<'s, Self::Error>> {
         self.map_err(|error| error.enrich(subject.into()))
     }
 
-    fn diagnose_with<F, S>(self, f: F) -> Result<T, Enriched<'s, Self::Error>>
+    fn diagnose_with<F, S>(self, f: F) -> Result<T, Diagnostic<'s, Self::Error>>
     where
         F: FnOnce() -> S,
-        S: Into<<Self::Error as Enrich<'s>>::Subject>,
+        S: Into<<Self::Error as IntoDiagnostic<'s>>::Subject>,
     {
         self.diagnose(f())
     }

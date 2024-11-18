@@ -1,5 +1,5 @@
 use crate::{
-    report::{impl_diagnostic_url, Enrich, Enriched, Label},
+    diagnostic::{impl_diagnostic_url, Diagnostic, IntoDiagnostic, Label},
     token::InvalidEncodingError,
     Components, Token, Tokens,
 };
@@ -942,7 +942,7 @@ impl PointerBuf {
     ///
     /// ## Errors
     /// Returns a [`RichParseError`] if the string is not a valid JSON Pointer.
-    pub fn parse<'s>(s: impl Into<Cow<'s, str>>) -> Result<Self, Enriched<'s, ParseError>> {
+    pub fn parse<'s>(s: impl Into<Cow<'s, str>>) -> Result<Self, Diagnostic<'s, ParseError>> {
         let s = s.into();
         match validate(&s) {
             Ok(_) => Ok(Self(s.into_owned())),
@@ -1277,7 +1277,7 @@ impl ParseError {
     }
 }
 
-impl<'s> Enrich<'s> for ParseError {
+impl<'s> IntoDiagnostic<'s> for ParseError {
     type Subject = Cow<'s, str>;
 
     fn url() -> &'static str {
