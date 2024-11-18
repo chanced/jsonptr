@@ -1387,7 +1387,7 @@ impl std::error::Error for ParseError {
     }
 }
 
-pub type RichParseError<'s> = Report<'s, ParseError>;
+pub type RichParseError<'s> = Report<ParseError, <ParseError as Diagnostic<'s>>::Subject>;
 
 /*
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
