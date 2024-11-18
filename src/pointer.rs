@@ -2116,7 +2116,7 @@ mod tests {
         assert!(invalid.is_err());
         assert_eq!(
             invalid.unwrap_err().to_string(),
-            "failed to parse json pointer\n\ncaused by:\njson pointer is malformed as it does not start with a backslash ('/') at line 1 column 9"
+            "failed to parse json pointer\n\ncaused by:\njson pointer is malformed as it does not start with a backslash ('/') and is not empty at line 1 column 9"
         );
     }
 

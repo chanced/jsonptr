@@ -69,13 +69,24 @@ impl<'s, S: Enrich<'s>> Enriched<'s, S> {
     }
 
     /// The error which occurred.
-    pub fn source(&self) -> &S {
+    pub fn original(&self) -> &S {
         &self.source
     }
 
     /// The docs.rs URL for the error of this [`Report`].
     pub fn url() -> &'static str {
         S::url()
+    }
+}
+
+impl<'s, S> core::ops::Deref for Enriched<'s, S>
+where
+    S: Enrich<'s>,
+{
+    type Target = S;
+
+    fn deref(&self) -> &Self::Target {
+        &self.source
     }
 }
 
