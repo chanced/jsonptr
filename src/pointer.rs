@@ -2240,15 +2240,20 @@ mod tests {
 
     #[test]
     fn quick_miette_spike() {
-        let err = PointerBuf::parse("hello-world/~3/##~~/~3/~").unwrap_err();
-        println!("{:?}", miette::Report::from(err));
+        println!(
+            "{:?}",
+            miette::Report::from(PointerBuf::parse("/~").unwrap_err())
+        );
 
-        let err: ParseError<Complete> = PointerBuf::parse("hello-world/~3/##~~/~3/~") // or .parse_complete
-            .unwrap_err() // ParseError<WithInput>
-            .into(); // ParseError<Complete>
-                     // println!("{:?}", miette::Report::from(err));
-        for err in err.causes() {
-            println!("{:?}", err);
-        }
+        // let err = PointerBuf::parse("hello-world/~3/##~~/~3/~").unwrap_err();
+        // println!("{:?}", miette::Report::from(err));
+
+        // let err: ParseError<Complete> = PointerBuf::parse("hello-world/~3/##~~/~3/~") // or .parse_complete
+        //     .unwrap_err() // ParseError<WithInput>
+        //     .into(); // ParseError<Complete>
+        //              // println!("{:?}", miette::Report::from(err));
+        // for err in err.causes() {
+        //     println!("{err:?}");
+        // }
     }
 }
