@@ -254,12 +254,15 @@ impl Diagnostic for Error {
             Error::FailedToParseIndex { .. } => Box::new(once(Label {
                 len,
                 offset,
-                text: format!("\"{}\" is an invalid array index", token.decoded()),
+                text: Some(format!("\"{}\" is an invalid array index", token.decoded())),
             })),
             Error::OutOfBounds { source, .. } => Box::new(once(Label {
                 offset,
                 len,
-                text: format!("{} is out of bounds (len: {})", source.index, source.length),
+                text: Some(format!(
+                    "{} is out of bounds (len: {})",
+                    source.index, source.length
+                )),
             })),
         })
     }

@@ -67,7 +67,9 @@ pub use resolve::{Resolve, ResolveMut};
 pub mod report;
 
 mod pointer;
-pub use pointer::{ParseError, Pointer, PointerBuf};
+pub use pointer::{Pointer, PointerBuf};
+pub mod parse_error;
+pub use parse_error::ParseError;
 
 mod token;
 pub use token::{InvalidEncodingError, Token, Tokens};
