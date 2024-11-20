@@ -454,7 +454,7 @@ where
 
 impl<S> ParseError<S>
 where
-    S: Structure<Cause = Vec<Cause>>,
+    S: Structure<Cause = Causes>,
 {
     pub fn causes(&self) -> &[Cause] {
         &self.cause
@@ -575,7 +575,11 @@ impl miette::Diagnostic for ParseError<Complete> {
     }
 
     fn related<'a>(&'a self) -> Option<Box<dyn Iterator<Item = &'a dyn miette::Diagnostic> + 'a>> {
-        None
+        Some(Box::new(
+            self.cause
+                .iter()
+                .map(|cause| cause as &dyn miette::Diagnostic),
+        ))
     }
 
     fn diagnostic_source(&self) -> Option<&dyn miette::Diagnostic> {
