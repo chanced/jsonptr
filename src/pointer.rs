@@ -1151,7 +1151,7 @@ impl core::fmt::Display for PointerBuf {
     }
 }
 
-struct Validator<'b> {
+pub(crate) struct Validator<'b> {
     // slashes ('/') separate tokens
     // we increment the ptr_offset to point to this character
     ptr_offset: usize,
@@ -1159,7 +1159,7 @@ struct Validator<'b> {
     cursor: usize,
 }
 impl<'b> Validator<'b> {
-    fn validate<C: Causative>(s: &'b str) -> Result<(), C> {
+    pub(crate) fn validate<C: Causative>(s: &'b str) -> Result<(), C> {
         C::try_new(Self {
             ptr_offset: 0,
             bytes: s.as_bytes(),
@@ -1168,6 +1168,7 @@ impl<'b> Validator<'b> {
         .map_or(Ok(()), Err)
     }
 }
+
 impl<'v> Validator<'v> {
     fn done(&mut self) -> Option<Cause> {
         self.cursor = self.bytes.len();

@@ -1,10 +1,6 @@
-use core::{
-    fmt,
-    iter::{empty, once},
-    ops::Deref,
-};
+use core::{fmt, iter::once, ops::Deref};
 
-use crate::{report::Label, InvalidEncodingError};
+use crate::{pointer::Validator, report::Label, InvalidEncodingError};
 
 /// The structure of a `ParseError`.
 pub trait Structure: core::fmt::Debug {
@@ -584,5 +580,15 @@ impl miette::Diagnostic for ParseError<Complete> {
 
     fn diagnostic_source(&self) -> Option<&dyn miette::Diagnostic> {
         None
+    }
+}
+
+impl From<ParseError<WithInput>> for ParseError<Complete> {
+    fn from(err: ParseError<WithInput>) -> Self {
+        let causes: Causes = Validator::validate(&err.subject).unwrap_err();
+        ParseError {
+            cause: causes,
+            subject: err.subject,
+        }
     }
 }
