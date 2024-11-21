@@ -42,6 +42,7 @@ pub trait Causative:
 {
     fn try_new(cause: impl Iterator<Item = Cause>) -> Option<Self>;
     fn labels(&self, value: &str) -> impl Iterator<Item = Label>;
+    fn first(&self) -> &Cause;
 }
 
 #[cfg(all(feature = "std", not(feature = "miette")))]
@@ -51,6 +52,7 @@ pub trait Causative:
 {
     fn try_new(cause: impl Iterator<Item = Cause>) -> Option<Self>;
     fn labels(&self, value: &str) -> impl Iterator<Item = Label>;
+    fn first(&self) -> &Cause;
 }
 
 #[cfg(not(feature = "miette"))]
@@ -58,6 +60,7 @@ pub trait Causative:
 pub trait Causative: Sized + fmt::Display + fmt::Debug {
     fn try_new(cause: impl Iterator<Item = Cause>) -> Option<Self>;
     fn labels(&self, value: &str) -> impl Iterator<Item = Label>;
+    fn first(&self) -> &Cause;
 }
 
 /// Cause of a [`ParseError`].
@@ -226,6 +229,10 @@ impl Causative for Cause {
     fn labels(&self, subject: &str) -> impl Iterator<Item = Label> {
         self.create_labels(subject)
     }
+
+    fn first(&self) -> &Cause {
+        self
+    }
 }
 
 impl fmt::Display for Cause {
@@ -320,6 +327,10 @@ impl Causative for Causes {
 
     fn labels(&self, value: &str) -> impl Iterator<Item = Label> {
         self.0.iter().flat_map(|cause| cause.labels(value))
+    }
+
+    fn first(&self) -> &Cause {
+        &self[0]
     }
 }
 
@@ -445,12 +456,9 @@ where
     }
 }
 
-impl<S> ParseError<S>
-where
-    S: Structure<Cause = Cause>,
-{
-    pub fn cause(&self) -> &S::Cause {
-        &self.cause
+impl<S: Structure> ParseError<S> {
+    pub fn cause(&self) -> &Cause {
+        self.cause.first()
     }
 }
 
@@ -466,7 +474,7 @@ impl<S> ParseError<S>
 where
     S: Structure<Subject = String>,
 {
-    pub fn subject(&self) -> &S::Subject {
+    pub fn subject(&self) -> &str {
         &self.subject
     }
 }
