@@ -1,6 +1,6 @@
 use core::{fmt, iter::once, ops::Deref};
 
-use crate::{pointer::Validator, report::Label, InvalidEncodingError};
+use crate::{pointer::Validator, report::Label, EncodingError};
 
 /// The structure of a `ParseError`.
 pub trait Structure: core::fmt::Debug {
@@ -73,7 +73,7 @@ pub enum Cause {
         /// the invalid encoding
         offset: usize,
         /// The source `InvalidEncodingError`
-        source: InvalidEncodingError,
+        source: EncodingError,
     },
 }
 impl<S> From<ParseError<S>> for Cause
@@ -232,12 +232,14 @@ impl fmt::Display for Cause {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::NoLeadingBackslash { .. } => {
+                write!(f, "missing leading slash ('/') for non-empty pointer")
+            }
+            Self::InvalidEncoding { offset, .. } => {
                 write!(
                     f,
-                    "json pointer is malformed as it does not start with a slash ('/') and is not empty"
+                    "token starting at offset {offset} contains invalid encoding"
                 )
             }
-            Self::InvalidEncoding { source, .. } => fmt::Display::fmt(source, f),
         }
     }
 }
@@ -507,7 +509,11 @@ where
 }
 
 #[cfg(feature = "std")]
-impl<S: Structure> std::error::Error for ParseError<S> {}
+impl<S: Structure> std::error::Error for ParseError<S> {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        self.cause.source()
+    }
+}
 
 #[cfg(feature = "miette")]
 impl miette::Diagnostic for ParseError<WithInput> {

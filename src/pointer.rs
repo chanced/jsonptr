@@ -3,8 +3,8 @@ use crate::{
         Causative, Cause, Causes, Complete, ParseError, Structure, WithInput, WithoutInput,
     },
     report::{impl_diagnostic_url, Diagnostic, Label, Report, Subject},
-    token::InvalidEncodingError,
-    Components, Token, Tokens,
+    token::EncodingError,
+    Components, InvalidEncoding, Token, Tokens,
 };
 use alloc::{
     borrow::ToOwned,
@@ -1251,7 +1251,10 @@ const fn validate_bytes(bytes: &[u8], offset: usize) -> Result<(), Cause> {
                     //
                     return Err(Cause::InvalidEncoding {
                         offset: ptr_offset,
-                        source: InvalidEncodingError { offset: tok_offset },
+                        source: EncodingError {
+                            offset: tok_offset,
+                            source: InvalidEncoding::Tilde,
+                        },
                     });
                 }
                 // already checked the next character, so we skip it
@@ -1268,9 +1271,12 @@ const fn validate_bytes(bytes: &[u8], offset: usize) -> Result<(), Cause> {
     }
     Ok(())
 }
-const fn validate_tilde(bytes: &[u8], i: usize) -> Result<(), InvalidEncodingError> {
+const fn validate_tilde(bytes: &[u8], i: usize) -> Result<(), EncodingError> {
     if i + 1 >= bytes.len() || (bytes[i + 1] != b'0' && bytes[i + 1] != b'1') {
-        Err(InvalidEncodingError { offset: i })
+        Err(EncodingError {
+            offset: i,
+            source: InvalidEncoding::Tilde,
+        })
     } else {
         Ok(())
     }
@@ -1437,7 +1443,10 @@ mod tests {
                 "/~",
                 Err(Cause::InvalidEncoding {
                     offset: 0,
-                    source: InvalidEncodingError { offset: 1 },
+                    source: EncodingError {
+                        offset: 1,
+                        source: InvalidEncoding::Tilde,
+                    },
                 }
                 .into()),
             ),
@@ -1445,7 +1454,10 @@ mod tests {
                 "/~2",
                 Err(Cause::InvalidEncoding {
                     offset: 0,
-                    source: InvalidEncodingError { offset: 1 },
+                    source: EncodingError {
+                        offset: 1,
+                        source: InvalidEncoding::Tilde,
+                    },
                 }
                 .into()),
             ),
@@ -1453,7 +1465,10 @@ mod tests {
                 "/~a",
                 Err(Cause::InvalidEncoding {
                     offset: 0,
-                    source: InvalidEncodingError { offset: 1 },
+                    source: EncodingError {
+                        offset: 1,
+                        source: InvalidEncoding::Tilde,
+                    },
                 }
                 .into()),
             ),
@@ -2240,20 +2255,21 @@ mod tests {
 
     #[test]
     fn quick_miette_spike() {
-        println!(
-            "{:?}",
-            miette::Report::from(PointerBuf::parse("/~").unwrap_err())
-        );
+        // println!(
+        //     "{:?}",
+        //     miette::Report::from(PointerBuf::parse("/~").unwrap_err())
+        // );
 
-        // let err = PointerBuf::parse("hello-world/~3/##~~/~3/~").unwrap_err();
+        // let err = PointerBuf::parse("/hello-world/~3/##~~/~3/~").unwrap_err();
         // println!("{:?}", miette::Report::from(err));
 
-        // let err: ParseError<Complete> = PointerBuf::parse("hello-world/~3/##~~/~3/~") // or .parse_complete
-        //     .unwrap_err() // ParseError<WithInput>
-        //     .into(); // ParseError<Complete>
-        //              // println!("{:?}", miette::Report::from(err));
-        // for err in err.causes() {
-        //     println!("{err:?}");
-        // }
+        let err: ParseError<Complete> = PointerBuf::parse("hello-world/~3/##~~/~3/~") // or .parse_complete
+            .unwrap_err() // ParseError<WithInput>
+            .into(); // ParseError<Complete>
+                     // println!("{:?}", miette::Report::from(err));
+                     // for err in err.causes() {
+                     //     println!("{err:?}");
+                     // }
+        println!("{:?}", miette::Report::from(err));
     }
 }

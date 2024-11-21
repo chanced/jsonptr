@@ -72,7 +72,7 @@ pub mod parse_error;
 pub use parse_error::ParseError;
 
 mod token;
-pub use token::{InvalidEncodingError, Token, Tokens};
+pub use token::{EncodingError, InvalidEncoding, InvalidEncodingError, Token, Tokens};
 
 pub mod index;
 
