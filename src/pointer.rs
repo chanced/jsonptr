@@ -667,7 +667,7 @@ macro_rules! impl_source_code {
     };
 }
 
-impl_source_code!(Pointer, &Pointer);
+impl_source_code!(Pointer, &Pointer, PointerBuf);
 
 impl<'p> From<&'p Pointer> for Cow<'p, Pointer> {
     fn from(value: &'p Pointer) -> Self {
@@ -942,10 +942,10 @@ impl PointerBuf {
     ///
     /// ## Errors
     /// Returns a [`RichParseError`] if the string is not a valid JSON Pointer.
-    pub fn parse<'s>(s: impl Into<Cow<'s, str>>) -> Result<Self, RichParseError<'s>> {
+    pub fn parse(s: impl Into<String>) -> Result<Self, RichParseError> {
         let s = s.into();
         match validate(&s) {
-            Ok(_) => Ok(Self(s.into_owned())),
+            Ok(_) => Ok(Self(s)),
             Err(err) => Err(err.into_report(s)),
         }
     }
@@ -1277,15 +1277,15 @@ impl ParseError {
     }
 }
 
-impl<'s> Diagnostic<'s> for ParseError {
-    type Subject = Cow<'s, str>;
+impl Diagnostic for ParseError {
+    type Subject = String;
+    type Related = ();
 
     fn url() -> &'static str {
         impl_diagnostic_url!(struct ParseError)
     }
 
     fn labels(&self, subject: &Self::Subject) -> Option<Box<dyn Iterator<Item = Label>>> {
-        // TODO: considering searching the pointer for all invalid encodings
         let offset = self.complete_offset();
         let len = self.invalid_encoding_len(subject);
         let text = match self {
@@ -1387,7 +1387,7 @@ impl std::error::Error for ParseError {
     }
 }
 
-pub type RichParseError<'s> = Report<ParseError, <ParseError as Diagnostic<'s>>::Subject>;
+pub type RichParseError = Report<ParseError>;
 
 /*
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
