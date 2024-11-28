@@ -1,14 +1,21 @@
 //! Error reporting data structures and miette integration.
 
-use core::fmt;
+use core::{fmt, ops::Deref};
 
 /// Implemented by errors which can be converted into a [`Report`].
-pub trait Diagnostic<'s>: Sized + private::Sealed {
+pub trait Diagnostic: Sized {
     /// The value which caused the error.
-    type Subject: private::IntoOwned;
+    type Subject: Deref;
+
+    // TODO: this is here to handle multiple errors, if we choose to support it. remove if not needed.
+    /// Optional type of related errors for miette reporting.
+    ///
+    /// This is required as this trait is not object safe. Implementations which
+    /// do not have related errors should use `()`.
+    type Related;
 
     /// Combine the error with its subject to generate a [`Report`].
-    fn into_report(self, subject: impl Into<Self::Subject>) -> Report<Self, Self::Subject> {
+    fn into_report(self, subject: impl Into<Self::Subject>) -> Report<Self> {
         Report {
             source: self,
             subject: subject.into(),
@@ -20,6 +27,12 @@ pub trait Diagnostic<'s>: Sized + private::Sealed {
 
     /// Returns the label for the given [`Subject`] if applicable.
     fn labels(&self, subject: &Self::Subject) -> Option<Box<dyn Iterator<Item = Label>>>;
+
+    // TODO: this is here to handle multiple errors, if we choose to support it. remove if not needed.
+    // The idea is that we will need
+    fn related(&self) -> Option<Box<dyn Iterator<Item = Self::Related>>> {
+        None
+    }
 }
 
 /// A label for a span within a json pointer or malformed string.
@@ -46,65 +59,47 @@ impl From<Label> for miette::LabeledSpan {
 
 /// An error wrapper which includes the subject of the failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Report<SRC, SUB> {
-    source: SRC,
-    subject: SUB,
+pub struct Report<D: Diagnostic> {
+    source: D,
+    subject: D::Subject,
 }
 
-impl<SRC, SUB> Report<SRC, SUB> {
+impl<D: Diagnostic> Report<D> {
     /// The value which caused the error.
-    pub fn subject(&self) -> &SUB {
+    pub fn subject(&self) -> &<D::Subject as Deref>::Target {
         &self.subject
     }
 
     /// The error which occurred.
-    pub fn original(&self) -> &SRC {
+    pub fn original(&self) -> &D {
         &self.source
     }
 
     /// The original parts of the [`Report`].
-    pub fn decompose(self) -> (SRC, SUB) {
+    pub fn decompose(self) -> (D, D::Subject) {
         (self.source, self.subject)
     }
 }
 
-impl<'s, S> Report<S, <S as Diagnostic<'s>>::Subject>
-where
-    S: Diagnostic<'s>,
-{
-    /// Converts the Report into an owned instance (generally by cloning the subject).
-    pub fn into_owned(self) -> Report<S, <S::Subject as private::IntoOwned>::Owned> {
-        use private::IntoOwned;
-
-        Report {
-            source: self.source,
-            subject: self.subject.into_owned(),
-        }
-    }
-}
-
-impl<SRC, SUB> core::ops::Deref for Report<SRC, SUB> {
-    type Target = SRC;
+impl<D: Diagnostic> core::ops::Deref for Report<D> {
+    type Target = D;
 
     fn deref(&self) -> &Self::Target {
         &self.source
     }
 }
 
-impl<SRC, SUB> fmt::Display for Report<SRC, SUB>
-where
-    SRC: fmt::Display,
-{
+impl<D: Diagnostic + fmt::Display> fmt::Display for Report<D> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         fmt::Display::fmt(&self.source, f)
     }
 }
 
 #[cfg(feature = "std")]
-impl<SRC, SUB> std::error::Error for Report<SRC, SUB>
+impl<D> std::error::Error for Report<D>
 where
-    SRC: fmt::Debug + std::error::Error + 'static,
-    SUB: fmt::Debug,
+    D: Diagnostic + fmt::Debug + std::error::Error + 'static,
+    D::Subject: fmt::Debug,
 {
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         Some(&self.source)
@@ -112,13 +107,13 @@ where
 }
 
 #[cfg(feature = "miette")]
-impl<'s, SRC> miette::Diagnostic for Report<SRC, SRC::Subject>
+impl<D> miette::Diagnostic for Report<D>
 where
-    SRC: Diagnostic<'s> + fmt::Debug + std::error::Error + 'static,
-    SRC::Subject: fmt::Debug + miette::SourceCode,
+    D: Diagnostic + fmt::Debug + std::error::Error + 'static,
+    D::Subject: fmt::Debug + miette::SourceCode,
 {
     fn url<'a>(&'a self) -> Option<Box<dyn core::fmt::Display + 'a>> {
-        Some(Box::new(SRC::url()))
+        Some(Box::new(D::url()))
     }
 
     fn source_code(&self) -> Option<&dyn miette::SourceCode> {
@@ -126,7 +121,7 @@ where
     }
 
     fn labels(&self) -> Option<Box<dyn Iterator<Item = miette::LabeledSpan> + '_>> {
-        Some(Box::new(SRC::labels(self, &self.subject)?.map(Into::into)))
+        Some(Box::new(D::labels(self, &self.subject)?.map(Into::into)))
     }
 }
 
@@ -160,66 +155,44 @@ macro_rules! impl_diagnostic_url {
 pub(crate) use impl_diagnostic_url;
 
 mod private {
-    use alloc::borrow::Cow;
-
     pub trait Sealed {}
     impl Sealed for crate::pointer::ParseError {}
     impl Sealed for crate::assign::Error {}
-
-    pub trait IntoOwned {
-        type Owned;
-
-        fn into_owned(self) -> Self::Owned;
-    }
-
-    impl<'s, T: 'static + ToOwned + ?Sized> IntoOwned for Cow<'s, T> {
-        type Owned = Cow<'static, T>;
-
-        fn into_owned(self) -> Cow<'static, T> {
-            Cow::Owned(self.into_owned())
-        }
-    }
 }
 
 pub trait Diagnose<'s, T> {
-    type Error: Diagnostic<'s>;
+    type Error: Diagnostic;
 
     #[allow(clippy::missing_errors_doc)]
     fn diagnose(
         self,
-        subject: impl Into<<Self::Error as Diagnostic<'s>>::Subject>,
-    ) -> Result<T, Report<Self::Error, <Self::Error as Diagnostic<'s>>::Subject>>;
+        subject: impl Into<<Self::Error as Diagnostic>::Subject>,
+    ) -> Result<T, Report<Self::Error>>;
 
     #[allow(clippy::missing_errors_doc)]
-    fn diagnose_with<F, S>(
-        self,
-        f: F,
-    ) -> Result<T, Report<Self::Error, <Self::Error as Diagnostic<'s>>::Subject>>
+    fn diagnose_with<F, S>(self, f: F) -> Result<T, Report<Self::Error>>
     where
         F: FnOnce() -> S,
-        S: Into<<Self::Error as Diagnostic<'s>>::Subject>;
+        S: Into<<Self::Error as Diagnostic>::Subject>;
 }
 
 impl<'s, T, E> Diagnose<'s, T> for Result<T, E>
 where
-    E: Diagnostic<'s>,
+    E: Diagnostic,
 {
     type Error = E;
 
     fn diagnose(
         self,
-        subject: impl Into<<Self::Error as Diagnostic<'s>>::Subject>,
-    ) -> Result<T, Report<Self::Error, <Self::Error as Diagnostic<'s>>::Subject>> {
+        subject: impl Into<<Self::Error as Diagnostic>::Subject>,
+    ) -> Result<T, Report<Self::Error>> {
         self.map_err(|error| error.into_report(subject.into()))
     }
 
-    fn diagnose_with<F, S>(
-        self,
-        f: F,
-    ) -> Result<T, Report<Self::Error, <Self::Error as Diagnostic<'s>>::Subject>>
+    fn diagnose_with<F, S>(self, f: F) -> Result<T, Report<Self::Error>>
     where
         F: FnOnce() -> S,
-        S: Into<<Self::Error as Diagnostic<'s>>::Subject>,
+        S: Into<<Self::Error as Diagnostic>::Subject>,
     {
         self.diagnose(f())
     }
@@ -264,16 +237,13 @@ mod tests {
 
     #[test]
     fn into_owned() {
-        let owned_report = {
-            // creating owned string to ensure its lifetime is local
-            // (could also coerce a static reference, but this is less brittle)
-            let invalid = "/foo/bar/invalid~3~encoding/cannot/reach".to_string();
-            let report = Pointer::parse(&invalid)
-                .diagnose(invalid.as_str())
-                .unwrap_err();
-            report.into_owned()
-        };
+        // creating owned string to ensure its lifetime is local
+        // (could also coerce a static reference, but this is less brittle)
+        let invalid = "/foo/bar/invalid~3~encoding/cannot/reach".to_string();
+        let report = Pointer::parse(&invalid)
+            .diagnose(invalid.as_str())
+            .unwrap_err();
 
-        println!("{owned_report}");
+        println!("{report}");
     }
 }

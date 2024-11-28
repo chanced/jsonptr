@@ -39,7 +39,7 @@
 use crate::{
     diagnostic::{impl_diagnostic_url, Diagnostic, Label},
     index::{OutOfBoundsError, ParseIndexError},
-    Pointer,
+    Pointer, PointerBuf,
 };
 use alloc::borrow::Cow;
 use core::{
@@ -228,8 +228,9 @@ impl fmt::Display for Error {
     }
 }
 
-impl<'s> Diagnostic<'s> for Error {
-    type Subject = Cow<'s, Pointer>;
+impl Diagnostic for Error {
+    type Subject = PointerBuf;
+    type Related = ();
 
     fn url() -> &'static str {
         impl_diagnostic_url!(enum assign::Error)
