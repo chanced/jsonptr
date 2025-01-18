@@ -1,7 +1,7 @@
 use crate::{
     diagnostic::{impl_diagnostic_url, Diagnostic, Label, Report},
-    token::InvalidEncodingError,
-    Components, Token, Tokens,
+    token::EncodingError,
+    Components, InvalidEncoding, Token, Tokens,
 };
 use alloc::{
     borrow::{Cow, ToOwned},
@@ -1169,63 +1169,26 @@ impl core::fmt::Display for PointerBuf {
     }
 }
 
-const fn validate(value: &str) -> Result<&str, ParseError> {
-    if value.is_empty() {
-        return Ok(value);
-    }
-    let bytes = value.as_bytes();
-    if bytes[0] != b'/' {
-        return Err(ParseError::NoLeadingBackslash);
-    }
-    let mut ptr_offset = 0; // offset within the pointer of the most recent '/' separator
-    let mut tok_offset = 0; // offset within the current token
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                                 ParseErrors                                  ║
+║                                ¯¯¯¯¯¯¯¯¯¯¯¯¯                                 ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
+pub struct ParseErrors(Box<[ParseError]>);
 
-    let bytes = value.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        match bytes[i] {
-            b'/' => {
-                // backslashes ('/') separate tokens
-                // we increment the ptr_offset to point to this character
-                ptr_offset = i;
-                // and reset the token offset
-                tok_offset = 0;
-            }
-            b'~' => {
-                // if the character is a '~', then the next character must be '0' or '1'
-                // otherwise the encoding is invalid and `InvalidEncodingError` is returned
-                if i + 1 >= bytes.len() || (bytes[i + 1] != b'0' && bytes[i + 1] != b'1') {
-                    // the pointer is not properly encoded
-                    //
-                    // we use the pointer offset, which points to the last
-                    // encountered separator, as the offset of the error.
-                    // The source `InvalidEncodingError` then uses the token
-                    // offset.
-                    //
-                    // "/foo/invalid~encoding"
-                    //      ^       ^
-                    //      |       |
-                    //  ptr_offset  |
-                    //          tok_offset
-                    //
-                    return Err(ParseError::InvalidEncoding {
-                        offset: ptr_offset,
-                        source: InvalidEncodingError { offset: tok_offset },
-                    });
-                }
-                // already checked the next character, so we skip it
-                i += 1;
-                // incrementing the pointer offset since the next byte has
-                // already been checked
-                tok_offset += 1;
-            }
-            _ => {}
+impl ParseErrors {
+    pub fn new(v: impl IntoIterator<Item = ParseError>) -> Option<Self> {
+        let v = v.into_iter().collect::<Box<[_]>>();
+        if v.is_empty() {
+            None
+        } else {
+            Some(Self(v))
         }
-        i += 1;
-        // not a separator so we increment the token offset
-        tok_offset += 1;
     }
-    Ok(value)
 }
 
 /*
@@ -1251,7 +1214,7 @@ pub enum ParseError {
         /// the invalid encoding
         offset: usize,
         /// The source `InvalidEncodingError`
-        source: InvalidEncodingError,
+        source: EncodingError,
     },
 }
 
@@ -1393,8 +1356,8 @@ pub type RichParseError = Report<ParseError>;
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                                                                              ║
-║                              ReplaceTokenError                               ║
-║                             ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯                              ║
+║                                 ReplaceError                                 ║
+║                                ¯¯¯¯¯¯¯¯¯¯¯¯¯¯                                ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 */
@@ -1417,6 +1380,165 @@ impl fmt::Display for ReplaceError {
 
 #[cfg(feature = "std")]
 impl std::error::Error for ReplaceError {}
+
+trait TryFromIter: Sized {
+    fn try_from_iter(iter: impl Iterator<Item = ParseError>) -> Option<Self>;
+}
+
+impl TryFromIter for ParseError {
+    fn try_from_iter(mut iter: impl Iterator<Item = ParseError>) -> Option<Self> {
+        iter.next()
+    }
+}
+impl TryFromIter for ParseErrors {
+    fn try_from_iter(iter: impl Iterator<Item = ParseError>) -> Option<Self> {
+        Self::new(iter)
+    }
+}
+
+pub(crate) struct Validator<'b> {
+    // slashes ('/') separate tokens
+    // we increment the ptr_offset to point to this character
+    ptr_offset: usize,
+    // the bytes of the string to be validated
+    bytes: &'b [u8],
+    // the current cursor position within bytes
+    cursor: usize,
+    // whether or not an error was emitted on the previous iteration
+    sent: bool,
+}
+
+impl<'b> Validator<'b> {
+    pub(crate) fn validate<D: TryFromIter>(s: &'b str) -> Result<(), D> {
+        D::try_from_iter(Self {
+            ptr_offset: 0,
+            bytes: s.as_bytes(),
+            cursor: 0,
+            sent: false,
+        })
+        .map_or(Ok(()), Err)
+    }
+}
+
+impl<'b> Validator<'b> {
+    fn done(&mut self) -> Option<ParseError> {
+        self.cursor = self.bytes.len();
+        None
+    }
+}
+
+impl<'b> Iterator for Validator<'b> {
+    type Item = ParseError;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.cursor >= self.bytes.len() {
+            return None;
+        }
+        if self.sent {
+            if let Some(cursor) = next_slash(self.bytes, self.cursor) {
+                self.cursor = cursor;
+                self.sent = false;
+            } else {
+                return None;
+            }
+        }
+        if let Err(err) = validate_bytes(self.bytes, self.cursor) {
+            self.sent = true;
+            return Some(err);
+        }
+        if self.bytes[self.cursor] == b'/' {
+            self.ptr_offset = self.cursor;
+        }
+        self.cursor = self.bytes.len();
+        None
+    }
+}
+
+const fn next_slash(bytes: &[u8], mut cursor: usize) -> Option<usize> {
+    while cursor < bytes.len() {
+        if bytes[cursor] == b'/' {
+            return Some(cursor);
+        }
+        cursor += 1;
+    }
+    None
+}
+
+const fn validate(value: &str) -> Result<&str, ParseError> {
+    if value.is_empty() {
+        return Ok(value);
+    }
+    if let Err(err) = validate_bytes(value.as_bytes(), 0) {
+        return Err(err);
+    }
+    Ok(value)
+}
+
+const fn validate_bytes(bytes: &[u8], offset: usize) -> Result<(), ParseError> {
+    if bytes[0] != b'/' && offset == 0 {
+        return Err(ParseError::NoLeadingBackslash);
+    }
+
+    let mut ptr_offset = offset; // offset within the pointer of the most recent '/' separator
+    let mut tok_offset = 0; // offset within the current token
+
+    let mut i = offset;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'/' => {
+                ptr_offset = i;
+                // and reset the token offset
+                tok_offset = 0;
+            }
+            b'~' => {
+                // if the character is a '~', then the next character must be '0' or '1'
+                // otherwise the encoding is invalid and `InvalidEncodingError` is returned
+                if i + 1 >= bytes.len() || (bytes[i + 1] != b'0' && bytes[i + 1] != b'1') {
+                    // the pointer is not properly encoded
+                    //
+                    // we use the pointer offset, which points to the last
+                    // encountered separator, as the offset of the error.
+                    // The source `InvalidEncodingError` then uses the token
+                    // offset.
+                    //
+                    // "/foo/invalid~encoding"
+                    //      ^       ^
+                    //      |       |
+                    //  ptr_offset  |
+                    //          tok_offset
+                    //
+                    return Err(ParseError::InvalidEncoding {
+                        offset: ptr_offset,
+                        source: EncodingError {
+                            offset: tok_offset,
+                            source: InvalidEncoding::Tilde,
+                        },
+                    });
+                }
+                // already checked the next character, so we skip it
+                i += 1;
+                // incrementing the pointer offset since the next byte has
+                // already been checked
+                tok_offset += 1;
+            }
+            _ => {}
+        }
+        i += 1;
+        // not a separator so we increment the token offset
+        tok_offset += 1;
+    }
+    Ok(())
+}
+const fn validate_tilde(bytes: &[u8], i: usize) -> Result<(), EncodingError> {
+    if i + 1 >= bytes.len() || (bytes[i + 1] != b'0' && bytes[i + 1] != b'1') {
+        Err(EncodingError {
+            offset: i,
+            source: InvalidEncoding::Tilde,
+        })
+    } else {
+        Ok(())
+    }
+}
 
 /*
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -1545,21 +1667,30 @@ mod tests {
                 "/~",
                 Err(ParseError::InvalidEncoding {
                     offset: 0,
-                    source: InvalidEncodingError { offset: 1 },
+                    source: EncodingError {
+                        offset: 1,
+                        source: InvalidEncoding::Tilde,
+                    },
                 }),
             ),
             (
                 "/~2",
                 Err(ParseError::InvalidEncoding {
                     offset: 0,
-                    source: InvalidEncodingError { offset: 1 },
+                    source: EncodingError {
+                        offset: 1,
+                        source: InvalidEncoding::Tilde,
+                    },
                 }),
             ),
             (
                 "/~a",
                 Err(ParseError::InvalidEncoding {
                     offset: 0,
-                    source: InvalidEncodingError { offset: 1 },
+                    source: EncodingError {
+                        offset: 1,
+                        source: InvalidEncoding::Tilde,
+                    },
                 }),
             ),
         ];
