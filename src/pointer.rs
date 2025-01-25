@@ -1178,16 +1178,28 @@ impl core::fmt::Display for PointerBuf {
 ╚══════════════════════════════════════════════════════════════════════════════╝
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 */
-pub struct ParseErrors(Box<[ParseError]>);
+pub struct ParseErrors(Vec<ParseError>);
 
 impl ParseErrors {
     pub fn new(v: impl IntoIterator<Item = ParseError>) -> Option<Self> {
-        let v = v.into_iter().collect::<Box<[_]>>();
+        let v = v.into_iter().collect::<Vec<_>>();
         if v.is_empty() {
             None
         } else {
             Some(Self(v))
         }
+    }
+}
+impl FromIterator<ParseError> for ParseErrors {
+    fn from_iter<I: IntoIterator<Item = ParseError>>(iter: I) -> Self {
+        Self::new(iter).unwrap()
+    }
+}
+impl IntoIterator for ParseErrors {
+    type Item = ParseError;
+    type IntoIter = alloc::vec::IntoIter<ParseError>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
     }
 }
 
@@ -1242,7 +1254,7 @@ impl ParseError {
 
 impl Diagnostic for ParseError {
     type Subject = String;
-    type Related = ();
+    type Related = ParseError;
 
     fn url() -> &'static str {
         impl_diagnostic_url!(struct ParseError)
@@ -1257,6 +1269,16 @@ impl Diagnostic for ParseError {
         }
         .to_string();
         Some(Box::new(once(Label::new(text, offset, len))))
+    }
+
+    fn related(&self, subject: &Self::Subject) -> Vec<Self::Related> {
+        Validator {
+            bytes: subject.as_bytes(),
+            cursor: self.complete_offset(),
+            ptr_offset: self.pointer_offset(),
+            sent: true,
+        }
+        .collect()
     }
 }
 
@@ -1406,25 +1428,6 @@ pub(crate) struct Validator<'b> {
     cursor: usize,
     // whether or not an error was emitted on the previous iteration
     sent: bool,
-}
-
-impl<'b> Validator<'b> {
-    pub(crate) fn validate<D: TryFromIter>(s: &'b str) -> Result<(), D> {
-        D::try_from_iter(Self {
-            ptr_offset: 0,
-            bytes: s.as_bytes(),
-            cursor: 0,
-            sent: false,
-        })
-        .map_or(Ok(()), Err)
-    }
-}
-
-impl<'b> Validator<'b> {
-    fn done(&mut self) -> Option<ParseError> {
-        self.cursor = self.bytes.len();
-        None
-    }
 }
 
 impl<'b> Iterator for Validator<'b> {

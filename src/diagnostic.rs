@@ -1,25 +1,24 @@
 //! Error reporting data structures and miette integration.
 
-use core::{fmt, ops::Deref};
+use core::{convert::Infallible, fmt, ops::Deref};
+use std::sync::OnceLock;
 
 /// Implemented by errors which can be converted into a [`Report`].
 pub trait Diagnostic: Sized {
     /// The value which caused the error.
     type Subject: Deref;
 
-    // TODO: this is here to handle multiple errors, if we choose to support it. remove if not needed.
     /// Optional type of related errors for miette reporting.
     ///
     /// This is required as this trait is not object safe. Implementations which
-    /// do not have related errors should use `()`.
+    /// do not have related errors should use
+    /// [`Infallible`](core::convert::Infallible) and simply not implement
+    /// `related`.
     type Related;
 
     /// Combine the error with its subject to generate a [`Report`].
     fn into_report(self, subject: impl Into<Self::Subject>) -> Report<Self> {
-        Report {
-            source: self,
-            subject: subject.into(),
-        }
+        Report::new(self, subject.into())
     }
 
     /// The docs.rs URL for this error
@@ -28,14 +27,40 @@ pub trait Diagnostic: Sized {
     /// Returns the label for the given [`Subject`] if applicable.
     fn labels(&self, subject: &Self::Subject) -> Option<Box<dyn Iterator<Item = Label>>>;
 
-    // TODO: this is here to handle multiple errors, if we choose to support it. remove if not needed.
-    // The idea is that we will need
-    fn related(&self) -> Option<Box<dyn Iterator<Item = Self::Related>>> {
+    /// Returns the related errors if applicable.
+    fn related(&self, subject: &Self::Subject) -> Vec<Self::Related> {
+        _ = subject;
+        vec![]
+    }
+}
+impl Diagnostic for () {
+    type Subject = String;
+    type Related = ();
+
+    fn url() -> &'static str {
+        ""
+    }
+
+    fn labels(&self, _: &Self::Subject) -> Option<Box<dyn Iterator<Item = Label>>> {
+        None
+    }
+}
+
+impl Diagnostic for Infallible {
+    type Subject = String;
+    type Related = ();
+
+    fn url() -> &'static str {
+        "https://doc.rust-lang.org/std/convert/enum.Infallible.html"
+    }
+
+    fn labels(&self, _: &Self::Subject) -> Option<Box<dyn Iterator<Item = Label>>> {
         None
     }
 }
 
 /// A label for a span within a json pointer or malformed string.
+///
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Label {
     text: String,
@@ -58,13 +83,22 @@ impl From<Label> for miette::LabeledSpan {
 }
 
 /// An error wrapper which includes the subject of the failure.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct Report<D: Diagnostic> {
     source: D,
     subject: D::Subject,
+    related: OnceLock<Vec<D::Related>>,
 }
 
 impl<D: Diagnostic> Report<D> {
+    fn new(source: D, subject: D::Subject) -> Self {
+        Self {
+            source,
+            subject,
+            related: OnceLock::new(),
+        }
+    }
+
     /// The value which caused the error.
     pub fn subject(&self) -> &<D::Subject as Deref>::Target {
         &self.subject
@@ -78,6 +112,11 @@ impl<D: Diagnostic> Report<D> {
     /// The original parts of the [`Report`].
     pub fn decompose(self) -> (D, D::Subject) {
         (self.source, self.subject)
+    }
+
+    pub fn related(&self) -> &[D::Related] {
+        self.related
+            .get_or_init(|| self.source.related(&self.subject))
     }
 }
 
@@ -99,6 +138,7 @@ impl<D: Diagnostic + fmt::Display> fmt::Display for Report<D> {
 impl<D> std::error::Error for Report<D>
 where
     D: Diagnostic + fmt::Debug + std::error::Error + 'static,
+    D::Related: fmt::Debug,
     D::Subject: fmt::Debug,
 {
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
@@ -111,6 +151,7 @@ impl<D> miette::Diagnostic for Report<D>
 where
     D: Diagnostic + fmt::Debug + std::error::Error + 'static,
     D::Subject: fmt::Debug + miette::SourceCode,
+    D::Related: Diagnostic + fmt::Debug + std::error::Error + 'static,
 {
     fn url<'a>(&'a self) -> Option<Box<dyn core::fmt::Display + 'a>> {
         Some(Box::new(D::url()))
@@ -153,6 +194,31 @@ macro_rules! impl_diagnostic_url {
     };
 }
 pub(crate) use impl_diagnostic_url;
+
+#[cfg(feature = "miette")]
+struct Borrowed<'a, D: Diagnostic> {
+    source: &'a D,
+    subject: &'a D::Subject,
+}
+#[cfg(feature = "miette")]
+impl<'a, D: Diagnostic> miette::Diagnostic for Borrowed<'a, D> {
+    fn url<'b>(&'b self) -> Option<Box<dyn core::fmt::Display + 'b>> {
+        Some(Box::new(D::url()))
+    }
+
+    fn source_code(&self) -> Option<&dyn miette::SourceCode> {
+        Some(self.subject)
+    }
+
+    fn labels(&self) -> Option<Box<dyn Iterator<Item = miette::LabeledSpan> + '_>> {
+        Diagnostic::labels(&self, self.subject)
+    }
+    fn related<'b>(&'b self) -> Option<Box<dyn Iterator<Item = &'b dyn miette::Diagnostic> + 'b>> {
+        Some(Box::new(
+            self.source.related(self.subject).iter().map(|r| r as _),
+        ))
+    }
+}
 
 mod private {
     pub trait Sealed {}
@@ -212,7 +278,7 @@ mod tests {
     ))]
     fn assign_error() {
         let mut v = serde_json::json!({"foo": {"bar": ["0"]}});
-
+        use miette::Diagnostic;
         let ptr = PointerBuf::parse("/foo/bar/invalid/cannot/reach").unwrap();
         let report = ptr.assign(&mut v, "qux").diagnose(ptr).unwrap_err();
         println!("{:?}", miette::Report::from(report));

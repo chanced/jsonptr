@@ -43,6 +43,7 @@ use crate::{
 };
 use alloc::borrow::Cow;
 use core::{
+    convert::Infallible,
     fmt::{self, Debug},
     iter::once,
 };
@@ -230,7 +231,7 @@ impl fmt::Display for Error {
 
 impl Diagnostic for Error {
     type Subject = PointerBuf;
-    type Related = ();
+    type Related = Infallible;
 
     fn url() -> &'static str {
         impl_diagnostic_url!(enum assign::Error)
