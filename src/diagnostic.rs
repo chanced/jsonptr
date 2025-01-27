@@ -1,5 +1,6 @@
 //! Error reporting data structures and miette integration.
 
+use alloc::{boxed::Box, string::String};
 use core::{fmt, ops::Deref};
 
 /// Implemented by errors which can be converted into a [`Report`].
