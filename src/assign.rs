@@ -41,6 +41,7 @@ use crate::{
     index::{OutOfBoundsError, ParseIndexError},
     Pointer, PointerBuf,
 };
+use alloc::boxed::Box;
 use core::{
     fmt::{self, Debug},
     iter::once,
