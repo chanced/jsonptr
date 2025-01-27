@@ -41,9 +41,7 @@ use crate::{
     index::{OutOfBoundsError, ParseIndexError},
     Pointer, PointerBuf,
 };
-use alloc::borrow::Cow;
 use core::{
-    convert::Infallible,
     fmt::{self, Debug},
     iter::once,
 };
@@ -190,7 +188,7 @@ pub enum Error {
 }
 
 impl Error {
-    /// Returns the position (index) of the [`Token`](crate::Token) which was out of bounds
+    /// The position (token index) of the [`Token`](crate::Token) which was out of bounds
     pub fn position(&self) -> usize {
         match self {
             Self::OutOfBounds { position, .. } | Self::FailedToParseIndex { position, .. } => {
@@ -198,7 +196,7 @@ impl Error {
             }
         }
     }
-
+    /// Offset (in bytes) of the partial pointer starting with the invalid token.
     pub fn offset(&self) -> usize {
         match self {
             Self::OutOfBounds { offset, .. } | Self::FailedToParseIndex { offset, .. } => *offset,
@@ -231,7 +229,6 @@ impl fmt::Display for Error {
 
 impl Diagnostic for Error {
     type Subject = PointerBuf;
-    type Related = Infallible;
 
     fn url() -> &'static str {
         impl_diagnostic_url!(enum assign::Error)

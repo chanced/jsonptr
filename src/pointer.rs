@@ -1254,7 +1254,6 @@ impl ParseError {
 
 impl Diagnostic for ParseError {
     type Subject = String;
-    type Related = ParseError;
 
     fn url() -> &'static str {
         impl_diagnostic_url!(struct ParseError)
@@ -1270,17 +1269,10 @@ impl Diagnostic for ParseError {
         .to_string();
         Some(Box::new(once(Label::new(text, offset, len))))
     }
-
-    fn related(&self, subject: &Self::Subject) -> Vec<Self::Related> {
-        Validator {
-            bytes: subject.as_bytes(),
-            cursor: self.complete_offset(),
-            ptr_offset: self.pointer_offset(),
-            sent: true,
-        }
-        .collect()
-    }
 }
+
+#[cfg(feature = "miette")]
+impl miette::Diagnostic for ParseError {}
 
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
