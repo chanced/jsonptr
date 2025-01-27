@@ -1,4 +1,5 @@
 //! Error reporting data structures and miette integration.
+//!
 
 use alloc::{boxed::Box, string::String};
 use core::{fmt, ops::Deref};
@@ -91,7 +92,7 @@ where
     D: Diagnostic + fmt::Debug + std::error::Error + 'static,
     D::Subject: fmt::Debug,
 {
-    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         Some(&self.source)
     }
 }
