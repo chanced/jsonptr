@@ -65,9 +65,10 @@ pub mod resolve;
 pub use resolve::{Resolve, ResolveMut};
 
 pub mod diagnostic;
+pub use diagnostic::{Diagnose, Report};
 
 mod pointer;
-pub use pointer::{ParseError, ParseErrors, Pointer, PointerBuf, RichParseError};
+pub use pointer::{ParseError, Pointer, PointerBuf, RichParseError};
 
 mod token;
 pub use token::{EncodingError, InvalidEncoding, Token, Tokens};

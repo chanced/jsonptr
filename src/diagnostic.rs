@@ -155,7 +155,8 @@ pub trait Diagnose<'s, T> {
     ///
     /// ## Example
     /// ```
-    /// use jsonptr::{Pointer, ParseError, Diagnose};
+    /// use core::any::{Any, TypeId};
+    /// use jsonptr::{Pointer, ParseError, Diagnose, Report};
     /// let subj = "invalid/pointer";
     /// let err = Pointer::parse(subj).diagnose(subj).unwrap_err();
     /// assert_eq!(err.type_id(),TypeId::of::<Report<ParseError>>());
@@ -171,7 +172,8 @@ pub trait Diagnose<'s, T> {
     ///
     /// ## Example
     /// ```
-    /// use jsonptr::{Pointer, ParseError, Diagnose};
+    /// use core::any::{Any, TypeId};
+    /// use jsonptr::{Pointer, ParseError, Diagnose, Report};
     /// let subj = "invalid/pointer";
     /// let err = Pointer::parse(subj).diagnose_with(|| subj).unwrap_err();
     ///

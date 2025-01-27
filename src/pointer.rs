@@ -1173,40 +1173,6 @@ impl core::fmt::Display for PointerBuf {
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                                                                              ║
-║                                 ParseErrors                                  ║
-║                                ¯¯¯¯¯¯¯¯¯¯¯¯¯                                 ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-*/
-pub struct ParseErrors(Vec<ParseError>);
-
-impl ParseErrors {
-    pub fn new(v: impl IntoIterator<Item = ParseError>) -> Option<Self> {
-        let v = v.into_iter().collect::<Vec<_>>();
-        if v.is_empty() {
-            None
-        } else {
-            Some(Self(v))
-        }
-    }
-}
-impl FromIterator<ParseError> for ParseErrors {
-    fn from_iter<I: IntoIterator<Item = ParseError>>(iter: I) -> Self {
-        Self::new(iter).unwrap()
-    }
-}
-impl IntoIterator for ParseErrors {
-    type Item = ParseError;
-    type IntoIter = alloc::vec::IntoIter<ParseError>;
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
-    }
-}
-
-/*
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
 ║                                  ParseError                                  ║
 ║                                 ¯¯¯¯¯¯¯¯¯¯¯¯                                 ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
@@ -1231,13 +1197,15 @@ pub enum ParseError {
 }
 
 impl ParseError {
+    /// Offset of the partial pointer starting with the token that contained the
+    /// invalid encoding
     pub fn offset(&self) -> usize {
         match self {
             Self::NoLeadingBackslash => 0,
             Self::InvalidEncoding { offset, .. } => *offset,
         }
     }
-
+    /// Length of the invalid encoding
     pub fn invalid_encoding_len(&self, subject: &str) -> usize {
         match self {
             Self::NoLeadingBackslash => 0,
@@ -1364,6 +1332,7 @@ impl std::error::Error for ParseError {
     }
 }
 
+/// A rich error type that includes the original string that failed to parse.
 pub type RichParseError = Report<ParseError>;
 
 /*
@@ -1394,70 +1363,6 @@ impl fmt::Display for ReplaceError {
 
 #[cfg(feature = "std")]
 impl std::error::Error for ReplaceError {}
-
-trait TryFromIter: Sized {
-    fn try_from_iter(iter: impl Iterator<Item = ParseError>) -> Option<Self>;
-}
-
-impl TryFromIter for ParseError {
-    fn try_from_iter(mut iter: impl Iterator<Item = ParseError>) -> Option<Self> {
-        iter.next()
-    }
-}
-impl TryFromIter for ParseErrors {
-    fn try_from_iter(iter: impl Iterator<Item = ParseError>) -> Option<Self> {
-        Self::new(iter)
-    }
-}
-
-pub(crate) struct Validator<'b> {
-    // slashes ('/') separate tokens
-    // we increment the ptr_offset to point to this character
-    ptr_offset: usize,
-    // the bytes of the string to be validated
-    bytes: &'b [u8],
-    // the current cursor position within bytes
-    cursor: usize,
-    // whether or not an error was emitted on the previous iteration
-    sent: bool,
-}
-
-impl<'b> Iterator for Validator<'b> {
-    type Item = ParseError;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.cursor >= self.bytes.len() {
-            return None;
-        }
-        if self.sent {
-            if let Some(cursor) = next_slash(self.bytes, self.cursor) {
-                self.cursor = cursor;
-                self.sent = false;
-            } else {
-                return None;
-            }
-        }
-        if let Err(err) = validate_bytes(self.bytes, self.cursor) {
-            self.sent = true;
-            return Some(err);
-        }
-        if self.bytes[self.cursor] == b'/' {
-            self.ptr_offset = self.cursor;
-        }
-        self.cursor = self.bytes.len();
-        None
-    }
-}
-
-const fn next_slash(bytes: &[u8], mut cursor: usize) -> Option<usize> {
-    while cursor < bytes.len() {
-        if bytes[cursor] == b'/' {
-            return Some(cursor);
-        }
-        cursor += 1;
-    }
-    None
-}
 
 const fn validate(value: &str) -> Result<&str, ParseError> {
     if value.is_empty() {
@@ -1523,16 +1428,6 @@ const fn validate_bytes(bytes: &[u8], offset: usize) -> Result<(), ParseError> {
         tok_offset += 1;
     }
     Ok(())
-}
-const fn validate_tilde(bytes: &[u8], i: usize) -> Result<(), EncodingError> {
-    if i + 1 >= bytes.len() || (bytes[i + 1] != b'0' && bytes[i + 1] != b'1') {
-        Err(EncodingError {
-            offset: i,
-            source: InvalidEncoding::Tilde,
-        })
-    } else {
-        Ok(())
-    }
 }
 
 /*

@@ -377,6 +377,7 @@ pub type InvalidEncodingError = EncodingError;
 pub struct EncodingError {
     /// offset of the erroneous `~` from within the `Token`
     pub offset: usize,
+    /// the specific encoding error
     pub source: InvalidEncoding,
 }
 
@@ -407,6 +408,7 @@ impl fmt::Display for EncodingError {
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 */
 
+/// Represents the specific type of invalid encoding error.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum InvalidEncoding {
     /// `~` not followed by `0` or `1`
