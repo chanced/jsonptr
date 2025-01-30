@@ -173,16 +173,38 @@ impl Error {
             Self::OutOfBounds { offset, .. } | Self::FailedToParseIndex { offset, .. } => *offset,
         }
     }
+
+    /// Returns `true` if the error is [`OutOfBounds`].
+    ///
+    /// [`OutOfBounds`]: Error::OutOfBounds
+    #[must_use]
+    pub fn is_out_of_bounds(&self) -> bool {
+        matches!(self, Self::OutOfBounds { .. })
+    }
+
+    /// Returns `true` if the error is [`FailedToParseIndex`].
+    ///
+    /// [`FailedToParseIndex`]: Error::FailedToParseIndex
+    #[must_use]
+    pub fn is_failed_to_parse_index(&self) -> bool {
+        matches!(self, Self::FailedToParseIndex { .. })
+    }
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "value failed to be assigned, caused by token (position: {}, offset: {}) of the json pointer",
-            self.position(),
-            self.offset()
-        )
+        match self {
+            Self::FailedToParseIndex { offset, .. } => {
+                write!(
+                    f,
+                    "assign failed: json pointer token at offset {offset} failed to parse as an array index"
+                )
+            }
+            Self::OutOfBounds { offset, .. } => write!(
+                f,
+                "assign failed: json pointer token at offset {offset} is out of bounds",
+            ),
+        }
     }
 }
 
@@ -203,9 +225,7 @@ impl Diagnostic for Error {
         };
         let len = token.encoded().len();
         let text = match self {
-            Error::FailedToParseIndex { .. } => {
-                format!("expected array index or '-', found \"{}\"", token.decoded())
-            }
+            Error::FailedToParseIndex { .. } => "expected array index or '-'".to_string(),
             Error::OutOfBounds { source, .. } => {
                 format!("{} is out of bounds (len: {})", source.index, source.length)
             }

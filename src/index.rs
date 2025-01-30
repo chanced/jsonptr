@@ -256,7 +256,7 @@ impl fmt::Display for OutOfBoundsError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "index {} out of bounds (limit: {})",
+            "index {} out of bounds (len: {})",
             self.index, self.length
         )
     }

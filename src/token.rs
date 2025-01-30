@@ -383,7 +383,7 @@ pub struct EncodingError {
 
 #[cfg(feature = "std")]
 impl std::error::Error for EncodingError {
-    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         Some(&self.source)
     }
 }

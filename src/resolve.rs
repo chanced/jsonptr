@@ -235,20 +235,23 @@ impl Diagnostic for Error {
 impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::FailedToParseIndex { .. } => {
-                write!(f, "value failed to resolve by json pointer because an array index is not a valid integer")
+            Self::FailedToParseIndex { offset, .. } => {
+                write!(f, "resolve failed: json pointer token at offset {offset} failed to parse as an index")
             }
-            Self::OutOfBounds { .. } => {
+            Self::OutOfBounds { offset, .. } => {
                 write!(
                     f,
-                    "value failed to resolve by json pointer because an array index is out of bounds"
+                    "resolve failed: json pointer token at offset {offset} is out of bounds"
                 )
             }
-            Self::NotFound { .. } => {
-                write!(f, "value failed to resolve by json pointer because a value within the path is not present")
+            Self::NotFound { offset, .. } => {
+                write!(
+                    f,
+                    "resolve failed: json pointer token at {offset} was not found in value"
+                )
             }
-            Self::Unreachable { .. } => {
-                write!(f, "value failed to resolve by json pointer because a scalar or null value was encountered before exhausting the path")
+            Self::Unreachable { offset, .. } => {
+                write!(f, "resolve failed: json pointer token at {offset} is unreachable (previous token resolved to a scalar or null value)")
             }
         }
     }

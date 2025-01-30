@@ -207,10 +207,11 @@ impl Pointer {
     }
 
     /// Splits the `Pointer` at the given index if the character at the index is
-    /// a separator backslash (`'/'`), returning `Some((head, tail))`. Otherwise,
+    /// a separator slash (`'/'`), returning `Some((head, tail))`. Otherwise,
     /// returns `None`.
     ///
-    /// For the following JSON Pointer, the following splits are possible (0, 4, 8):
+    /// For the following JSON Pointer, the following splits are possible (0, 4,
+    /// 8):
     /// ```text
     /// /foo/bar/baz
     /// ↑   ↑   ↑
@@ -1166,8 +1167,8 @@ impl fmt::Display for NoLeadingSlash {
 /// Indicates that a `Pointer` was malformed and unable to be parsed.
 #[derive(Debug, PartialEq)]
 pub enum ParseError {
-    /// `Pointer` did not start with a backslash (`'/'`).
-    NoLeadingBackslash,
+    /// `Pointer` did not start with a slash (`'/'`).
+    NoLeadingSlash,
 
     /// `Pointer` contained invalid encoding (e.g. `~` not followed by `0` or
     /// `1`).
@@ -1185,14 +1186,14 @@ impl ParseError {
     /// invalid encoding
     pub fn offset(&self) -> usize {
         match self {
-            Self::NoLeadingBackslash => 0,
+            Self::NoLeadingSlash => 0,
             Self::InvalidEncoding { offset, .. } => *offset,
         }
     }
     /// Length of the invalid encoding
     pub fn invalid_encoding_len(&self, subject: &str) -> usize {
         match self {
-            Self::NoLeadingBackslash => 0,
+            Self::NoLeadingSlash => 0,
             Self::InvalidEncoding { offset, .. } => {
                 if *offset < subject.len() - 1 {
                     2
@@ -1215,7 +1216,7 @@ impl Diagnostic for ParseError {
         let offset = self.complete_offset();
         let len = self.invalid_encoding_len(subject);
         let text = match self {
-            ParseError::NoLeadingBackslash => "must start with a backslash ('/')",
+            ParseError::NoLeadingSlash => "must start with a backslash ('/')",
             ParseError::InvalidEncoding { .. } => "'~' must be followed by '0' or '1'",
         }
         .to_string();
@@ -1229,7 +1230,7 @@ impl miette::Diagnostic for ParseError {}
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::NoLeadingBackslash { .. } => {
+            Self::NoLeadingSlash { .. } => {
                 write!(
                     f,
                     "json pointer failed to parse; does not start with a backslash ('/') and is not empty"
@@ -1248,7 +1249,7 @@ impl fmt::Display for ParseError {
 impl ParseError {
     /// Returns `true` if this error is `NoLeadingBackslash`
     pub fn is_no_leading_backslash(&self) -> bool {
-        matches!(self, Self::NoLeadingBackslash { .. })
+        matches!(self, Self::NoLeadingSlash { .. })
     }
 
     /// Returns `true` if this error is `InvalidEncoding`    
@@ -1270,7 +1271,7 @@ impl ParseError {
     /// ```
     pub fn pointer_offset(&self) -> usize {
         match *self {
-            Self::NoLeadingBackslash { .. } => 0,
+            Self::NoLeadingSlash { .. } => 0,
             Self::InvalidEncoding { offset, .. } => offset,
         }
     }
@@ -1290,7 +1291,7 @@ impl ParseError {
     /// ```
     pub fn source_offset(&self) -> usize {
         match self {
-            Self::NoLeadingBackslash { .. } => 0,
+            Self::NoLeadingSlash { .. } => 0,
             Self::InvalidEncoding { source, .. } => source.offset,
         }
     }
@@ -1316,7 +1317,7 @@ impl std::error::Error for ParseError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::InvalidEncoding { source, .. } => Some(source),
-            Self::NoLeadingBackslash => None,
+            Self::NoLeadingSlash => None,
         }
     }
 }
@@ -1355,7 +1356,7 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
 
 const fn validate_bytes(bytes: &[u8], offset: usize) -> Result<(), ParseError> {
     if bytes[0] != b'/' && offset == 0 {
-        return Err(ParseError::NoLeadingBackslash);
+        return Err(ParseError::NoLeadingSlash);
     }
 
     let mut ptr_offset = offset; // offset within the pointer of the most recent '/' separator
@@ -1521,7 +1522,7 @@ mod tests {
             ("/foo/bar/baz/~10", Ok("/foo/bar/baz/~10")),
             ("/foo/bar/baz/~11", Ok("/foo/bar/baz/~11")),
             ("/foo/bar/baz/~1/~0", Ok("/foo/bar/baz/~1/~0")),
-            ("missing-slash", Err(ParseError::NoLeadingBackslash)),
+            ("missing-slash", Err(ParseError::NoLeadingSlash)),
             (
                 "/~",
                 Err(ParseError::InvalidEncoding {
