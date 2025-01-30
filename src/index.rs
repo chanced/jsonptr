@@ -237,7 +237,7 @@ derive_try_from!(String, &String);
 */
 
 /// Indicates that an `Index` is not within the given bounds.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OutOfBoundsError {
     /// The provided array length.
     ///
@@ -276,7 +276,7 @@ impl std::error::Error for OutOfBoundsError {}
 */
 
 /// Indicates that the `Token` could not be parsed as valid RFC 6901 array index.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParseIndexError {
     /// The Token does not represent a valid integer.
     InvalidInteger(ParseIntError),
@@ -295,14 +295,16 @@ impl From<ParseIntError> for ParseIndexError {
 impl fmt::Display for ParseIndexError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ParseIndexError::InvalidInteger(source) => {
-                write!(f, "failed to parse token as an integer: {source}")
+            ParseIndexError::InvalidInteger(_) => {
+                write!(f, "failed to parse token as an integer")
             }
             ParseIndexError::LeadingZeros => write!(
                 f,
                 "token contained leading zeros, which are disallowed by RFC 6901"
             ),
-            ParseIndexError::InvalidCharacter(err) => err.fmt(f),
+            ParseIndexError::InvalidCharacter(_) => {
+                write!(f, "failed to parse token as an index")
+            }
         }
     }
 }
@@ -319,7 +321,7 @@ impl std::error::Error for ParseIndexError {
 }
 
 /// Indicates that a non-digit character was found when parsing the RFC 6901 array index.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InvalidCharacterError {
     pub(crate) source: String,
     pub(crate) offset: usize,

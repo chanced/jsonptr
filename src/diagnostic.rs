@@ -93,7 +93,7 @@ where
     D::Subject: fmt::Debug,
 {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(&self.source)
+        self.source.source()
     }
 }
 
@@ -116,18 +116,18 @@ where
     }
 }
 
-macro_rules! impl_diagnostic_url {
+macro_rules! diagnostic_url {
     (enum $type:ident) => {
-        $crate::diagnostic::impl_diagnostic_url!("enum", "", $type)
+        $crate::diagnostic::diagnostic_url!("enum", "", $type)
     };
     (struct $type:ident) => {
-        $crate::diagnostic::impl_diagnostic_url!("struct", "", $type)
+        $crate::diagnostic::diagnostic_url!("struct", "", $type)
     };
     (enum $mod:ident::$type:ident) => {
-        $crate::diagnostic::impl_diagnostic_url!("enum", concat!("/", stringify!($mod)), $type)
+        $crate::diagnostic::diagnostic_url!("enum", concat!("/", stringify!($mod)), $type)
     };
     (struct $mod:ident::$type:ident) => {
-        $crate::diagnostic::impl_diagnostic_url!("struct", concat!("/", stringify!($mod)), $type)
+        $crate::diagnostic::diagnostic_url!("struct", concat!("/", stringify!($mod)), $type)
     };
     ($kind:literal, $mod:expr, $type:ident) => {
         concat!(
@@ -143,7 +143,7 @@ macro_rules! impl_diagnostic_url {
         )
     };
 }
-pub(crate) use impl_diagnostic_url;
+pub(crate) use diagnostic_url;
 
 /// An extension trait for `Result<_, E>`, where `E` is an implementation of
 /// [`Diagnostic`], that converts `E` into [`Report<E>`](`Report`), yielding
@@ -228,6 +228,24 @@ mod tests {
 
         let ptr = PointerBuf::parse("/foo/bar/3/cannot/reach").unwrap();
         let report = ptr.assign(&mut v, "qux").diagnose(ptr).unwrap_err();
+        println!("{:?}", miette::Report::from(report));
+    }
+
+    #[test]
+    #[cfg(all(
+        feature = "resolve",
+        feature = "miette",
+        feature = "serde",
+        feature = "json"
+    ))]
+    fn resolve_error() {
+        let v = serde_json::json!({"foo": {"bar": ["0"]}});
+        let ptr = PointerBuf::parse("/foo/bar/invalid/cannot/reach").unwrap();
+        let report = ptr.resolve(&v).diagnose(ptr).unwrap_err();
+        println!("{:?}", miette::Report::from(report));
+
+        let ptr = PointerBuf::parse("/foo/bar/3/cannot/reach").unwrap();
+        let report = ptr.resolve(&v).diagnose(ptr).unwrap_err();
         println!("{:?}", miette::Report::from(report));
     }
 

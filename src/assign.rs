@@ -37,7 +37,7 @@
 //!
 
 use crate::{
-    diagnostic::{impl_diagnostic_url, Diagnostic, Label},
+    diagnostic::{diagnostic_url, Diagnostic, Label},
     index::{OutOfBoundsError, ParseIndexError},
     Pointer, PointerBuf,
 };
@@ -46,16 +46,6 @@ use core::{
     fmt::{self, Debug},
     iter::once,
 };
-
-/*
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║                                    Assign                                    ║
-║                                   ¯¯¯¯¯¯¯¯                                   ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-*/
 
 /// Implemented by types which can internally assign a
 /// ([`Value`](`Assign::Value`)) at a path represented by a JSON [`Pointer`].
@@ -134,29 +124,9 @@ pub trait Assign {
         V: Into<Self::Value>;
 }
 
-/*
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║                                 AssignError                                  ║
-║                                ¯¯¯¯¯¯¯¯¯¯¯¯¯                                 ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-*/
-
 /// Alias for [`Error`] - indicates a value assignment failed.
 #[deprecated(since = "0.7.0", note = "renamed to `Error`")]
 pub type AssignError = Error;
-
-/*
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║                                    Error                                     ║
-║                                   ¯¯¯¯¯¯¯                                    ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-*/
 
 /// Possible error returned from [`Assign`] implementations for
 /// [`serde_json::Value`] and
@@ -207,24 +177,12 @@ impl Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::FailedToParseIndex { .. } => {
-                write!(
-                    f,
-                    "value failed to be assigned by json pointer; \
-                    array index for token at offset {} is not a valid integer or '-'",
-                    self.offset()
-                )
-            }
-            Self::OutOfBounds { .. } => {
-                write!(
-                    f,
-                    "value failed to be assigned by json pointer; \
-                    array index for token at offset {} is out of bounds",
-                    self.offset()
-                )
-            }
-        }
+        write!(
+            f,
+            "value failed to be assigned, caused by token (position: {}, offset: {}) of the json pointer",
+            self.position(),
+            self.offset()
+        )
     }
 }
 
@@ -232,7 +190,7 @@ impl Diagnostic for Error {
     type Subject = PointerBuf;
 
     fn url() -> &'static str {
-        impl_diagnostic_url!(enum assign::Error)
+        diagnostic_url!(enum assign::Error)
     }
 
     fn labels(&self, origin: &Self::Subject) -> Option<Box<dyn Iterator<Item = Label>>> {
@@ -244,18 +202,22 @@ impl Diagnostic for Error {
             self.offset()
         };
         let len = token.encoded().len();
-        Some(match self {
-            Error::FailedToParseIndex { .. } => Box::new(once(Label::new(
-                format!("\"{}\" is an invalid array index", token.decoded()),
-                offset,
-                len,
-            ))),
-            Error::OutOfBounds { source, .. } => Box::new(once(Label::new(
-                format!("{} is out of bounds (len: {})", source.index, source.length),
-                offset,
-                len,
-            ))),
-        })
+        let text = match self {
+            Error::FailedToParseIndex { .. } => {
+                format!("expected array index or '-', found \"{}\"", token.decoded())
+            }
+            Error::OutOfBounds { source, .. } => {
+                format!("{} is out of bounds (len: {})", source.index, source.length)
+            }
+        };
+        Some(Box::new(once(Label::new(text, offset, len))))
+    }
+}
+
+#[cfg(feature = "miette")]
+impl miette::Diagnostic for Error {
+    fn url<'a>(&'a self) -> Option<Box<dyn fmt::Display + 'a>> {
+        Some(Box::new(<Self as Diagnostic>::url()))
     }
 }
 
@@ -268,16 +230,6 @@ impl std::error::Error for Error {
         }
     }
 }
-
-/*
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║                                  json impl                                   ║
-║                                 ¯¯¯¯¯¯¯¯¯¯¯                                  ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-*/
 
 #[cfg(feature = "json")]
 mod json {
@@ -454,16 +406,6 @@ mod json {
     }
 }
 
-/*
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║                                  toml impl                                   ║
-║                                 ¯¯¯¯¯¯¯¯¯¯¯                                  ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-*/
-
 #[cfg(feature = "toml")]
 mod toml {
     use super::{Assign, Assigned, Error};
@@ -638,16 +580,6 @@ enum Assigned<'v, V> {
     Continue { next_dest: &'v mut V, same_value: V },
 }
 
-/*
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║                                    Tests                                     ║
-║                                   ¯¯¯¯¯¯¯                                    ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-*/
-
 #[cfg(test)]
 #[allow(clippy::too_many_lines)]
 mod tests {
@@ -693,12 +625,6 @@ mod tests {
             assert_eq!(&expected, &replaced);
         }
     }
-
-    /*
-    ╔═══════════════════════════════════════════════════╗
-    ║                        json                       ║
-    ╚═══════════════════════════════════════════════════╝
-    */
 
     #[test]
     #[cfg(feature = "json")]
@@ -889,12 +815,6 @@ mod tests {
         .enumerate()
         .for_each(|(i, t)| t.run(i));
     }
-
-    /*
-    ╔══════════════════════════════════════════════════╗
-    ║                       toml                       ║
-    ╚══════════════════════════════════════════════════╝
-    */
 
     #[test]
     #[cfg(feature = "toml")]

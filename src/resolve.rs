@@ -33,20 +33,13 @@
 //! | TOML  |    `toml::Value`    |   `"toml"`   |         |
 //!
 //!
-use crate::{
-    index::{OutOfBoundsError, ParseIndexError},
-    Pointer, Token,
-};
+use core::iter::once;
 
-/*
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║                                   Resolve                                    ║
-║                                  ¯¯¯¯¯¯¯¯¯                                   ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-*/
+use crate::{
+    diagnostic::{diagnostic_url, Diagnostic, Label},
+    index::{OutOfBoundsError, ParseIndexError},
+    Pointer, PointerBuf, Token,
+};
 
 /// A trait implemented by types which can resolve a reference to a value type
 /// from a path represented by a JSON [`Pointer`].
@@ -65,16 +58,6 @@ pub trait Resolve {
     fn resolve(&self, ptr: &Pointer) -> Result<&Self::Value, Self::Error>;
 }
 
-/*
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║                                 ResolveMut                                   ║
-║                                ¯¯¯¯¯¯¯¯¯¯¯¯                                  ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-*/
-
 /// A trait implemented by types which can resolve a mutable reference to a
 /// value type from a path represented by a JSON [`Pointer`].
 pub trait ResolveMut {
@@ -92,16 +75,6 @@ pub trait ResolveMut {
     /// be resolved.
     fn resolve_mut(&mut self, ptr: &Pointer) -> Result<&mut Self::Value, Self::Error>;
 }
-
-/*
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║                                    Error                                     ║
-║                                   ¯¯¯¯¯¯¯                                    ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-*/
 
 // TODO: should ResolveError be deprecated?
 /// Alias for [`Error`].
@@ -233,6 +206,32 @@ impl Error {
     }
 }
 
+impl Diagnostic for Error {
+    type Subject = PointerBuf;
+
+    fn url() -> &'static str {
+        diagnostic_url!(enum assign::Error)
+    }
+
+    fn labels(&self, origin: &Self::Subject) -> Option<Box<dyn Iterator<Item = Label>>> {
+        let position = self.position();
+        let token = origin.get(position)?;
+        let offset = if self.offset() + 1 < origin.as_str().len() {
+            self.offset() + 1
+        } else {
+            self.offset()
+        };
+        let len = token.encoded().len();
+        let text = match self {
+            Error::FailedToParseIndex { .. } => "not an array index".to_string(),
+            Error::OutOfBounds { source, .. } => source.to_string(),
+            Error::NotFound { .. } => "not found in value".to_string(),
+            Error::Unreachable { .. } => "unreachable".to_string(),
+        };
+        Some(Box::new(once(Label::new(text, offset, len))))
+    }
+}
+
 impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
@@ -265,16 +264,6 @@ impl std::error::Error for Error {
         }
     }
 }
-
-/*
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║                                  json impl                                   ║
-║                                 ¯¯¯¯¯¯¯¯¯¯¯                                  ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-*/
 
 #[cfg(feature = "json")]
 mod json {
@@ -373,16 +362,6 @@ fn parse_index(
         })
 }
 
-/*
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║                                  toml impl                                   ║
-║                                 ¯¯¯¯¯¯¯¯¯¯¯                                  ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-*/
-
 #[cfg(feature = "toml")]
 mod toml {
     use super::{Error, Resolve, ResolveMut};
@@ -473,16 +452,6 @@ mod toml {
         }
     }
 }
-
-/*
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║                                    Tests                                     ║
-║                                   ¯¯¯¯¯¯¯                                    ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-*/
 
 #[cfg(test)]
 mod tests {

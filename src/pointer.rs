@@ -1,5 +1,5 @@
 use crate::{
-    diagnostic::{impl_diagnostic_url, Diagnostic, Label, Report},
+    diagnostic::{diagnostic_url, Diagnostic, Label, Report},
     token::EncodingError,
     Components, InvalidEncoding, Token, Tokens,
 };
@@ -14,16 +14,6 @@ use core::{borrow::Borrow, cmp::Ordering, iter::once, ops::Deref, str::FromStr};
 use slice::PointerIndex;
 
 mod slice;
-
-/*
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║                                   Pointer                                    ║
-║                                  ¯¯¯¯¯¯¯¯¯                                   ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-*/
 
 /// A JSON Pointer is a string containing a sequence of zero or more reference
 /// [`Token`]s, each prefixed by a `'/'` character.
@@ -898,16 +888,6 @@ impl<'a> IntoIterator for &'a Pointer {
     }
 }
 
-/*
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║                                  PointerBuf                                  ║
-║                                 ¯¯¯¯¯¯¯¯¯¯¯¯                                 ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-*/
-
 /// An owned, mutable [`Pointer`] (akin to `String`).
 ///
 /// This type provides methods like [`PointerBuf::push_back`] and
@@ -1169,15 +1149,19 @@ impl core::fmt::Display for PointerBuf {
     }
 }
 
-/*
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║                                  ParseError                                  ║
-║                                 ¯¯¯¯¯¯¯¯¯¯¯¯                                 ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-*/
+/// Indicates that a [`Pointer`] was unable to be parsed due to not containing
+/// a leading slash (`'/'`).
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub struct NoLeadingSlash;
+
+impl fmt::Display for NoLeadingSlash {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "json pointer must start with a backslash ('/') and is not empty"
+        )
+    }
+}
 
 /// Indicates that a `Pointer` was malformed and unable to be parsed.
 #[derive(Debug, PartialEq)]
@@ -1224,7 +1208,7 @@ impl Diagnostic for ParseError {
     type Subject = String;
 
     fn url() -> &'static str {
-        impl_diagnostic_url!(struct ParseError)
+        diagnostic_url!(struct ParseError)
     }
 
     fn labels(&self, subject: &Self::Subject) -> Option<Box<dyn Iterator<Item = Label>>> {
@@ -1248,10 +1232,15 @@ impl fmt::Display for ParseError {
             Self::NoLeadingBackslash { .. } => {
                 write!(
                     f,
-                    "json pointer is malformed as it does not start with a backslash ('/') and is not empty"
+                    "json pointer failed to parse; does not start with a backslash ('/') and is not empty"
                 )
             }
-            Self::InvalidEncoding { source, .. } => fmt::Display::fmt(source, f),
+            Self::InvalidEncoding { offset, .. } => {
+                write!(
+                    f,
+                    "json pointer failed to parse; the first token in the partial-pointer starting at offset {offset} is malformed"
+                )
+            }
         }
     }
 }
@@ -1334,16 +1323,6 @@ impl std::error::Error for ParseError {
 
 /// A rich error type that includes the original string that failed to parse.
 pub type RichParseError = Report<ParseError>;
-
-/*
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║                                 ReplaceError                                 ║
-║                                ¯¯¯¯¯¯¯¯¯¯¯¯¯¯                                ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-*/
 
 /// Returned from [`PointerBuf::replace`] when the provided index is out of
 /// bounds.
@@ -1429,16 +1408,6 @@ const fn validate_bytes(bytes: &[u8], offset: usize) -> Result<(), ParseError> {
     }
     Ok(())
 }
-
-/*
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║                                    Tests                                     ║
-║                                   ¯¯¯¯¯¯¯                                    ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-*/
 
 #[cfg(test)]
 mod tests {
@@ -2373,7 +2342,7 @@ mod tests {
 
     #[test]
     fn quick_miette_spike() {
-        let err = PointerBuf::parse("hello-world").unwrap_err();
-        println!("{:?}", miette::Report::from(err));
+        // let err = PointerBuf::parse("hello-world").unwrap_err();
+        // println!("{:?}", miette::Report::from(err));
     }
 }
