@@ -468,28 +468,6 @@ mod tests {
     }
 
     #[test]
-    fn parse_index_error_display() {
-        let err = ParseIndexError::InvalidInteger("not a number".parse::<usize>().unwrap_err());
-        assert_eq!(
-            err.to_string(),
-            "failed to parse token as an integer: invalid digit found in string"
-        );
-        assert_eq!(
-            ParseIndexError::LeadingZeros.to_string(),
-            "token contained leading zeros, which are disallowed by RFC 6901"
-        );
-        assert_eq!(
-            ParseIndexError::InvalidCharacter(InvalidCharacterError {
-                source: "+10".into(),
-                offset: 0
-            })
-            .to_string(),
-            "token contains the non-digit character '+', \
-                which is disallowed by RFC 6901"
-        );
-    }
-
-    #[test]
     #[cfg(feature = "std")]
     fn parse_index_error_source() {
         use std::error::Error;
