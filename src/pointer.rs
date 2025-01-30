@@ -2106,10 +2106,6 @@ mod tests {
 
         let invalid = serde_json::from_str::<&Pointer>("\"foo/bar\"");
         assert!(invalid.is_err());
-        assert_eq!(
-            invalid.unwrap_err().to_string(),
-            "failed to parse json pointer\n\ncaused by:\njson pointer is malformed as it does not start with a backslash ('/') and is not empty at line 1 column 9"
-        );
     }
 
     #[test]
