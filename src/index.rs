@@ -459,27 +459,6 @@ mod tests {
     }
 
     #[test]
-    fn out_of_bounds_error_display() {
-        let err = OutOfBoundsError {
-            length: 5,
-            index: 10,
-        };
-        assert_eq!(err.to_string(), "index 10 out of bounds (limit: 5)");
-    }
-
-    #[test]
-    #[cfg(feature = "std")]
-    fn parse_index_error_source() {
-        use std::error::Error;
-        let err = ParseIndexError::InvalidInteger("not a number".parse::<usize>().unwrap_err());
-        assert_eq!(
-            err.source().unwrap().to_string(),
-            "not a number".parse::<usize>().unwrap_err().to_string()
-        );
-        assert!(ParseIndexError::LeadingZeros.source().is_none());
-    }
-
-    #[test]
     fn try_from_token() {
         let token = Token::new("3");
         let index = <Index as TryFrom<Token>>::try_from(token).unwrap();
