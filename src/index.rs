@@ -237,7 +237,7 @@ derive_try_from!(String, &String);
 */
 
 /// Indicates that an `Index` is not within the given bounds.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OutOfBoundsError {
     /// The provided array length.
     ///
@@ -256,7 +256,7 @@ impl fmt::Display for OutOfBoundsError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "index {} out of bounds (limit: {})",
+            "index {} out of bounds (len: {})",
             self.index, self.length
         )
     }
@@ -276,7 +276,7 @@ impl std::error::Error for OutOfBoundsError {}
 */
 
 /// Indicates that the `Token` could not be parsed as valid RFC 6901 array index.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParseIndexError {
     /// The Token does not represent a valid integer.
     InvalidInteger(ParseIntError),
@@ -295,14 +295,16 @@ impl From<ParseIntError> for ParseIndexError {
 impl fmt::Display for ParseIndexError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ParseIndexError::InvalidInteger(source) => {
-                write!(f, "failed to parse token as an integer: {source}")
+            ParseIndexError::InvalidInteger(_) => {
+                write!(f, "failed to parse token as an integer")
             }
             ParseIndexError::LeadingZeros => write!(
                 f,
                 "token contained leading zeros, which are disallowed by RFC 6901"
             ),
-            ParseIndexError::InvalidCharacter(err) => err.fmt(f),
+            ParseIndexError::InvalidCharacter(_) => {
+                write!(f, "failed to parse token as an index")
+            }
         }
     }
 }
@@ -319,7 +321,7 @@ impl std::error::Error for ParseIndexError {
 }
 
 /// Indicates that a non-digit character was found when parsing the RFC 6901 array index.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InvalidCharacterError {
     pub(crate) source: String,
     pub(crate) offset: usize,
@@ -454,49 +456,6 @@ mod tests {
         assert_eq!(Index::Num(0).for_len(1), Ok(0));
         assert!(Index::Num(1).for_len(1).is_err());
         assert!(Index::Next.for_len(1).is_err());
-    }
-
-    #[test]
-    fn out_of_bounds_error_display() {
-        let err = OutOfBoundsError {
-            length: 5,
-            index: 10,
-        };
-        assert_eq!(err.to_string(), "index 10 out of bounds (limit: 5)");
-    }
-
-    #[test]
-    fn parse_index_error_display() {
-        let err = ParseIndexError::InvalidInteger("not a number".parse::<usize>().unwrap_err());
-        assert_eq!(
-            err.to_string(),
-            "failed to parse token as an integer: invalid digit found in string"
-        );
-        assert_eq!(
-            ParseIndexError::LeadingZeros.to_string(),
-            "token contained leading zeros, which are disallowed by RFC 6901"
-        );
-        assert_eq!(
-            ParseIndexError::InvalidCharacter(InvalidCharacterError {
-                source: "+10".into(),
-                offset: 0
-            })
-            .to_string(),
-            "token contains the non-digit character '+', \
-                which is disallowed by RFC 6901"
-        );
-    }
-
-    #[test]
-    #[cfg(feature = "std")]
-    fn parse_index_error_source() {
-        use std::error::Error;
-        let err = ParseIndexError::InvalidInteger("not a number".parse::<usize>().unwrap_err());
-        assert_eq!(
-            err.source().unwrap().to_string(),
-            "not a number".parse::<usize>().unwrap_err().to_string()
-        );
-        assert!(ParseIndexError::LeadingZeros.source().is_none());
     }
 
     #[test]

@@ -1,18 +1,17 @@
 //! Error reporting data structures and miette integration.
+//!
 
-use core::fmt;
+use alloc::{boxed::Box, string::String};
+use core::{fmt, ops::Deref};
 
 /// Implemented by errors which can be converted into a [`Report`].
-pub trait Diagnostic<'s>: Sized + private::Sealed {
+pub trait Diagnostic: Sized {
     /// The value which caused the error.
-    type Subject: private::IntoOwned;
+    type Subject: Deref;
 
     /// Combine the error with its subject to generate a [`Report`].
-    fn into_report(self, subject: impl Into<Self::Subject>) -> Report<Self, Self::Subject> {
-        Report {
-            source: self,
-            subject: subject.into(),
-        }
+    fn into_report(self, subject: impl Into<Self::Subject>) -> Report<Self> {
+        Report::new(self, subject.into())
     }
 
     /// The docs.rs URL for this error
@@ -23,6 +22,7 @@ pub trait Diagnostic<'s>: Sized + private::Sealed {
 }
 
 /// A label for a span within a json pointer or malformed string.
+///
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Label {
     text: String,
@@ -45,80 +45,66 @@ impl From<Label> for miette::LabeledSpan {
 }
 
 /// An error wrapper which includes the subject of the failure.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Report<SRC, SUB> {
-    source: SRC,
-    subject: SUB,
+#[derive(Debug, Clone)]
+pub struct Report<D: Diagnostic> {
+    source: D,
+    subject: D::Subject,
 }
 
-impl<SRC, SUB> Report<SRC, SUB> {
+impl<D: Diagnostic> Report<D> {
+    fn new(source: D, subject: D::Subject) -> Self {
+        Self { source, subject }
+    }
+
     /// The value which caused the error.
-    pub fn subject(&self) -> &SUB {
+    pub fn subject(&self) -> &<D::Subject as Deref>::Target {
         &self.subject
     }
 
     /// The error which occurred.
-    pub fn original(&self) -> &SRC {
+    pub fn original(&self) -> &D {
         &self.source
     }
 
     /// The original parts of the [`Report`].
-    pub fn decompose(self) -> (SRC, SUB) {
+    pub fn decompose(self) -> (D, D::Subject) {
         (self.source, self.subject)
     }
 }
 
-impl<'s, S> Report<S, <S as Diagnostic<'s>>::Subject>
-where
-    S: Diagnostic<'s>,
-{
-    /// Converts the Report into an owned instance (generally by cloning the subject).
-    pub fn into_owned(self) -> Report<S, <S::Subject as private::IntoOwned>::Owned> {
-        use private::IntoOwned;
-
-        Report {
-            source: self.source,
-            subject: self.subject.into_owned(),
-        }
-    }
-}
-
-impl<SRC, SUB> core::ops::Deref for Report<SRC, SUB> {
-    type Target = SRC;
+impl<D: Diagnostic> core::ops::Deref for Report<D> {
+    type Target = D;
 
     fn deref(&self) -> &Self::Target {
         &self.source
     }
 }
 
-impl<SRC, SUB> fmt::Display for Report<SRC, SUB>
-where
-    SRC: fmt::Display,
-{
+impl<D: Diagnostic + fmt::Display> fmt::Display for Report<D> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         fmt::Display::fmt(&self.source, f)
     }
 }
 
 #[cfg(feature = "std")]
-impl<SRC, SUB> std::error::Error for Report<SRC, SUB>
+impl<D> std::error::Error for Report<D>
 where
-    SRC: fmt::Debug + std::error::Error + 'static,
-    SUB: fmt::Debug,
+    D: Diagnostic + fmt::Debug + std::error::Error + 'static,
+    D::Subject: fmt::Debug,
 {
-    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
-        Some(&self.source)
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.source.source()
     }
 }
 
 #[cfg(feature = "miette")]
-impl<'s, SRC> miette::Diagnostic for Report<SRC, SRC::Subject>
+impl<D> miette::Diagnostic for Report<D>
 where
-    SRC: Diagnostic<'s> + fmt::Debug + std::error::Error + 'static,
-    SRC::Subject: fmt::Debug + miette::SourceCode,
+    D: Diagnostic + fmt::Debug + std::error::Error + 'static,
+    D::Subject: fmt::Debug + miette::SourceCode,
 {
     fn url<'a>(&'a self) -> Option<Box<dyn core::fmt::Display + 'a>> {
-        Some(Box::new(SRC::url()))
+        Some(Box::new(D::url()))
     }
 
     fn source_code(&self) -> Option<&dyn miette::SourceCode> {
@@ -126,22 +112,22 @@ where
     }
 
     fn labels(&self) -> Option<Box<dyn Iterator<Item = miette::LabeledSpan> + '_>> {
-        Some(Box::new(SRC::labels(self, &self.subject)?.map(Into::into)))
+        Some(Box::new(D::labels(self, &self.subject)?.map(Into::into)))
     }
 }
 
-macro_rules! impl_diagnostic_url {
+macro_rules! diagnostic_url {
     (enum $type:ident) => {
-        $crate::diagnostic::impl_diagnostic_url!("enum", "", $type)
+        $crate::diagnostic::diagnostic_url!("enum", "", $type)
     };
     (struct $type:ident) => {
-        $crate::diagnostic::impl_diagnostic_url!("struct", "", $type)
+        $crate::diagnostic::diagnostic_url!("struct", "", $type)
     };
     (enum $mod:ident::$type:ident) => {
-        $crate::diagnostic::impl_diagnostic_url!("enum", concat!("/", stringify!($mod)), $type)
+        $crate::diagnostic::diagnostic_url!("enum", concat!("/", stringify!($mod)), $type)
     };
     (struct $mod:ident::$type:ident) => {
-        $crate::diagnostic::impl_diagnostic_url!("struct", concat!("/", stringify!($mod)), $type)
+        $crate::diagnostic::diagnostic_url!("struct", concat!("/", stringify!($mod)), $type)
     };
     ($kind:literal, $mod:expr, $type:ident) => {
         concat!(
@@ -157,69 +143,67 @@ macro_rules! impl_diagnostic_url {
         )
     };
 }
-pub(crate) use impl_diagnostic_url;
+pub(crate) use diagnostic_url;
 
-mod private {
-    use alloc::borrow::Cow;
-
-    pub trait Sealed {}
-    impl Sealed for crate::pointer::ParseError {}
-    impl Sealed for crate::assign::Error {}
-
-    pub trait IntoOwned {
-        type Owned;
-
-        fn into_owned(self) -> Self::Owned;
-    }
-
-    impl<'s, T: 'static + ToOwned + ?Sized> IntoOwned for Cow<'s, T> {
-        type Owned = Cow<'static, T>;
-
-        fn into_owned(self) -> Cow<'static, T> {
-            Cow::Owned(self.into_owned())
-        }
-    }
-}
-
+/// An extension trait for `Result<_, E>`, where `E` is an implementation of
+/// [`Diagnostic`], that converts `E` into [`Report<E>`](`Report`), yielding
+/// `Result<_, Report<E>>`.
 pub trait Diagnose<'s, T> {
-    type Error: Diagnostic<'s>;
+    /// The error type returned from `diagnose` and `diagnose_with`.
+    type Error: Diagnostic;
 
+    /// If the `Result` is an `Err`, converts the error into a [`Report`] with
+    /// the supplied `subject`.
+    ///
+    /// ## Example
+    /// ```
+    /// use core::any::{Any, TypeId};
+    /// use jsonptr::{Pointer, ParseError, Diagnose, Report};
+    /// let subj = "invalid/pointer";
+    /// let err = Pointer::parse(subj).diagnose(subj).unwrap_err();
+    /// assert_eq!(err.type_id(),TypeId::of::<Report<ParseError>>());
+    /// ```
     #[allow(clippy::missing_errors_doc)]
     fn diagnose(
         self,
-        subject: impl Into<<Self::Error as Diagnostic<'s>>::Subject>,
-    ) -> Result<T, Report<Self::Error, <Self::Error as Diagnostic<'s>>::Subject>>;
+        subject: impl Into<<Self::Error as Diagnostic>::Subject>,
+    ) -> Result<T, Report<Self::Error>>;
 
+    /// If the `Result` is an `Err`, converts the error into a [`Report`] with
+    /// the subject returned from `f`
+    ///
+    /// ## Example
+    /// ```
+    /// use core::any::{Any, TypeId};
+    /// use jsonptr::{Pointer, ParseError, Diagnose, Report};
+    /// let subj = "invalid/pointer";
+    /// let err = Pointer::parse(subj).diagnose_with(|| subj).unwrap_err();
+    ///
+    /// assert_eq!(err.type_id(),TypeId::of::<Report<ParseError>>());
     #[allow(clippy::missing_errors_doc)]
-    fn diagnose_with<F, S>(
-        self,
-        f: F,
-    ) -> Result<T, Report<Self::Error, <Self::Error as Diagnostic<'s>>::Subject>>
+    fn diagnose_with<F, S>(self, f: F) -> Result<T, Report<Self::Error>>
     where
         F: FnOnce() -> S,
-        S: Into<<Self::Error as Diagnostic<'s>>::Subject>;
+        S: Into<<Self::Error as Diagnostic>::Subject>;
 }
 
 impl<'s, T, E> Diagnose<'s, T> for Result<T, E>
 where
-    E: Diagnostic<'s>,
+    E: Diagnostic,
 {
     type Error = E;
 
     fn diagnose(
         self,
-        subject: impl Into<<Self::Error as Diagnostic<'s>>::Subject>,
-    ) -> Result<T, Report<Self::Error, <Self::Error as Diagnostic<'s>>::Subject>> {
+        subject: impl Into<<Self::Error as Diagnostic>::Subject>,
+    ) -> Result<T, Report<Self::Error>> {
         self.map_err(|error| error.into_report(subject.into()))
     }
 
-    fn diagnose_with<F, S>(
-        self,
-        f: F,
-    ) -> Result<T, Report<Self::Error, <Self::Error as Diagnostic<'s>>::Subject>>
+    fn diagnose_with<F, S>(self, f: F) -> Result<T, Report<Self::Error>>
     where
         F: FnOnce() -> S,
-        S: Into<<Self::Error as Diagnostic<'s>>::Subject>,
+        S: Into<<Self::Error as Diagnostic>::Subject>,
     {
         self.diagnose(f())
     }
@@ -229,7 +213,6 @@ where
 mod tests {
     use super::*;
     use crate::{Pointer, PointerBuf};
-
     #[test]
     #[cfg(all(
         feature = "assign",
@@ -239,13 +222,30 @@ mod tests {
     ))]
     fn assign_error() {
         let mut v = serde_json::json!({"foo": {"bar": ["0"]}});
-
         let ptr = PointerBuf::parse("/foo/bar/invalid/cannot/reach").unwrap();
         let report = ptr.assign(&mut v, "qux").diagnose(ptr).unwrap_err();
         println!("{:?}", miette::Report::from(report));
 
         let ptr = PointerBuf::parse("/foo/bar/3/cannot/reach").unwrap();
         let report = ptr.assign(&mut v, "qux").diagnose(ptr).unwrap_err();
+        println!("{:?}", miette::Report::from(report));
+    }
+
+    #[test]
+    #[cfg(all(
+        feature = "resolve",
+        feature = "miette",
+        feature = "serde",
+        feature = "json"
+    ))]
+    fn resolve_error() {
+        let v = serde_json::json!({"foo": {"bar": ["0"]}});
+        let ptr = PointerBuf::parse("/foo/bar/invalid/cannot/reach").unwrap();
+        let report = ptr.resolve(&v).diagnose(ptr).unwrap_err();
+        println!("{:?}", miette::Report::from(report));
+
+        let ptr = PointerBuf::parse("/foo/bar/3/cannot/reach").unwrap();
+        let report = ptr.resolve(&v).diagnose(ptr).unwrap_err();
         println!("{:?}", miette::Report::from(report));
     }
 
@@ -260,20 +260,5 @@ mod tests {
 
         let report = miette::Report::from(report);
         println!("{report:?}");
-    }
-
-    #[test]
-    fn into_owned() {
-        let owned_report = {
-            // creating owned string to ensure its lifetime is local
-            // (could also coerce a static reference, but this is less brittle)
-            let invalid = "/foo/bar/invalid~3~encoding/cannot/reach".to_string();
-            let report = Pointer::parse(&invalid)
-                .diagnose(invalid.as_str())
-                .unwrap_err();
-            report.into_owned()
-        };
-
-        println!("{owned_report}");
     }
 }

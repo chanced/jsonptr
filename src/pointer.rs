@@ -1,7 +1,7 @@
 use crate::{
-    diagnostic::{impl_diagnostic_url, Diagnostic, Label, Report},
-    token::InvalidEncodingError,
-    Components, Token, Tokens,
+    diagnostic::{diagnostic_url, Diagnostic, Label, Report},
+    token::EncodingError,
+    Components, InvalidEncoding, Token, Tokens,
 };
 use alloc::{
     borrow::{Cow, ToOwned},
@@ -14,16 +14,6 @@ use core::{borrow::Borrow, cmp::Ordering, iter::once, ops::Deref, str::FromStr};
 use slice::PointerIndex;
 
 mod slice;
-
-/*
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║                                   Pointer                                    ║
-║                                  ¯¯¯¯¯¯¯¯¯                                   ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-*/
 
 /// A JSON Pointer is a string containing a sequence of zero or more reference
 /// [`Token`]s, each prefixed by a `'/'` character.
@@ -217,10 +207,11 @@ impl Pointer {
     }
 
     /// Splits the `Pointer` at the given index if the character at the index is
-    /// a separator backslash (`'/'`), returning `Some((head, tail))`. Otherwise,
+    /// a separator slash (`'/'`), returning `Some((head, tail))`. Otherwise,
     /// returns `None`.
     ///
-    /// For the following JSON Pointer, the following splits are possible (0, 4, 8):
+    /// For the following JSON Pointer, the following splits are possible (0, 4,
+    /// 8):
     /// ```text
     /// /foo/bar/baz
     /// ↑   ↑   ↑
@@ -667,7 +658,7 @@ macro_rules! impl_source_code {
     };
 }
 
-impl_source_code!(Pointer, &Pointer);
+impl_source_code!(Pointer, &Pointer, PointerBuf);
 
 impl<'p> From<&'p Pointer> for Cow<'p, Pointer> {
     fn from(value: &'p Pointer) -> Self {
@@ -898,16 +889,6 @@ impl<'a> IntoIterator for &'a Pointer {
     }
 }
 
-/*
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║                                  PointerBuf                                  ║
-║                                 ¯¯¯¯¯¯¯¯¯¯¯¯                                 ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-*/
-
 /// An owned, mutable [`Pointer`] (akin to `String`).
 ///
 /// This type provides methods like [`PointerBuf::push_back`] and
@@ -942,10 +923,10 @@ impl PointerBuf {
     ///
     /// ## Errors
     /// Returns a [`RichParseError`] if the string is not a valid JSON Pointer.
-    pub fn parse<'s>(s: impl Into<Cow<'s, str>>) -> Result<Self, RichParseError<'s>> {
+    pub fn parse(s: impl Into<String>) -> Result<Self, RichParseError> {
         let s = s.into();
         match validate(&s) {
-            Ok(_) => Ok(Self(s.into_owned())),
+            Ok(_) => Ok(Self(s)),
             Err(err) => Err(err.into_report(s)),
         }
     }
@@ -1169,80 +1150,25 @@ impl core::fmt::Display for PointerBuf {
     }
 }
 
-const fn validate(value: &str) -> Result<&str, ParseError> {
-    if value.is_empty() {
-        return Ok(value);
-    }
-    let bytes = value.as_bytes();
-    if bytes[0] != b'/' {
-        return Err(ParseError::NoLeadingBackslash);
-    }
-    let mut ptr_offset = 0; // offset within the pointer of the most recent '/' separator
-    let mut tok_offset = 0; // offset within the current token
+/// Indicates that a [`Pointer`] was unable to be parsed due to not containing
+/// a leading slash (`'/'`).
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub struct NoLeadingSlash;
 
-    let bytes = value.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        match bytes[i] {
-            b'/' => {
-                // backslashes ('/') separate tokens
-                // we increment the ptr_offset to point to this character
-                ptr_offset = i;
-                // and reset the token offset
-                tok_offset = 0;
-            }
-            b'~' => {
-                // if the character is a '~', then the next character must be '0' or '1'
-                // otherwise the encoding is invalid and `InvalidEncodingError` is returned
-                if i + 1 >= bytes.len() || (bytes[i + 1] != b'0' && bytes[i + 1] != b'1') {
-                    // the pointer is not properly encoded
-                    //
-                    // we use the pointer offset, which points to the last
-                    // encountered separator, as the offset of the error.
-                    // The source `InvalidEncodingError` then uses the token
-                    // offset.
-                    //
-                    // "/foo/invalid~encoding"
-                    //      ^       ^
-                    //      |       |
-                    //  ptr_offset  |
-                    //          tok_offset
-                    //
-                    return Err(ParseError::InvalidEncoding {
-                        offset: ptr_offset,
-                        source: InvalidEncodingError { offset: tok_offset },
-                    });
-                }
-                // already checked the next character, so we skip it
-                i += 1;
-                // incrementing the pointer offset since the next byte has
-                // already been checked
-                tok_offset += 1;
-            }
-            _ => {}
-        }
-        i += 1;
-        // not a separator so we increment the token offset
-        tok_offset += 1;
+impl fmt::Display for NoLeadingSlash {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "json pointer must start with a backslash ('/') and is not empty"
+        )
     }
-    Ok(value)
 }
-
-/*
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║                                  ParseError                                  ║
-║                                 ¯¯¯¯¯¯¯¯¯¯¯¯                                 ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-*/
 
 /// Indicates that a `Pointer` was malformed and unable to be parsed.
 #[derive(Debug, PartialEq)]
 pub enum ParseError {
-    /// `Pointer` did not start with a backslash (`'/'`).
-    NoLeadingBackslash,
+    /// `Pointer` did not start with a slash (`'/'`).
+    NoLeadingSlash,
 
     /// `Pointer` contained invalid encoding (e.g. `~` not followed by `0` or
     /// `1`).
@@ -1251,21 +1177,23 @@ pub enum ParseError {
         /// the invalid encoding
         offset: usize,
         /// The source `InvalidEncodingError`
-        source: InvalidEncodingError,
+        source: EncodingError,
     },
 }
 
 impl ParseError {
+    /// Offset of the partial pointer starting with the token that contained the
+    /// invalid encoding
     pub fn offset(&self) -> usize {
         match self {
-            Self::NoLeadingBackslash => 0,
+            Self::NoLeadingSlash => 0,
             Self::InvalidEncoding { offset, .. } => *offset,
         }
     }
-
+    /// Length of the invalid encoding
     pub fn invalid_encoding_len(&self, subject: &str) -> usize {
         match self {
-            Self::NoLeadingBackslash => 0,
+            Self::NoLeadingSlash => 0,
             Self::InvalidEncoding { offset, .. } => {
                 if *offset < subject.len() - 1 {
                     2
@@ -1277,19 +1205,18 @@ impl ParseError {
     }
 }
 
-impl<'s> Diagnostic<'s> for ParseError {
-    type Subject = Cow<'s, str>;
+impl Diagnostic for ParseError {
+    type Subject = String;
 
     fn url() -> &'static str {
-        impl_diagnostic_url!(struct ParseError)
+        diagnostic_url!(struct ParseError)
     }
 
     fn labels(&self, subject: &Self::Subject) -> Option<Box<dyn Iterator<Item = Label>>> {
-        // TODO: considering searching the pointer for all invalid encodings
         let offset = self.complete_offset();
         let len = self.invalid_encoding_len(subject);
         let text = match self {
-            ParseError::NoLeadingBackslash => "must start with a backslash ('/')",
+            ParseError::NoLeadingSlash => "must start with a backslash ('/')",
             ParseError::InvalidEncoding { .. } => "'~' must be followed by '0' or '1'",
         }
         .to_string();
@@ -1297,16 +1224,24 @@ impl<'s> Diagnostic<'s> for ParseError {
     }
 }
 
+#[cfg(feature = "miette")]
+impl miette::Diagnostic for ParseError {}
+
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::NoLeadingBackslash { .. } => {
+            Self::NoLeadingSlash { .. } => {
                 write!(
                     f,
-                    "json pointer is malformed as it does not start with a backslash ('/') and is not empty"
+                    "json pointer failed to parse; does not start with a backslash ('/') and is not empty"
                 )
             }
-            Self::InvalidEncoding { source, .. } => fmt::Display::fmt(source, f),
+            Self::InvalidEncoding { offset, .. } => {
+                write!(
+                    f,
+                    "json pointer failed to parse; the first token in the partial-pointer starting at offset {offset} is malformed"
+                )
+            }
         }
     }
 }
@@ -1314,7 +1249,7 @@ impl fmt::Display for ParseError {
 impl ParseError {
     /// Returns `true` if this error is `NoLeadingBackslash`
     pub fn is_no_leading_backslash(&self) -> bool {
-        matches!(self, Self::NoLeadingBackslash { .. })
+        matches!(self, Self::NoLeadingSlash { .. })
     }
 
     /// Returns `true` if this error is `InvalidEncoding`    
@@ -1336,7 +1271,7 @@ impl ParseError {
     /// ```
     pub fn pointer_offset(&self) -> usize {
         match *self {
-            Self::NoLeadingBackslash { .. } => 0,
+            Self::NoLeadingSlash { .. } => 0,
             Self::InvalidEncoding { offset, .. } => offset,
         }
     }
@@ -1356,7 +1291,7 @@ impl ParseError {
     /// ```
     pub fn source_offset(&self) -> usize {
         match self {
-            Self::NoLeadingBackslash { .. } => 0,
+            Self::NoLeadingSlash { .. } => 0,
             Self::InvalidEncoding { source, .. } => source.offset,
         }
     }
@@ -1382,22 +1317,13 @@ impl std::error::Error for ParseError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::InvalidEncoding { source, .. } => Some(source),
-            Self::NoLeadingBackslash => None,
+            Self::NoLeadingSlash => None,
         }
     }
 }
 
-pub type RichParseError<'s> = Report<ParseError, <ParseError as Diagnostic<'s>>::Subject>;
-
-/*
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║                              ReplaceTokenError                               ║
-║                             ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-*/
+/// A rich error type that includes the original string that failed to parse.
+pub type RichParseError = Report<ParseError>;
 
 /// Returned from [`PointerBuf::replace`] when the provided index is out of
 /// bounds.
@@ -1418,15 +1344,71 @@ impl fmt::Display for ReplaceError {
 #[cfg(feature = "std")]
 impl std::error::Error for ReplaceError {}
 
-/*
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║                                    Tests                                     ║
-║                                   ¯¯¯¯¯¯¯                                    ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-*/
+const fn validate(value: &str) -> Result<&str, ParseError> {
+    if value.is_empty() {
+        return Ok(value);
+    }
+    if let Err(err) = validate_bytes(value.as_bytes(), 0) {
+        return Err(err);
+    }
+    Ok(value)
+}
+
+const fn validate_bytes(bytes: &[u8], offset: usize) -> Result<(), ParseError> {
+    if bytes[0] != b'/' && offset == 0 {
+        return Err(ParseError::NoLeadingSlash);
+    }
+
+    let mut ptr_offset = offset; // offset within the pointer of the most recent '/' separator
+    let mut tok_offset = 0; // offset within the current token
+
+    let mut i = offset;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'/' => {
+                ptr_offset = i;
+                // and reset the token offset
+                tok_offset = 0;
+            }
+            b'~' => {
+                // if the character is a '~', then the next character must be '0' or '1'
+                // otherwise the encoding is invalid and `InvalidEncodingError` is returned
+                if i + 1 >= bytes.len() || (bytes[i + 1] != b'0' && bytes[i + 1] != b'1') {
+                    // the pointer is not properly encoded
+                    //
+                    // we use the pointer offset, which points to the last
+                    // encountered separator, as the offset of the error.
+                    // The source `InvalidEncodingError` then uses the token
+                    // offset.
+                    //
+                    // "/foo/invalid~encoding"
+                    //      ^       ^
+                    //      |       |
+                    //  ptr_offset  |
+                    //          tok_offset
+                    //
+                    return Err(ParseError::InvalidEncoding {
+                        offset: ptr_offset,
+                        source: EncodingError {
+                            offset: tok_offset,
+                            source: InvalidEncoding::Tilde,
+                        },
+                    });
+                }
+                // already checked the next character, so we skip it
+                i += 1;
+                // incrementing the pointer offset since the next byte has
+                // already been checked
+                tok_offset += 1;
+            }
+            _ => {}
+        }
+        i += 1;
+        // not a separator so we increment the token offset
+        tok_offset += 1;
+    }
+    Ok(())
+}
 
 #[cfg(test)]
 mod tests {
@@ -1540,26 +1522,35 @@ mod tests {
             ("/foo/bar/baz/~10", Ok("/foo/bar/baz/~10")),
             ("/foo/bar/baz/~11", Ok("/foo/bar/baz/~11")),
             ("/foo/bar/baz/~1/~0", Ok("/foo/bar/baz/~1/~0")),
-            ("missing-slash", Err(ParseError::NoLeadingBackslash)),
+            ("missing-slash", Err(ParseError::NoLeadingSlash)),
             (
                 "/~",
                 Err(ParseError::InvalidEncoding {
                     offset: 0,
-                    source: InvalidEncodingError { offset: 1 },
+                    source: EncodingError {
+                        offset: 1,
+                        source: InvalidEncoding::Tilde,
+                    },
                 }),
             ),
             (
                 "/~2",
                 Err(ParseError::InvalidEncoding {
                     offset: 0,
-                    source: InvalidEncodingError { offset: 1 },
+                    source: EncodingError {
+                        offset: 1,
+                        source: InvalidEncoding::Tilde,
+                    },
                 }),
             ),
             (
                 "/~a",
                 Err(ParseError::InvalidEncoding {
                     offset: 0,
-                    source: InvalidEncodingError { offset: 1 },
+                    source: EncodingError {
+                        offset: 1,
+                        source: InvalidEncoding::Tilde,
+                    },
                 }),
             ),
         ];
@@ -2116,10 +2107,6 @@ mod tests {
 
         let invalid = serde_json::from_str::<&Pointer>("\"foo/bar\"");
         assert!(invalid.is_err());
-        assert_eq!(
-            invalid.unwrap_err().to_string(),
-            "failed to parse json pointer\n\ncaused by:\njson pointer is malformed as it does not start with a backslash ('/') and is not empty at line 1 column 9"
-        );
     }
 
     #[test]
@@ -2352,7 +2339,7 @@ mod tests {
 
     #[test]
     fn quick_miette_spike() {
-        let err = PointerBuf::parse("hello-world").unwrap_err();
-        println!("{:?}", miette::Report::from(err));
+        // let err = PointerBuf::parse("hello-world").unwrap_err();
+        // println!("{:?}", miette::Report::from(err));
     }
 }

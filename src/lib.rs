@@ -65,12 +65,16 @@ pub mod resolve;
 pub use resolve::{Resolve, ResolveMut};
 
 pub mod diagnostic;
+pub use diagnostic::{Diagnose, Report};
 
 mod pointer;
-pub use pointer::{ParseError, Pointer, PointerBuf};
+pub use pointer::{ParseError, Pointer, PointerBuf, RichParseError};
 
 mod token;
-pub use token::{InvalidEncodingError, Token, Tokens};
+pub use token::{EncodingError, InvalidEncoding, Token, Tokens};
+
+#[allow(deprecated)]
+pub use token::InvalidEncodingError;
 
 pub mod index;
 

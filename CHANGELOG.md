@@ -15,7 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   Adds `Pointer::starts_with` and `Pointer::ends_with` for prefix and suffix matching.
 -   Adds new `ParseIndexError` variant to express the presence non-digit characters in the token.
 -   Adds `Token::is_next` for checking if a token represents the `-` character.
--   Adds `ParseBufError`, returned as the `Err` variant of `PointerBuf::parse`, which includes the input `String` (from `Into::into`).
+-   Adds `InvalidEncoding` to represent the two possible encoding errors when decoding a token.
+-   Adds `diagnostic` mod, including:
+-   Adds `diagnotic::Diagnostic` trait to facilitate error reporting and
+    `miette` integration. All errors intended for usage with `assign::Assign` or
+    `resolve::Resolve` must implement this trait.
+-   Adds `"miette"` featureflag to enable `miette` integration for error reporting.
 
 ### Changed
 
@@ -24,10 +29,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   `Pointer::get` now accepts ranges and can produce `Pointer` segments as output (similar to
     `slice::get`).
 -   `PointerBuf::parse` now returns `BufParseError` instead of `ParseError`.
+-   Adds field `position` to variants of `resolve::Error` and `assign::Error` to indicate the
+    token index of where the error occurred.
+-   Renames `ParseError::NoLeadingBackslash` to `ParseError::NoLeadingSlash`.
 
 ### Fixed
 
 -   Make validation of array indices conform to RFC 6901 in the presence of non-digit characters.
+
+### Deprecated
+
+-   `assign::AssignError` renamed to `assign::Error`
+-   `resolve::ResolveError` renamed to `resolve::Error`
+-   `InvalidEncodingError` renamed to `EncodingError`
 
 ## [0.6.2] 2024-09-30
 
