@@ -187,7 +187,7 @@ pub trait Diagnose<'s, T> {
         S: Into<<Self::Error as Diagnostic>::Subject>;
 }
 
-impl<'s, T, E> Diagnose<'s, T> for Result<T, E>
+impl<T, E> Diagnose<'_, T> for Result<T, E>
 where
     E: Diagnostic,
 {
