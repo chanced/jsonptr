@@ -33,14 +33,13 @@
 //! | TOML  |    `toml::Value`    |   `"toml"`   |         |
 //!
 //!
-use alloc::string::ToString;
-use core::iter::once;
-
 use crate::{
     diagnostic::{diagnostic_url, Diagnostic, Label},
     index::{OutOfBoundsError, ParseIndexError},
     Pointer, PointerBuf, Token,
 };
+use alloc::{boxed::Box, string::ToString};
+use core::iter::once;
 
 /// A trait implemented by types which can resolve a reference to a value type
 /// from a path represented by a JSON [`Pointer`].
