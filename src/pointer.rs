@@ -1931,6 +1931,7 @@ mod tests {
     #[test]
     #[cfg(feature = "json")]
     fn into_value() {
+        use alloc::string::ToString;
         use serde_json::Value;
         let ptr = Pointer::from_static("/foo/bar");
         let value: Value = ptr.into();

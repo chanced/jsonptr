@@ -33,6 +33,7 @@
 //! | TOML  |    `toml::Value`    |   `"toml"`   |         |
 //!
 //!
+use alloc::string::ToString;
 use core::iter::once;
 
 use crate::{
