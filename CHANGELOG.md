@@ -19,7 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   Adds `diagnotic::Diagnostic` trait to facilitate error reporting and
     `miette` integration. All errors intended for usage with `assign::Assign` or
     `resolve::Resolve` must implement this trait.
--   Adds `diagnostic::Report<T>` that
+-   Adds `diagnostic::Report<T>` to capture the input for `PointerBuf::parse`
+    and to facilitate `miette` integration for all errors.
 -   Adds `"miette"` feature flag to enable `miette` integration for error reporting.
 
 ### Changed
@@ -32,7 +33,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     error. Use `Report::original` for matches or `Report::
 -   Renames `ParseError::NoLeadingBackslash` to `ParseError::NoLeadingSlash`
     (sorry for the churn, I spaced hard - @chanced).
--   Usages of `"backslash` corrected to `"slash"`
 -   Adds field `position` to variants of `resolve::Error` and `assign::Error` to indicate the
     token index of where the error occurred.
 -   Renames `ParseError::is_no_leading_backslash` to `ParseError::is_no_leading_slash`.
