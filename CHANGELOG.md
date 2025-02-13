@@ -5,28 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-
 ## [Unreleased]
 
 ### Added
 
--   Adds method `into_buf` for `Box<Pointer>` and `impl From<PathBuf> for Box<Pointer>`. 
+-   Adds method `into_buf` for `Box<Pointer>` and `impl From<PathBuf> for Box<Pointer>`.
 -   Adds unsafe associated methods `Pointer::new_unchecked` and `PointerBuf::new_unchecked` for
     external zero-cost construction.
 -   Adds `Pointer::starts_with` and `Pointer::ends_with` for prefix and suffix matching.
 -   Adds new `ParseIndexError` variant to express the presence non-digit characters in the token.
 -   Adds `Token::is_next` for checking if a token represents the `-` character.
+-   Adds `InvalidEncoding` to represent the two possible encoding errors when decoding a token.
+-   Adds `diagnotic::Diagnostic` trait to facilitate error reporting and
+    `miette` integration. All errors intended for usage with `assign::Assign` or
+    `resolve::Resolve` must implement this trait.
+-   Adds `diagnostic::Report<T>` to capture the input for `PointerBuf::parse`
+    and to facilitate `miette` integration for all errors.
+-   Adds `"miette"` feature flag to enable `miette` integration for error reporting.
 
 ### Changed
 
--   Changed signature of `PathBuf::parse` to avoid requiring allocation.
--   Bumps minimum Rust version to 1.79.
 -   `Pointer::get` now accepts ranges and can produce `Pointer` segments as output (similar to
     `slice::get`).
+-   Bumps minimum Rust version to 1.79.
+-   `PointerBuf::parse` now returns `RichParseError`, an alias to
+    `Report<ParseError>` which contains the allocated string as well as the
+    error. Use `Report::original` for matches or `Report::
+-   Renames `ParseError::NoLeadingBackslash` to `ParseError::NoLeadingSlash`
+    (sorry for the churn, I spaced hard - @chanced).
+-   Adds field `position` to variants of `resolve::Error` and `assign::Error` to indicate the
+    token index of where the error occurred.
+-   Renames `ParseError::is_no_leading_backslash` to `ParseError::is_no_leading_slash`.
+-   Renames `assign::AssignError` to `assign::Error`
+-   Renames `resolve::ResolveError` to `resolve::Error`
+-   Renames `InvalidEncodingError` to `EncodingError`
 
 ### Fixed
 
 -   Make validation of array indices conform to RFC 6901 in the presence of non-digit characters.
+
+### Deprecated
+
+-   `ParseError::is_no_leading_backslash` renamed to `ParseError::is_no_leading_slash`.
+-   `assign::AssignError` renamed to `assign::Error`
+-   `resolve::ResolveError` renamed to `resolve::Error`
+-   `InvalidEncodingError` renamed to `EncodingError`
 
 ## [0.6.2] 2024-09-30
 

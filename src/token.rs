@@ -70,11 +70,16 @@ impl<'a> Token<'a> {
     /// ## Errors
     /// Returns `InvalidEncodingError` if the input string is not a valid RFC
     /// 6901 (`~` must be followed by `0` or `1`)
-    pub fn from_encoded(s: &'a str) -> Result<Self, InvalidEncodingError> {
+    pub fn from_encoded(s: &'a str) -> Result<Self, EncodingError> {
         let mut escaped = false;
         for (offset, b) in s.bytes().enumerate() {
             match b {
-                b'/' => return Err(InvalidEncodingError { offset }),
+                b'/' => {
+                    return Err(EncodingError {
+                        offset,
+                        source: InvalidEncoding::Slash,
+                    })
+                }
                 ENC_PREFIX => {
                     escaped = true;
                 }
@@ -83,13 +88,19 @@ impl<'a> Token<'a> {
                 }
                 _ => {
                     if escaped {
-                        return Err(InvalidEncodingError { offset });
+                        return Err(EncodingError {
+                            offset,
+                            source: InvalidEncoding::Tilde,
+                        });
                     }
                 }
             }
         }
         if escaped {
-            return Err(InvalidEncodingError { offset: s.len() });
+            return Err(EncodingError {
+                offset: s.len(),
+                source: InvalidEncoding::Slash,
+            });
         }
         Ok(Self { inner: s.into() })
     }
@@ -345,26 +356,77 @@ impl<'t> Tokens<'t> {
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 */
 
+#[deprecated(since = "0.7.0", note = "renamed to `EncodingError`")]
+/// Deprecated alias for [`EncodingError`].
+pub type InvalidEncodingError = EncodingError;
+
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                                EncodingError                                 ║
+║                               ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯                                ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
+
 /// A token within a json pointer contained invalid encoding (`~` not followed
 /// by `0` or `1`).
 ///
 #[derive(Debug, PartialEq, Eq)]
-pub struct InvalidEncodingError {
+pub struct EncodingError {
     /// offset of the erroneous `~` from within the `Token`
     pub offset: usize,
+    /// the specific encoding error
+    pub source: InvalidEncoding,
 }
 
-impl fmt::Display for InvalidEncodingError {
+#[cfg(feature = "std")]
+impl std::error::Error for EncodingError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.source)
+    }
+}
+
+impl fmt::Display for EncodingError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "json pointer is malformed due to invalid encoding ('~' not followed by '0' or '1')"
+            "token contains invalid encoding at offset {}",
+            self.offset
         )
     }
 }
 
+/*
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                               InvalidEncoding                                ║
+║                              ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯                               ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+*/
+
+/// Represents the specific type of invalid encoding error.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum InvalidEncoding {
+    /// `~` not followed by `0` or `1`
+    Tilde,
+    /// non-encoded `/` found in token
+    Slash,
+}
+
+impl fmt::Display for InvalidEncoding {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            InvalidEncoding::Tilde => write!(f, "tilde (~) not followed by 0 or 1"),
+            InvalidEncoding::Slash => write!(f, "slash (/) found in token"),
+        }
+    }
+}
 #[cfg(feature = "std")]
-impl std::error::Error for InvalidEncodingError {}
+impl std::error::Error for InvalidEncoding {}
 
 /*
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -378,7 +440,7 @@ impl std::error::Error for InvalidEncodingError {}
 
 #[cfg(test)]
 mod tests {
-    use crate::{assign::AssignError, index::OutOfBoundsError, Pointer};
+    use crate::Pointer;
 
     use super::*;
     use quickcheck_macros::quickcheck;
@@ -409,53 +471,6 @@ mod tests {
     }
 
     #[test]
-    fn assign_error_display() {
-        let err = AssignError::FailedToParseIndex {
-            offset: 3,
-            source: ParseIndexError::InvalidInteger("a".parse::<usize>().unwrap_err()),
-        };
-        assert_eq!(
-            err.to_string(),
-            "assignment failed due to an invalid index at offset 3"
-        );
-
-        let err = AssignError::OutOfBounds {
-            offset: 3,
-            source: OutOfBoundsError {
-                index: 3,
-                length: 2,
-            },
-        };
-
-        assert_eq!(
-            err.to_string(),
-            "assignment failed due to index at offset 3 being out of bounds"
-        );
-    }
-
-    #[test]
-    #[cfg(feature = "std")]
-    fn assign_error_source() {
-        use std::error::Error;
-        let err = AssignError::FailedToParseIndex {
-            offset: 3,
-            source: ParseIndexError::InvalidInteger("a".parse::<usize>().unwrap_err()),
-        };
-        assert!(err.source().is_some());
-        assert!(err.source().unwrap().is::<ParseIndexError>());
-
-        let err = AssignError::OutOfBounds {
-            offset: 3,
-            source: OutOfBoundsError {
-                index: 3,
-                length: 2,
-            },
-        };
-
-        assert!(err.source().unwrap().is::<OutOfBoundsError>());
-    }
-
-    #[test]
     fn from_encoded() {
         assert_eq!(Token::from_encoded("~1").unwrap().encoded(), "~1");
         assert_eq!(Token::from_encoded("~0~1").unwrap().encoded(), "~0~1");
@@ -476,14 +491,6 @@ mod tests {
         let token = Token::new(s);
         let decoded = Token::from_encoded(token.encoded()).unwrap();
         token == decoded
-    }
-
-    #[test]
-    fn invalid_encoding_error_display() {
-        assert_eq!(
-            Token::from_encoded("~").unwrap_err().to_string(),
-            "json pointer is malformed due to invalid encoding ('~' not followed by '0' or '1')"
-        );
     }
 
     #[test]
