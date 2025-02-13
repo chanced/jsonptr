@@ -16,22 +16,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   Adds new `ParseIndexError` variant to express the presence non-digit characters in the token.
 -   Adds `Token::is_next` for checking if a token represents the `-` character.
 -   Adds `InvalidEncoding` to represent the two possible encoding errors when decoding a token.
--   Adds `diagnostic` mod, including:
 -   Adds `diagnotic::Diagnostic` trait to facilitate error reporting and
     `miette` integration. All errors intended for usage with `assign::Assign` or
     `resolve::Resolve` must implement this trait.
--   Adds `"miette"` featureflag to enable `miette` integration for error reporting.
+-   Adds `diagnostic::Report<T>` that
+-   Adds `"miette"` feature flag to enable `miette` integration for error reporting.
 
 ### Changed
 
+-   `Pointer::get` now accepts ranges and can produce `Pointer` segments as output (similar to
+    `slice::get`).
+-   Bumps minimum Rust version to 1.79.
+-   `PointerBuf::parse` now returns `RichParseError`, an alias to
+    `Report<ParseError>` which contains the allocated string as well as the
+    error. Use `Report::original` for matches or `Report::
 -   Renames `ParseError::NoLeadingBackslash` to `ParseError::NoLeadingSlash`
     (sorry for the churn, I spaced hard - @chanced).
 -   Usages of `"backslash` corrected to `"slash"`
--   Changed signature of `PathBuf::parse` to avoid requiring allocation.
--   Bumps minimum Rust version to 1.79.
--   `Pointer::get` now accepts ranges and can produce `Pointer` segments as output (similar to
-    `slice::get`).
--   `PointerBuf::parse` now returns `BufParseError` instead of `ParseError`.
 -   Adds field `position` to variants of `resolve::Error` and `assign::Error` to indicate the
     token index of where the error occurred.
 -   Renames `ParseError::is_no_leading_backslash` to `ParseError::is_no_leading_slash`.
