@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+-   Renames `ParseError::NoLeadingBackslash` to `ParseError::NoLeadingSlash`
+    (sorry for the churn, I spaced hard - @chanced).
+-   Usages of `"backslash` corrected to `"slash"`
 -   Changed signature of `PathBuf::parse` to avoid requiring allocation.
 -   Bumps minimum Rust version to 1.79.
 -   `Pointer::get` now accepts ranges and can produce `Pointer` segments as output (similar to
@@ -31,7 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   `PointerBuf::parse` now returns `BufParseError` instead of `ParseError`.
 -   Adds field `position` to variants of `resolve::Error` and `assign::Error` to indicate the
     token index of where the error occurred.
--   Renames `ParseError::NoLeadingBackslash` to `ParseError::NoLeadingSlash`.
+-   Renames `ParseError::is_no_leading_backslash` to `ParseError::is_no_leading_slash`.
+-   Renames `assign::AssignError` to `assign::Error`
+-   Renames `resolve::ResolveError` to `resolve::Error`
+-   Renames `InvalidEncodingError` to `EncodingError`
 
 ### Fixed
 
@@ -39,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Deprecated
 
+-   `ParseError::is_no_leading_backslash` renamed to `ParseError::is_no_leading_slash`.
 -   `assign::AssignError` renamed to `assign::Error`
 -   `resolve::ResolveError` renamed to `resolve::Error`
 -   `InvalidEncodingError` renamed to `EncodingError`

@@ -538,7 +538,7 @@ impl Pointer {
     /// See [`PointerBuf::append`] for more details.
     ///
     /// **Note**: this method allocates. If you find yourself calling it more
-    /// than once for a given pointer, consider using [`PointerBuf::append`]
+    /// than  given pointer, consider using [`PointerBuf::append`]
     /// instead.
     ///
     /// ## Examples
@@ -1159,7 +1159,7 @@ impl fmt::Display for NoLeadingSlash {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "json pointer must start with a backslash ('/') and is not empty"
+            "json pointer must start with a slash ('/') and is not empty"
         )
     }
 }
@@ -1216,7 +1216,7 @@ impl Diagnostic for ParseError {
         let offset = self.complete_offset();
         let len = self.invalid_encoding_len(subject);
         let text = match self {
-            ParseError::NoLeadingSlash => "must start with a backslash ('/')",
+            ParseError::NoLeadingSlash => "must start with a slash ('/')",
             ParseError::InvalidEncoding { .. } => "'~' must be followed by '0' or '1'",
         }
         .to_string();
@@ -1233,7 +1233,7 @@ impl fmt::Display for ParseError {
             Self::NoLeadingSlash { .. } => {
                 write!(
                     f,
-                    "json pointer failed to parse; does not start with a backslash ('/') and is not empty"
+                    "json pointer failed to parse; does not start with a slash ('/') and is not empty"
                 )
             }
             Self::InvalidEncoding { offset, .. } => {
@@ -1247,8 +1247,14 @@ impl fmt::Display for ParseError {
 }
 
 impl ParseError {
-    /// Returns `true` if this error is `NoLeadingBackslash`
+    #[deprecated(note = "renamed to `is_no_leading_slash`", since = "0.7.0")]
+    /// Returns `true` if this error is `NoLeadingSlash`
     pub fn is_no_leading_backslash(&self) -> bool {
+        matches!(self, Self::NoLeadingSlash { .. })
+    }
+
+    /// Returns `true` if this error is `NoLeadingSlash`
+    pub fn is_no_leading_slash(&self) -> bool {
         matches!(self, Self::NoLeadingSlash { .. })
     }
 
@@ -2340,7 +2346,7 @@ mod tests {
 
     #[test]
     fn quick_miette_spike() {
-        // let err = PointerBuf::parse("hello-world").unwrap_err();
-        // println!("{:?}", miette::Report::from(err));
+        let err = PointerBuf::parse("hello-world").unwrap_err();
+        println!("{:?}", miette::Report::from(err));
     }
 }

@@ -44,53 +44,68 @@ impl From<Label> for miette::LabeledSpan {
     }
 }
 
-/// An error wrapper which includes the subject of the failure.
+/// An enriched error wrapper which captures the original error and the subject
+/// (`String` or `PointerBuf`) which caused it, for reporting purposes.
+///
+/// This type serves two roles:
+///
+/// 1. **[`PointerBuf::parse`]**: Captures the [`ParseError`] along with the
+///    input `String`.
+///
+/// 2. **Reporting:** Provides enriched reporting capabilities, including
+///    (optional) `miette` integration, for `ParseError` and associated  errors
+///    of `assign::Assign` and `resolve::Resolve` implementations
 #[derive(Debug, Clone)]
-pub struct Report<D: Diagnostic> {
-    source: D,
-    subject: D::Subject,
+pub struct Report<T: Diagnostic> {
+    source: T,
+    subject: T::Subject,
 }
 
-impl<D: Diagnostic> Report<D> {
-    fn new(source: D, subject: D::Subject) -> Self {
+impl<T: Diagnostic> Report<T> {
+    fn new(source: T, subject: T::Subject) -> Self {
         Self { source, subject }
     }
 
     /// The value which caused the error.
-    pub fn subject(&self) -> &<D::Subject as Deref>::Target {
+    pub fn subject(&self) -> &<T::Subject as Deref>::Target {
         &self.subject
     }
 
     /// The error which occurred.
-    pub fn original(&self) -> &D {
+    pub fn original(&self) -> &T {
         &self.source
     }
 
     /// The original parts of the [`Report`].
-    pub fn decompose(self) -> (D, D::Subject) {
+    pub fn decompose(self) -> (T, T::Subject) {
         (self.source, self.subject)
+    }
+
+    /// Consumes the [`Report`] and returns the original error `T`.
+    pub fn into_original(self) -> T {
+        self.source
     }
 }
 
-impl<D: Diagnostic> core::ops::Deref for Report<D> {
-    type Target = D;
+impl<T: Diagnostic> core::ops::Deref for Report<T> {
+    type Target = T;
 
     fn deref(&self) -> &Self::Target {
         &self.source
     }
 }
 
-impl<D: Diagnostic + fmt::Display> fmt::Display for Report<D> {
+impl<T: Diagnostic + fmt::Display> fmt::Display for Report<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         fmt::Display::fmt(&self.source, f)
     }
 }
 
 #[cfg(feature = "std")]
-impl<D> std::error::Error for Report<D>
+impl<T> std::error::Error for Report<T>
 where
-    D: Diagnostic + fmt::Debug + std::error::Error + 'static,
-    D::Subject: fmt::Debug,
+    T: Diagnostic + fmt::Debug + std::error::Error + 'static,
+    T::Subject: fmt::Debug,
 {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         self.source.source()
@@ -98,13 +113,13 @@ where
 }
 
 #[cfg(feature = "miette")]
-impl<D> miette::Diagnostic for Report<D>
+impl<T> miette::Diagnostic for Report<T>
 where
-    D: Diagnostic + fmt::Debug + std::error::Error + 'static,
-    D::Subject: fmt::Debug + miette::SourceCode,
+    T: Diagnostic + fmt::Debug + std::error::Error + 'static,
+    T::Subject: fmt::Debug + miette::SourceCode,
 {
     fn url<'a>(&'a self) -> Option<Box<dyn core::fmt::Display + 'a>> {
-        Some(Box::new(D::url()))
+        Some(Box::new(T::url()))
     }
 
     fn source_code(&self) -> Option<&dyn miette::SourceCode> {
@@ -112,7 +127,7 @@ where
     }
 
     fn labels(&self) -> Option<Box<dyn Iterator<Item = miette::LabeledSpan> + '_>> {
-        Some(Box::new(D::labels(self, &self.subject)?.map(Into::into)))
+        Some(Box::new(T::labels(self, &self.subject)?.map(Into::into)))
     }
 }
 
