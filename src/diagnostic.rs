@@ -220,7 +220,7 @@ where
         F: FnOnce() -> S,
         S: Into<<Self::Error as Diagnostic>::Subject>,
     {
-        self.diagnose(f())
+        self.map_err(|error| error.into_report(f()))
     }
 }
 

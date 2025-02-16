@@ -1,5 +1,5 @@
 use crate::{
-    diagnostic::{diagnostic_url, Diagnostic, Label, Report},
+    diagnostic::{diagnostic_url, Diagnostic, Label},
     token::EncodingError,
     Components, InvalidEncoding, Token, Tokens,
 };
@@ -12,8 +12,10 @@ use alloc::{
 };
 use core::{borrow::Borrow, cmp::Ordering, iter::once, ops::Deref, str::FromStr};
 use slice::PointerIndex;
+use strcow::StrCow;
 
 mod slice;
+mod strcow;
 
 /// A JSON Pointer is a string containing a sequence of zero or more reference
 /// [`Token`]s, each prefixed by a `'/'` character.
@@ -923,11 +925,11 @@ impl PointerBuf {
     ///
     /// ## Errors
     /// Returns a [`RichParseError`] if the string is not a valid JSON Pointer.
-    pub fn parse(s: impl Into<String>) -> Result<Self, RichParseError> {
-        let s = s.into();
-        match validate(&s) {
-            Ok(_) => Ok(Self(s)),
-            Err(err) => Err(err.into_report(s)),
+    pub fn parse(s: impl StrCow) -> Result<Self, ParseError> {
+        // must explicitly match due to borrow checker limitations
+        match validate(s.as_ref()) {
+            Ok(_) => Ok(Self(s.into_owned())),
+            Err(err) => Err(err),
         }
     }
 
@@ -1327,9 +1329,6 @@ impl std::error::Error for ParseError {
         }
     }
 }
-
-/// A rich error type that includes the original string that failed to parse.
-pub type RichParseError = Report<ParseError>;
 
 /// Returned from [`PointerBuf::replace`] when the provided index is out of
 /// bounds.
@@ -2342,11 +2341,5 @@ mod tests {
         let boxed: Box<Pointer> = subjectal.clone().into();
         let unboxed = boxed.into_buf();
         assert_eq!(subjectal, unboxed);
-    }
-
-    #[test]
-    fn quick_miette_spike() {
-        let err = PointerBuf::parse("hello-world").unwrap_err();
-        println!("{:?}", miette::Report::from(err));
     }
 }
