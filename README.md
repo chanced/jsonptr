@@ -35,6 +35,8 @@ flags](#feature-flags).
 
 ## Usage
 
+### Parsing and General Usage
+
 To parse a [`Pointer`] from a string, use either [`Pointer::parse`], for
 potentially fallible parsing, or the `const fn` `from_static` to produce a
 `&'static Pointer` from a string that is known to be valid.
@@ -45,6 +47,8 @@ use jsonptr::Pointer;
 let ptr = Pointer::parse("/examples/0/name").unwrap();
 let static_ptr = Pointer::from_static("/examples/0/name");
 assert_eq!(ptr, static_ptr);
+
+assert_eq!(ptr.get(1..).unwrap(), Pointer::parse("/0/name").unwrap());
 
 let parent = ptr.parent().unwrap();
 assert_eq!(parent, Pointer::parse("/examples/0").unwrap());
@@ -70,6 +74,8 @@ buf.push_back("/");
 assert_eq!(buf.as_str(), "/~0/pointer/examples/0/name/~1");
 ```
 
+### Token Iteration
+
 Iterating over the tokens or components of a pointer:
 
 ```rust
@@ -88,6 +94,8 @@ assert_eq!(components.next(), Some(Component::Token(Token::new("to"))));
 assert_eq!(components.next(), Some(Component::Token(Token::new("value"))));
 ```
 
+### Resolving Values
+
 To get a value at the location of a pointer, use either the [`Resolve`] and
 [`ResolveMut`] traits or [`Pointer::resolve`] and [`Pointer::resolve_mut`]
 methods. See the [`resolve`] mod for more information.
@@ -101,6 +109,8 @@ let data = json!({"foo": { "bar": 34 }});
 let bar = ptr.resolve(&data).unwrap();
 assert_eq!(bar, &json!(34));
 ```
+
+### Assigning Values
 
 Values can be set, with path expansion, using the either the [`Assign`] trait or
 [`Pointer::assign`]. See [`assign`] for more information.
@@ -116,6 +126,8 @@ assert_eq!(replaced, Some(json!(42)));
 assert_eq!(data, json!({"secret": { "universe": 34 }}));
 ```
 
+### Deleting Values
+
 Values can be removed with the either the [`Delete`] trait or
 [`Pointer::delete`]. See [`delete`] for more information.
 
@@ -130,6 +142,30 @@ assert_eq!(replaced, Some(json!(42)));
 assert_eq!(data, json!({"secret": { "universe": 34 }}));
 ```
 
+### Error Reporting
+
+Any error produced by function calls into methods of traits or types of this
+crate can be converted into a [`Report`] which contains the original error
+and the [`String`] which failed to parse or the [`PointerBuf`] which failed to
+resolve or assign.
+
+```rust
+    use jsonptr::{Pointer, Diagnose};
+    let ptr_str = "foo/bar";
+    let err /* Result<&Pointer, Report<ParseError>> */ = Pointer::parse(ptr_str).diagnose(ptr_str).unwrap_err();
+    assert!(err.original().is_no_leading_slash());
+```
+
+In the case of [`PointerBuf::parse`], the [`ParseError`] is always wrapped in a
+[`Report`] so that the input `String` is not dropped.
+
+```rust
+    use jsonptr::{PointerBuf};
+    let ptr_str = "foo/bar";
+    let err /* Result<&PointerBuf, Report<ParseError>> */ = PointerBuf::parse(ptr_str).unwrap_err();
+    assert!(err.original().is_no_leading_slash());
+```
+
 ## Feature Flags
 
 |    Flag     | Description                                                                                                                               | Enables         | Default |
@@ -141,6 +177,7 @@ assert_eq!(data, json!({"secret": { "universe": 34 }}));
 | `"assign"`  | Enables the [`assign`] module and related pointer methods, providing a means to assign a value to a specific location within a document   |                 |    ✓    |
 | `"resolve"` | Enables the [`resolve`] module and related pointer methods, providing a means to resolve a value at a specific location within a document |                 |    ✓    |
 | `"delete"`  | Enables the [`delete`] module and related pointer methods, providing a means to delete a value at a specific location within a document   | `"resolve"`     |    ✓    |
+| `"miette"`  | Enables integration with [`miette`](https://docs.rs/miette) for error reporting                                                           | `"std"`         |         |
 
 <div class="rustdoc-hidden">
 

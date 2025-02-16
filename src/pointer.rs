@@ -2345,6 +2345,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "miette")]
     fn quick_miette_spike() {
         let err = PointerBuf::parse("hello-world").unwrap_err();
         println!("{:?}", miette::Report::from(err));
