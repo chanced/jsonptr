@@ -39,7 +39,7 @@ impl StrCow for Cow<'_, str> {
 }
 
 mod private {
-    use alloc::borrow::Cow;
+    use alloc::{borrow::Cow, string::String};
 
     pub trait Sealed {}
     impl Sealed for &str {}
