@@ -1,4 +1,7 @@
-use alloc::borrow::Cow;
+use alloc::{
+    borrow::{Cow, ToOwned},
+    string::String,
+};
 
 pub trait StrCow: private::Sealed {
     fn as_ref(&self) -> &str;
