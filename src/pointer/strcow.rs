@@ -28,6 +28,16 @@ impl StrCow for String {
     }
 }
 
+impl StrCow for &String {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+
+    fn into_owned(self) -> String {
+        self.clone()
+    }
+}
+
 impl StrCow for Cow<'_, str> {
     fn as_ref(&self) -> &str {
         AsRef::as_ref(self)
@@ -44,6 +54,7 @@ mod private {
     pub trait Sealed {}
     impl Sealed for &str {}
     impl Sealed for String {}
+    impl Sealed for &String {}
     impl Sealed for Cow<'_, str> {}
 }
 

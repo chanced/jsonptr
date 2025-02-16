@@ -150,21 +150,16 @@ and the [`String`] which failed to parse or the [`PointerBuf`] which failed to
 resolve or assign.
 
 ```rust
-    use jsonptr::{Pointer, Diagnose};
+    use jsonptr::{Pointer, PointerBuf, Diagnose};
     let ptr_str = "foo/bar";
     let err /* Result<&Pointer, Report<ParseError>> */ = Pointer::parse(ptr_str).diagnose(ptr_str).unwrap_err();
     assert!(err.original().is_no_leading_slash());
-```
 
-In the case of [`PointerBuf::parse`], the [`ParseError`] is always wrapped in a
-[`Report`] so that the input `String` is not dropped.
-
-```rust
-    use jsonptr::{PointerBuf};
-    let ptr_str = "foo/bar";
-    let err /* Result<&PointerBuf, Report<ParseError>> */ = PointerBuf::parse(ptr_str).unwrap_err();
+    let err /* Result<PointerBuf, Report<ParseError>> */ = PointerBuf::parse(ptr_str).diagnose_with(|| ptr_str.to_owned()).unwrap_err();
     assert!(err.original().is_no_leading_slash());
 ```
+
+Note that when using this feature, allocation is unavoidable when parsing.
 
 ## Feature Flags
 
