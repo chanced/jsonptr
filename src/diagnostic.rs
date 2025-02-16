@@ -265,6 +265,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "miette")]
     fn parse_error() {
         let invalid = "/foo/bar/invalid~3~encoding/cannot/reach";
         let report = Pointer::parse(invalid).diagnose(invalid).unwrap_err();
