@@ -12,10 +12,8 @@ use alloc::{
 };
 use core::{borrow::Borrow, cmp::Ordering, iter::once, ops::Deref, str::FromStr};
 use slice::PointerIndex;
-use strcow::StrCow;
 
 mod slice;
-mod strcow;
 
 /// A JSON Pointer is a string containing a sequence of zero or more reference
 /// [`Token`]s, each prefixed by a `'/'` character.
@@ -370,7 +368,6 @@ impl Pointer {
     /// [`ResolveError`]: `crate::resolve::ResolveError`
     /// [`Token`]: `crate::Token`
     /// [`Index`]: `crate::index::Index`
-
     #[cfg(feature = "resolve")]
     pub fn resolve_mut<'v, R: crate::ResolveMut>(
         &self,
@@ -681,7 +678,7 @@ impl PartialEq<&str> for Pointer {
         &&self.0 == other
     }
 }
-impl<'p> PartialEq<String> for &'p Pointer {
+impl PartialEq<String> for &Pointer {
     fn eq(&self, other: &String) -> bool {
         self.0.eq(other)
     }
@@ -871,7 +868,7 @@ impl PartialOrd<&str> for PointerBuf {
     }
 }
 
-impl<'p> PartialOrd<PointerBuf> for &'p Pointer {
+impl PartialOrd<PointerBuf> for &Pointer {
     fn partial_cmp(&self, other: &PointerBuf) -> Option<Ordering> {
         self.0.partial_cmp(other.0.as_str())
     }
@@ -925,7 +922,8 @@ impl PointerBuf {
     ///
     /// ## Errors
     /// Returns a [`RichParseError`] if the string is not a valid JSON Pointer.
-    pub fn parse(s: impl StrCow) -> Result<Self, ParseError> {
+    pub fn parse<'s>(s: impl Into<Cow<'s, str>>) -> Result<Self, ParseError> {
+        let s = s.into();
         // must explicitly match due to borrow checker limitations
         match validate(s.as_ref()) {
             Ok(_) => Ok(Self(s.into_owned())),
