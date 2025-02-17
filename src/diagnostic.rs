@@ -32,7 +32,7 @@ pub struct Label {
 
 impl Label {
     /// Creates a new instance of a [`Label`] from its parts
-    pub fn new(text: String, offset: usize, len: usize) -> Self {
+    pub(crate) fn new(text: String, offset: usize, len: usize) -> Self {
         Self { text, offset, len }
     }
 }
