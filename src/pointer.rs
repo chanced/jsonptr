@@ -368,7 +368,6 @@ impl Pointer {
     /// [`ResolveError`]: `crate::resolve::ResolveError`
     /// [`Token`]: `crate::Token`
     /// [`Index`]: `crate::index::Index`
-
     #[cfg(feature = "resolve")]
     pub fn resolve_mut<'v, R: crate::ResolveMut>(
         &self,
@@ -679,7 +678,7 @@ impl PartialEq<&str> for Pointer {
         &&self.0 == other
     }
 }
-impl<'p> PartialEq<String> for &'p Pointer {
+impl PartialEq<String> for &Pointer {
     fn eq(&self, other: &String) -> bool {
         self.0.eq(other)
     }
@@ -869,7 +868,7 @@ impl PartialOrd<&str> for PointerBuf {
     }
 }
 
-impl<'p> PartialOrd<PointerBuf> for &'p Pointer {
+impl PartialOrd<PointerBuf> for &Pointer {
     fn partial_cmp(&self, other: &PointerBuf) -> Option<Ordering> {
         self.0.partial_cmp(other.0.as_str())
     }
@@ -2342,12 +2341,5 @@ mod tests {
         let boxed: Box<Pointer> = subjectal.clone().into();
         let unboxed = boxed.into_buf();
         assert_eq!(subjectal, unboxed);
-    }
-
-    #[test]
-    #[cfg(feature = "miette")]
-    fn quick_miette_spike() {
-        let err = PointerBuf::parse("hello-world").unwrap_err();
-        println!("{:?}", miette::Report::from(err));
     }
 }
