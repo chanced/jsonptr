@@ -798,10 +798,7 @@ mod tests {
                 expected: Err(Error::FailedToParseIndex {
                     position: 0,
                     offset: 0,
-                    source: ParseIndexError::InvalidCharacter(InvalidCharacterError {
-                        source: "12a".into(),
-                        offset: 2,
-                    }),
+                    source: ParseIndexError::InvalidCharacter(InvalidCharacterError { offset: 2 }),
                 }),
                 expected_data: json!([]),
             },
@@ -823,10 +820,7 @@ mod tests {
                 expected: Err(Error::FailedToParseIndex {
                     position: 0,
                     offset: 0,
-                    source: ParseIndexError::InvalidCharacter(InvalidCharacterError {
-                        source: "+23".into(),
-                        offset: 0,
-                    }),
+                    source: ParseIndexError::InvalidCharacter(InvalidCharacterError { offset: 0 }),
                 }),
                 expected_data: json!([]),
             },
@@ -976,10 +970,7 @@ mod tests {
                 expected: Err(Error::FailedToParseIndex {
                     position: 0,
                     offset: 0,
-                    source: ParseIndexError::InvalidCharacter(InvalidCharacterError {
-                        source: "a".into(),
-                        offset: 0,
-                    }),
+                    source: ParseIndexError::InvalidCharacter(InvalidCharacterError { offset: 0 }),
                 }),
                 expected_data: Value::Array(vec![]),
             },

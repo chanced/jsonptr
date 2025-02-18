@@ -1,6 +1,9 @@
-use core::str::Split;
+use core::{iter::once, str::Split};
 
-use crate::index::{Index, ParseIndexError};
+use crate::{
+    diagnostic::{diagnostic_url, IntoReport, Label},
+    index::{Index, ParseIndexError},
+};
 use alloc::{
     borrow::Cow,
     fmt,
@@ -99,7 +102,7 @@ impl<'a> Token<'a> {
         if escaped {
             return Err(EncodingError {
                 offset: s.len(),
-                source: InvalidEncoding::Slash,
+                source: InvalidEncoding::Tilde,
             });
         }
         Ok(Self { inner: s.into() })
@@ -381,13 +384,6 @@ pub struct EncodingError {
     pub source: InvalidEncoding,
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for EncodingError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(&self.source)
-    }
-}
-
 impl fmt::Display for EncodingError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -395,6 +391,38 @@ impl fmt::Display for EncodingError {
             "token contains invalid encoding at offset {}",
             self.offset
         )
+    }
+}
+
+impl IntoReport for EncodingError {
+    type Subject = String;
+
+    fn url() -> &'static str {
+        diagnostic_url!(struct EncodingError)
+    }
+
+    fn labels(&self, subject: &Self::Subject) -> Option<Box<dyn Iterator<Item = Label>>> {
+        let (text, offset) = match self.source {
+            InvalidEncoding::Tilde => {
+                if self.offset == subject.len() {
+                    ("incomplete escape sequence", self.offset - 1)
+                } else {
+                    ("must be 0 or 1", self.offset)
+                }
+            }
+            InvalidEncoding::Slash => ("invalid character", self.offset),
+        };
+        Some(Box::new(once(Label::new(text.to_string(), offset, 1))))
+    }
+}
+
+#[cfg(feature = "miette")]
+impl miette::Diagnostic for EncodingError {}
+
+#[cfg(feature = "std")]
+impl std::error::Error for EncodingError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.source)
     }
 }
 
@@ -425,6 +453,7 @@ impl fmt::Display for InvalidEncoding {
         }
     }
 }
+
 #[cfg(feature = "std")]
 impl std::error::Error for InvalidEncoding {}
 
@@ -476,8 +505,27 @@ mod tests {
         assert_eq!(Token::from_encoded("~0~1").unwrap().encoded(), "~0~1");
         let t = Token::from_encoded("a~1b").unwrap();
         assert_eq!(t.decoded(), "a/b");
-        assert!(Token::from_encoded("a/b").is_err());
-        assert!(Token::from_encoded("a~a").is_err());
+        assert_eq!(
+            Token::from_encoded("a/b"),
+            Err(EncodingError {
+                offset: 1,
+                source: InvalidEncoding::Slash
+            })
+        );
+        assert_eq!(
+            Token::from_encoded("a~a"),
+            Err(EncodingError {
+                offset: 2,
+                source: InvalidEncoding::Tilde
+            })
+        );
+        assert_eq!(
+            Token::from_encoded("a~"),
+            Err(EncodingError {
+                offset: 2,
+                source: InvalidEncoding::Tilde
+            })
+        );
     }
 
     #[test]
