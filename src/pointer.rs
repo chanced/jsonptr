@@ -2346,9 +2346,10 @@ mod tests {
     #[test]
     fn default_lifetime_is_correct() {
         // if this compiles, we're good
-        #[allow(dead_code)]
         fn or_default(ptr: &Pointer) -> &Pointer {
             Some(ptr).unwrap_or_default()
         }
+        // just to satisfy codecov and clippy
+        or_default(Pointer::root());
     }
 }
