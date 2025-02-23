@@ -608,7 +608,6 @@ mod tests {
         index::{InvalidCharacterError, OutOfBoundsError, ParseIndexError},
         Pointer,
     };
-    use alloc::vec;
     use core::fmt::{Debug, Display};
 
     #[derive(Debug)]
@@ -833,6 +832,7 @@ mod tests {
     #[test]
     #[cfg(feature = "toml")]
     fn assign_toml() {
+        use alloc::vec;
         use toml::{toml, Table, Value};
         [
             Test {
