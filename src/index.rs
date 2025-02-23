@@ -597,4 +597,18 @@ mod tests {
 
         assert_eq!(labels, vec![Label::new("leading zeros".into(), 0, 5)]);
     }
+
+    #[test]
+    fn error_from_empty_string() {
+        let s = String::from("");
+        let err = Index::try_from(&s).diagnose(s).unwrap_err();
+
+        #[cfg(feature = "miette")]
+        {
+            assert!(miette::Diagnostic::labels(&err).is_none());
+        }
+
+        let (src, sub) = err.decompose();
+        assert!(src.labels(&sub).is_none());
+    }
 }
