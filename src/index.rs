@@ -39,7 +39,7 @@ use crate::{
     diagnostic::{diagnostic_url, Diagnostic, Label},
     Token,
 };
-use alloc::string::String;
+use alloc::{boxed::Box, string::String};
 use core::{fmt, iter::once, num::ParseIntError, str::FromStr};
 
 /// Represents an abstract index into an array.

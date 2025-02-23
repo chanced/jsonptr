@@ -6,6 +6,7 @@ use crate::{
 };
 use alloc::{
     borrow::Cow,
+    boxed::Box,
     fmt,
     string::{String, ToString},
     vec::Vec,
