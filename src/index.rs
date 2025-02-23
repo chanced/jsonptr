@@ -35,9 +35,12 @@
 //! assert_eq!(Index::Next.for_len_unchecked(30), 30);
 //! ```
 
-use crate::Token;
-use alloc::string::String;
-use core::{fmt, num::ParseIntError, str::FromStr};
+use crate::{
+    diagnostic::{diagnostic_url, Diagnostic, Label},
+    Token,
+};
+use alloc::{boxed::Box, string::String};
+use core::{fmt, iter::once, num::ParseIntError, str::FromStr};
 
 /// Represents an abstract index into an array.
 ///
@@ -177,7 +180,6 @@ impl FromStr for Index {
                     // representing a `usize` but not allowed in RFC 6901 array
                     // indices
                     Err(ParseIndexError::InvalidCharacter(InvalidCharacterError {
-                        source: String::from(s),
                         offset,
                     }))
                 },
@@ -309,6 +311,88 @@ impl fmt::Display for ParseIndexError {
     }
 }
 
+// shouldn't be used directly, but is part of a public interface
+#[doc(hidden)]
+#[derive(Debug)]
+pub enum StringOrToken {
+    String(String),
+    Token(Token<'static>),
+}
+
+impl From<String> for StringOrToken {
+    fn from(value: String) -> Self {
+        Self::String(value)
+    }
+}
+
+impl From<Token<'static>> for StringOrToken {
+    fn from(value: Token<'static>) -> Self {
+        Self::Token(value)
+    }
+}
+
+impl core::ops::Deref for StringOrToken {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            StringOrToken::String(s) => s.as_str(),
+            StringOrToken::Token(t) => t.encoded(),
+        }
+    }
+}
+
+#[cfg(feature = "miette")]
+impl miette::SourceCode for StringOrToken {
+    fn read_span<'a>(
+        &'a self,
+        span: &miette::SourceSpan,
+        context_lines_before: usize,
+        context_lines_after: usize,
+    ) -> Result<Box<dyn miette::SpanContents<'a> + 'a>, miette::MietteError> {
+        let s: &str = &**self;
+        s.read_span(span, context_lines_before, context_lines_after)
+    }
+}
+
+impl Diagnostic for ParseIndexError {
+    type Subject = StringOrToken;
+
+    fn url() -> &'static str {
+        diagnostic_url!(enum ParseIndexError)
+    }
+
+    fn labels(
+        &self,
+        subject: &Self::Subject,
+    ) -> Option<Box<dyn Iterator<Item = crate::diagnostic::Label>>> {
+        let subject = &**subject;
+        match self {
+            ParseIndexError::InvalidInteger(_) => None,
+            ParseIndexError::LeadingZeros => {
+                let len = subject
+                    .chars()
+                    .position(|c| c != '0')
+                    .expect("starts with zeros");
+                let text = String::from("leading zeros");
+                Some(Box::new(once(Label::new(text, 0, len))))
+            }
+            ParseIndexError::InvalidCharacter(err) => {
+                let len = subject
+                    .chars()
+                    .skip(err.offset)
+                    .position(|c| c.is_ascii_digit())
+                    .unwrap_or(subject.len());
+                let text = String::from("invalid character(s)");
+                Some(Box::new(once(Label::new(text, err.offset, len))))
+            }
+        }
+    }
+}
+
+#[cfg(feature = "miette")]
+impl miette::Diagnostic for ParseIndexError {}
+
 #[cfg(feature = "std")]
 impl std::error::Error for ParseIndexError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
@@ -323,7 +407,6 @@ impl std::error::Error for ParseIndexError {
 /// Indicates that a non-digit character was found when parsing the RFC 6901 array index.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InvalidCharacterError {
-    pub(crate) source: String,
     pub(crate) offset: usize,
 }
 
@@ -334,29 +417,14 @@ impl InvalidCharacterError {
     pub fn offset(&self) -> usize {
         self.offset
     }
-
-    /// Returns the source string.
-    pub fn source(&self) -> &str {
-        &self.source
-    }
-
-    /// Returns the offending character.
-    #[allow(clippy::missing_panics_doc)]
-    pub fn char(&self) -> char {
-        self.source
-            .chars()
-            .nth(self.offset)
-            .expect("char was found at offset")
-    }
 }
 
 impl fmt::Display for InvalidCharacterError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "token contains the non-digit character '{}', \
-                which is disallowed by RFC 6901",
-            self.char()
+            "token contains a non-digit character, \
+            which is disallowed by RFC 6901",
         )
     }
 }
@@ -377,7 +445,7 @@ impl std::error::Error for InvalidCharacterError {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Token;
+    use crate::{Diagnose, Token};
 
     #[test]
     fn index_from_usize() {
@@ -466,5 +534,81 @@ mod tests {
         let token = Token::new("-");
         let index = Index::try_from(&token).unwrap();
         assert_eq!(index, Index::Next);
+    }
+
+    #[test]
+    fn diagnose_works_with_token_or_string() {
+        let token = Token::new("foo");
+        // despite the clone, this is cheap because `token` is borrowed
+        Index::try_from(token.clone()).diagnose(token).unwrap_err();
+        let s = String::from("bar");
+        Index::try_from(&s).diagnose(s).unwrap_err();
+    }
+
+    #[test]
+    fn error_from_invalid_chars() {
+        let s = String::from("bar");
+        let err = Index::try_from(&s).diagnose(s).unwrap_err();
+
+        #[cfg(feature = "miette")]
+        {
+            let labels: Vec<_> = miette::Diagnostic::labels(&err)
+                .unwrap()
+                .into_iter()
+                .collect();
+            assert_eq!(
+                labels,
+                vec![miette::LabeledSpan::new(
+                    Some("invalid character(s)".into()),
+                    0,
+                    3
+                )]
+            );
+        }
+
+        let (src, sub) = err.decompose();
+        let labels: Vec<_> = src.labels(&sub).unwrap().into_iter().collect();
+
+        assert_eq!(
+            labels,
+            vec![Label::new("invalid character(s)".into(), 0, 3)]
+        );
+    }
+
+    #[test]
+    fn error_from_leading_zeros() {
+        let s = String::from("000001");
+        let err = Index::try_from(&s).diagnose(s).unwrap_err();
+
+        #[cfg(feature = "miette")]
+        {
+            let labels: Vec<_> = miette::Diagnostic::labels(&err)
+                .unwrap()
+                .into_iter()
+                .collect();
+            assert_eq!(
+                labels,
+                vec![miette::LabeledSpan::new(Some("leading zeros".into()), 0, 5)]
+            );
+        }
+
+        let (src, sub) = err.decompose();
+        let labels: Vec<_> = src.labels(&sub).unwrap().into_iter().collect();
+
+        assert_eq!(labels, vec![Label::new("leading zeros".into(), 0, 5)]);
+    }
+
+    #[test]
+    fn error_from_empty_string() {
+        let s = String::from("");
+        let err = Index::try_from(&s).diagnose(s).unwrap_err();
+
+        #[cfg(feature = "miette")]
+        {
+            assert!(miette::Diagnostic::labels(&err).is_none());
+        }
+
+        let (src, sub) = err.decompose();
+        assert!(src.labels(&sub).is_none());
     }
 }
