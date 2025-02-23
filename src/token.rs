@@ -1,7 +1,7 @@
 use core::{iter::once, str::Split};
 
 use crate::{
-    diagnostic::{diagnostic_url, IntoReport, Label},
+    diagnostic::{diagnostic_url, Diagnostic, Label},
     index::{Index, ParseIndexError},
 };
 use alloc::{
@@ -394,7 +394,7 @@ impl fmt::Display for EncodingError {
     }
 }
 
-impl IntoReport for EncodingError {
+impl Diagnostic for EncodingError {
     type Subject = String;
 
     fn url() -> &'static str {

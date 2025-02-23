@@ -36,7 +36,7 @@
 //! ```
 
 use crate::{
-    diagnostic::{diagnostic_url, IntoReport, Label},
+    diagnostic::{diagnostic_url, Diagnostic, Label},
     Token,
 };
 use alloc::string::String;
@@ -342,7 +342,7 @@ impl core::ops::Deref for StringOrToken {
     }
 }
 
-impl IntoReport for ParseIndexError {
+impl Diagnostic for ParseIndexError {
     type Subject = StringOrToken;
 
     fn url() -> &'static str {
