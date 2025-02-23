@@ -506,26 +506,94 @@ mod tests {
         assert_eq!(Token::from_encoded("~0~1").unwrap().encoded(), "~0~1");
         let t = Token::from_encoded("a~1b").unwrap();
         assert_eq!(t.decoded(), "a/b");
+
+        let sub = String::from("a/b");
+        let err = Token::from_encoded(&sub).unwrap_err();
+        let labels: Vec<_> = err.labels(&sub).unwrap().into_iter().collect();
+        assert_eq!(labels, vec![Label::new("invalid character".into(), 1, 1)]);
+        let err = err.into_report(sub);
+        #[cfg(feature = "miette")]
+        {
+            let labels: Vec<_> = miette::Diagnostic::labels(&err)
+                .unwrap()
+                .into_iter()
+                .collect();
+            assert_eq!(
+                labels,
+                vec![miette::LabeledSpan::new(
+                    Some("invalid character".into()),
+                    1,
+                    1
+                )]
+            );
+        }
+        let (err, _) = err.decompose();
         assert_eq!(
-            Token::from_encoded("a/b"),
-            Err(EncodingError {
+            err,
+            EncodingError {
                 offset: 1,
                 source: InvalidEncoding::Slash
-            })
+            }
         );
+
+        let sub = String::from("a~a");
+        let err = Token::from_encoded(&sub).unwrap_err();
+        let labels: Vec<_> = err.labels(&sub).unwrap().into_iter().collect();
+        assert_eq!(labels, vec![Label::new("must be 0 or 1".into(), 2, 1)]);
+        let err = err.into_report(sub);
+        #[cfg(feature = "miette")]
+        {
+            let labels: Vec<_> = miette::Diagnostic::labels(&err)
+                .unwrap()
+                .into_iter()
+                .collect();
+            assert_eq!(
+                labels,
+                vec![miette::LabeledSpan::new(
+                    Some("must be 0 or 1".into()),
+                    2,
+                    1
+                )]
+            );
+        }
+        let (err, _) = err.decompose();
         assert_eq!(
-            Token::from_encoded("a~a"),
-            Err(EncodingError {
+            err,
+            EncodingError {
                 offset: 2,
                 source: InvalidEncoding::Tilde
-            })
+            }
         );
+        let sub = String::from("a~");
+        let err = Token::from_encoded(&sub).unwrap_err();
+        let labels: Vec<_> = err.labels(&sub).unwrap().into_iter().collect();
         assert_eq!(
-            Token::from_encoded("a~"),
-            Err(EncodingError {
+            labels,
+            vec![Label::new("incomplete escape sequence".into(), 1, 1)]
+        );
+        let err = err.into_report(sub);
+        #[cfg(feature = "miette")]
+        {
+            let labels: Vec<_> = miette::Diagnostic::labels(&err)
+                .unwrap()
+                .into_iter()
+                .collect();
+            assert_eq!(
+                labels,
+                vec![miette::LabeledSpan::new(
+                    Some("incomplete escape sequence".into()),
+                    1,
+                    1
+                )]
+            );
+        }
+        let (err, _) = err.decompose();
+        assert_eq!(
+            err,
+            EncodingError {
                 offset: 2,
                 source: InvalidEncoding::Tilde
-            })
+            }
         );
     }
 
