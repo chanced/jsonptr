@@ -398,7 +398,7 @@ impl Pointer {
     /// [`Delete`]. The supplied implementations (`"json"` & `"toml"`) operate
     /// as follows:
     /// - If the `Pointer` can be resolved, the `Value` is deleted and returned.
-    /// - If the `Pointer` fails to resolve for any reason, `Ok(None)` is returned.
+    /// - If the `Pointer` fails to resolve for any reason, `None` is returned.
     /// - If the `Pointer` is root, `value` is replaced:
     ///     - `"json"`: `serde_json::Value::Null`
     ///     - `"toml"`: `toml::Value::Table::Default`
