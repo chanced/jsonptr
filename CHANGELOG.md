@@ -7,11 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-### Fixed
-
 ### Deprecated
 
 -   Deprecated `ResolveError` name.
+
+### Changed
+-   Sealed the `Diagnose` trait.
+-   Implementation of the `Default` trait for `Pointer` now doesn't constrain the lifetime.
 
 ## [0.7.1] 2025-02-16
 

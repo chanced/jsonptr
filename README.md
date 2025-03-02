@@ -136,10 +136,10 @@ use jsonptr::Pointer;
 use serde_json::json;
 
 let ptr = Pointer::parse("/secret/universe").unwrap();
-let mut data = json!({"secret": { "universe": 42 }});
-let replaced = ptr.assign(&mut data, json!(34)).unwrap();
-assert_eq!(replaced, Some(json!(42)));
-assert_eq!(data, json!({"secret": { "universe": 34 }}));
+let mut data = json!({"secret": { "life": 42, "universe": 42, "everything": 42 }});
+let deleted = ptr.delete(&mut data);
+assert_eq!(deleted, Some(json!(42)));
+assert_eq!(data, json!({"secret": { "life": 42, "everything": 42 }}));
 ```
 
 ### Error Reporting

@@ -165,7 +165,7 @@ pub(crate) use diagnostic_url;
 /// An extension trait for `Result<_, E>`, where `E` is an implementation of
 /// [`Diagnostic`], that converts `E` into [`Report<E>`](`Report`), yielding
 /// `Result<_, Report<E>>`.
-pub trait Diagnose<'s, T> {
+pub trait Diagnose<'s, T>: private::Sealed {
     /// The error type returned from `diagnose` and `diagnose_with`.
     type Error: Diagnostic;
 
@@ -224,6 +224,11 @@ where
     {
         self.map_err(|error| error.into_report(f()))
     }
+}
+
+mod private {
+    pub trait Sealed {}
+    impl<T, E> Sealed for Result<T, E> {}
 }
 
 #[cfg(test)]
