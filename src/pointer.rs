@@ -36,7 +36,7 @@ mod slice;
 #[cfg_attr(not(doc), repr(transparent))]
 pub struct Pointer(str);
 
-impl Default for &'static Pointer {
+impl Default for &Pointer {
     fn default() -> Self {
         Pointer::root()
     }
@@ -398,7 +398,7 @@ impl Pointer {
     /// [`Delete`]. The supplied implementations (`"json"` & `"toml"`) operate
     /// as follows:
     /// - If the `Pointer` can be resolved, the `Value` is deleted and returned.
-    /// - If the `Pointer` fails to resolve for any reason, `Ok(None)` is returned.
+    /// - If the `Pointer` fails to resolve for any reason, `None` is returned.
     /// - If the `Pointer` is root, `value` is replaced:
     ///     - `"json"`: `serde_json::Value::Null`
     ///     - `"toml"`: `toml::Value::Table::Default`
@@ -2341,5 +2341,15 @@ mod tests {
         let boxed: Box<Pointer> = subjectal.clone().into();
         let unboxed = boxed.into_buf();
         assert_eq!(subjectal, unboxed);
+    }
+
+    #[test]
+    fn default_lifetime_is_correct() {
+        // if this compiles, we're good
+        fn or_default(ptr: &Pointer) -> &Pointer {
+            Some(ptr).unwrap_or_default()
+        }
+        // just to satisfy codecov and clippy
+        or_default(Pointer::root());
     }
 }
