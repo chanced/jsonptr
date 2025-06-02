@@ -8,9 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 ### Changed
-
 -   `Token::from_encoded` now accepts owned or borrowed strings (any type that
     implements `Into<Cow<'_, str>>`).
+-   Sealed the `Diagnose` trait.
+-   Implementation of the `Default` trait for `Pointer` now doesn't constrain the lifetime.
 
 ## [0.7.1] 2025-02-16
 
