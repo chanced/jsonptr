@@ -74,9 +74,10 @@ impl<'a> Token<'a> {
     /// ## Errors
     /// Returns `InvalidEncodingError` if the input string is not a valid RFC
     /// 6901 (`~` must be followed by `0` or `1`)
-    pub fn from_encoded(s: &'a str) -> Result<Self, EncodingError> {
+    pub fn from_encoded(s: impl Into<Cow<'a, str>>) -> Result<Self, EncodingError> {
+        let inner = s.into();
         let mut escaped = false;
-        for (offset, b) in s.bytes().enumerate() {
+        for (offset, b) in inner.bytes().enumerate() {
             match b {
                 b'/' => {
                     return Err(EncodingError {
@@ -102,11 +103,11 @@ impl<'a> Token<'a> {
         }
         if escaped {
             return Err(EncodingError {
-                offset: s.len(),
+                offset: inner.len(),
                 source: InvalidEncoding::Tilde,
             });
         }
-        Ok(Self { inner: s.into() })
+        Ok(Self { inner })
     }
 
     /// Constructs a `Token` from an arbitrary string.
