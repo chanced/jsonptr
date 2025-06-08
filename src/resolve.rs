@@ -76,8 +76,8 @@ pub trait ResolveMut {
     fn resolve_mut(&mut self, ptr: &Pointer) -> Result<&mut Self::Value, Self::Error>;
 }
 
-// TODO: should ResolveError be deprecated?
 /// Alias for [`Error`].
+#[deprecated(since = "0.7.2", note = "renamed to `Error`")]
 pub type ResolveError = Error;
 
 /// Indicates that the `Pointer` could not be resolved.

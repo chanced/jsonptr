@@ -21,8 +21,7 @@ pub trait Diagnostic: Sized {
     fn labels(&self, subject: &Self::Subject) -> Option<Box<dyn Iterator<Item = Label>>>;
 }
 
-/// A label for a span within a json pointer or malformed string.
-///
+/// A label for a span within a JSON Pointer or malformed string.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Label {
     text: String,
@@ -32,6 +31,9 @@ pub struct Label {
 
 impl Label {
     /// Creates a new instance of a [`Label`] from its parts
+    // NOTE: this is deliberately public, so that users can use
+    // the `Assign` and `Resolve` traits with custom types and errors,
+    // and then implement `Diagnostic` for those errors.
     pub fn new(text: String, offset: usize, len: usize) -> Self {
         Self { text, offset, len }
     }

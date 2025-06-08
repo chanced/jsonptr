@@ -1149,20 +1149,6 @@ impl core::fmt::Display for PointerBuf {
     }
 }
 
-/// Indicates that a [`Pointer`] was unable to be parsed due to not containing
-/// a leading slash (`'/'`).
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub struct NoLeadingSlash;
-
-impl fmt::Display for NoLeadingSlash {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "json pointer must start with a slash ('/') and is not empty"
-        )
-    }
-}
-
 /// Indicates that a `Pointer` was malformed and unable to be parsed.
 #[derive(Debug, PartialEq)]
 pub enum ParseError {
@@ -1359,6 +1345,11 @@ const fn validate(value: &str) -> Result<&str, ParseError> {
     Ok(value)
 }
 
+/// Validates that a sequence of bytes is a valid RFC 6901 Pointer.
+///
+/// # Panics
+///
+/// Caller must ensure the sequence is non-empty, and that offset is in range.
 const fn validate_bytes(bytes: &[u8], offset: usize) -> Result<(), ParseError> {
     if bytes[0] != b'/' && offset == 0 {
         return Err(ParseError::NoLeadingSlash);
