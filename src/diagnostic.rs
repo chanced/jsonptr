@@ -233,8 +233,6 @@ mod private {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{Pointer, PointerBuf};
     #[test]
     #[cfg(all(
         feature = "assign",
@@ -243,6 +241,8 @@ mod tests {
         feature = "json"
     ))]
     fn assign_error() {
+        use crate::{diagnostic::Diagnose, PointerBuf};
+
         let mut v = serde_json::json!({"foo": {"bar": ["0"]}});
         let ptr = PointerBuf::parse("/foo/bar/invalid/cannot/reach").unwrap();
         let report = ptr.assign(&mut v, "qux").diagnose(ptr).unwrap_err();
@@ -261,6 +261,7 @@ mod tests {
         feature = "json"
     ))]
     fn resolve_error() {
+        use crate::{diagnostic::Diagnose, PointerBuf};
         let v = serde_json::json!({"foo": {"bar": ["0"]}});
         let ptr = PointerBuf::parse("/foo/bar/invalid/cannot/reach").unwrap();
         let report = ptr.resolve(&v).diagnose(ptr).unwrap_err();
@@ -274,6 +275,7 @@ mod tests {
     #[test]
     #[cfg(feature = "miette")]
     fn parse_error() {
+        use crate::{diagnostic::Diagnose, Pointer, PointerBuf};
         let invalid = "/foo/bar/invalid~3~encoding/cannot/reach";
         let report = Pointer::parse(invalid).diagnose(invalid).unwrap_err();
 

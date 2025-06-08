@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 -   Deprecated `ResolveError` name.
 
+### Fixed
+
+-   `EncodingError` and `ParseIndexError` now implement `Diagnostic`, which
+    unifies the API for errors originating from parse-like operations.
+-   Fixes returning an incorrect error type when parsing a `Token` that
+    terminates with `~`. This now correctly classifies the error as a `Tilde`
+    error.
+
+### Removed
+
+-   Some methods were removed from `InvalidCharacterError`, as that type no
+    longer holds a copy of the input string internally. This is a breaking
+    change. To access equivalent functionality, use the `Diagnostic` API
+    integration.
+
 ### Changed
 -   Sealed the `Diagnose` trait.
 -   Implementation of the `Default` trait for `Pointer` now doesn't constrain the lifetime.
