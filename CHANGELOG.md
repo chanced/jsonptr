@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   Fixes returning an incorrect error type when parsing a `Token` that
     terminates with `~`. This now correctly classifies the error as a `Tilde`
     error.
+-   Disabled default features for the `serde` dependency, which enables using
+    this library in no-std environments even with the `serde` feature enabled.
 
 ### Removed
 
