@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+-   Added `Token::into_encoded`, which consumes the `Token` and returns its
+    encoded string representation as a `Cow<'a, str>` without allocating.
+    Resolves [#115](https://github.com/chanced/jsonptr/issues/115).
+
 ### Changed
 
 -   Resolved all `clippy` (`clippy::all` + `clippy::pedantic`) and `rustc` lint

@@ -197,6 +197,22 @@ impl<'a> Token<'a> {
         &self.inner
     }
 
+    /// Converts this `Token` into the encoded string representation, as a
+    /// `Cow<'a, str>`.
+    ///
+    /// This is like [`Self::encoded`], except it consumes the `Token` and,
+    /// since the token is already encoded internally, does not allocate.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use jsonptr::Token;
+    /// assert_eq!(Token::new("~bar").into_encoded(), "~0bar");
+    /// ```
+    pub fn into_encoded(self) -> Cow<'a, str> {
+        self.inner
+    }
+
     /// Returns the decoded string representation of the `Token`.
     ///
     /// # Examples
@@ -587,6 +603,15 @@ mod tests {
                 source: InvalidEncoding::Tilde
             }
         );
+    }
+
+    #[test]
+    fn into_encoded() {
+        let token = Token::from_encoded("foo~0").unwrap();
+        assert_eq!(token.into_encoded(), "foo~0");
+
+        let token = Token::new("~bar");
+        assert_eq!(token.into_encoded(), "~0bar");
     }
 
     #[test]
