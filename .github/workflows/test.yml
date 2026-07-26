@@ -149,7 +149,7 @@ jobs:
             - name: Record Rust version
               run: echo "RUST=$(rustc --version)" >> "$GITHUB_ENV"
             - name: Upload to codecov.io
-              uses: codecov/codecov-action@v4
+              uses: codecov/codecov-action@v7
               with:
                   # Dependabot and fork PRs don't have access to CODECOV_TOKEN
                   # (secrets are withheld from untrusted contexts), so codecov
