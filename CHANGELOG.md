@@ -7,11 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.8.1] 2026-07-26
+
 ### Added
 
 -   Added `Token::into_encoded`, which consumes the `Token` and returns its
     encoded string representation as a `Cow<'a, str>` without allocating.
     Resolves [#115](https://github.com/chanced/jsonptr/issues/115).
+-   `ReplaceError` (returned by `PointerBuf::replace`) is now re-exported from
+    the crate root, so callers can actually name the type.
 
 ### Changed
 
@@ -19,6 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     warnings across the full feature powerset — including newer-toolchain lints
     (`mismatched_lifetime_syntaxes`) and feature-combination dead-code warnings.
     Internal only; no public API changes.
+
+### Fixed
+
+-   Fixed several broken/stale intra-doc links (a `crate::asign` typo, an "RFC
+    6091" typo, stale `toml` docs.rs links pointing at 0.8 instead of 0.9) and
+    a doc comment on `Pointer::len` that used `//` instead of `///` and was
+    silently dropped from rendered docs.
 
 ## [0.8.0] 2026-07-26
 
