@@ -9,9 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.8.0] 2026-07-26
 
+### Added
+
+-   Adds `Pointer::split_at_offset`, the byte-offset-based replacement for the
+    now-deprecated `Pointer::split_at`.
+
 ### Deprecated
 
 -   Deprecated `ResolveError` name.
+-   Deprecated `Pointer::split_at` in favor of `Pointer::split_at_offset`. The
+    `split_at` name is being reserved so it can be reintroduced as a position
+    (index) based split by 1.0, consistent with the rest of the API (e.g.
+    `Pointer::get`).
 
 ### Fixed
 
