@@ -510,15 +510,12 @@ mod tests {
 
         let sub = String::from("a/b");
         let err = Token::from_encoded(&sub).unwrap_err();
-        let labels: Vec<_> = err.labels(&sub).unwrap().into_iter().collect();
+        let labels: Vec<_> = err.labels(&sub).unwrap().collect();
         assert_eq!(labels, vec![Label::new("invalid character".into(), 1, 1)]);
         let err = err.into_report(sub);
         #[cfg(feature = "miette")]
         {
-            let labels: Vec<_> = miette::Diagnostic::labels(&err)
-                .unwrap()
-                .into_iter()
-                .collect();
+            let labels: Vec<_> = miette::Diagnostic::labels(&err).unwrap().collect();
             assert_eq!(
                 labels,
                 vec![miette::LabeledSpan::new(
@@ -539,15 +536,12 @@ mod tests {
 
         let sub = String::from("a~a");
         let err = Token::from_encoded(&sub).unwrap_err();
-        let labels: Vec<_> = err.labels(&sub).unwrap().into_iter().collect();
+        let labels: Vec<_> = err.labels(&sub).unwrap().collect();
         assert_eq!(labels, vec![Label::new("must be 0 or 1".into(), 2, 1)]);
         let err = err.into_report(sub);
         #[cfg(feature = "miette")]
         {
-            let labels: Vec<_> = miette::Diagnostic::labels(&err)
-                .unwrap()
-                .into_iter()
-                .collect();
+            let labels: Vec<_> = miette::Diagnostic::labels(&err).unwrap().collect();
             assert_eq!(
                 labels,
                 vec![miette::LabeledSpan::new(
@@ -567,7 +561,7 @@ mod tests {
         );
         let sub = String::from("a~");
         let err = Token::from_encoded(&sub).unwrap_err();
-        let labels: Vec<_> = err.labels(&sub).unwrap().into_iter().collect();
+        let labels: Vec<_> = err.labels(&sub).unwrap().collect();
         assert_eq!(
             labels,
             vec![Label::new("incomplete escape sequence".into(), 1, 1)]
@@ -575,10 +569,7 @@ mod tests {
         let err = err.into_report(sub);
         #[cfg(feature = "miette")]
         {
-            let labels: Vec<_> = miette::Diagnostic::labels(&err)
-                .unwrap()
-                .into_iter()
-                .collect();
+            let labels: Vec<_> = miette::Diagnostic::labels(&err).unwrap().collect();
             assert_eq!(
                 labels,
                 vec![miette::LabeledSpan::new(

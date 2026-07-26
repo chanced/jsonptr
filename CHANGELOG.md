@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed
+
+-   Resolved all `clippy` (`clippy::all` + `clippy::pedantic`) and `rustc` lint
+    warnings across the full feature powerset — including newer-toolchain lints
+    (`mismatched_lifetime_syntaxes`) and feature-combination dead-code warnings.
+    Internal only; no public API changes.
+
 ## [0.8.0] 2026-07-26
 
 ### Added

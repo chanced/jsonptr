@@ -350,7 +350,7 @@ impl miette::SourceCode for StringOrToken {
         context_lines_before: usize,
         context_lines_after: usize,
     ) -> Result<Box<dyn miette::SpanContents<'a> + 'a>, miette::MietteError> {
-        let s: &str = &**self;
+        let s: &str = self;
         s.read_span(span, context_lines_before, context_lines_after)
     }
 }
@@ -552,10 +552,7 @@ mod tests {
 
         #[cfg(feature = "miette")]
         {
-            let labels: Vec<_> = miette::Diagnostic::labels(&err)
-                .unwrap()
-                .into_iter()
-                .collect();
+            let labels: Vec<_> = miette::Diagnostic::labels(&err).unwrap().collect();
             assert_eq!(
                 labels,
                 vec![miette::LabeledSpan::new(
@@ -567,7 +564,7 @@ mod tests {
         }
 
         let (src, sub) = err.decompose();
-        let labels: Vec<_> = src.labels(&sub).unwrap().into_iter().collect();
+        let labels: Vec<_> = src.labels(&sub).unwrap().collect();
 
         assert_eq!(
             labels,
@@ -582,10 +579,7 @@ mod tests {
 
         #[cfg(feature = "miette")]
         {
-            let labels: Vec<_> = miette::Diagnostic::labels(&err)
-                .unwrap()
-                .into_iter()
-                .collect();
+            let labels: Vec<_> = miette::Diagnostic::labels(&err).unwrap().collect();
             assert_eq!(
                 labels,
                 vec![miette::LabeledSpan::new(Some("leading zeros".into()), 0, 5)]
@@ -593,14 +587,14 @@ mod tests {
         }
 
         let (src, sub) = err.decompose();
-        let labels: Vec<_> = src.labels(&sub).unwrap().into_iter().collect();
+        let labels: Vec<_> = src.labels(&sub).unwrap().collect();
 
         assert_eq!(labels, vec![Label::new("leading zeros".into(), 0, 5)]);
     }
 
     #[test]
     fn error_from_empty_string() {
-        let s = String::from("");
+        let s = String::new();
         let err = Index::try_from(&s).diagnose(s).unwrap_err();
 
         #[cfg(feature = "miette")]

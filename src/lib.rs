@@ -46,7 +46,6 @@
     clippy::similar_names
 )]
 
-#[cfg_attr(not(feature = "std"), macro_use)]
 extern crate alloc;
 
 #[cfg(feature = "assign")]
