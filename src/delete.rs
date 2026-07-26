@@ -105,7 +105,7 @@ mod json {
                 .ok()
                 .and_then(|parent| match parent {
                     Value::Array(children) => {
-                        let idx = last.to_index().ok()?.for_len_incl(children.len()).ok()?;
+                        let idx = last.to_index().ok()?.for_len(children.len()).ok()?;
                         children.remove(idx).into()
                     }
                     Value::Object(children) => children.remove(last.decoded().as_ref()),
@@ -143,7 +143,7 @@ mod toml {
                 .ok()
                 .and_then(|parent| match parent {
                     Value::Array(children) => {
-                        let idx = last.to_index().ok()?.for_len_incl(children.len()).ok()?;
+                        let idx = last.to_index().ok()?.for_len(children.len()).ok()?;
                         children.remove(idx).into()
                     }
                     Value::Table(children) => children.remove(last.decoded().as_ref()),
@@ -269,6 +269,38 @@ mod tests {
                 expected_data: json!(null),
                 expected_deleted: Some(json!({"Example": 21, "test": "test"})),
             },
+            // 9
+            // issue #120 - `-` on an array must miss rather than panic
+            Test {
+                ptr: "/-",
+                data: json!([1, 2, 3]),
+                expected_data: json!([1, 2, 3]),
+                expected_deleted: None,
+            },
+            // 10
+            // issue #120 - numeric index equal to the array length misses
+            Test {
+                ptr: "/3",
+                data: json!([1, 2, 3]),
+                expected_data: json!([1, 2, 3]),
+                expected_deleted: None,
+            },
+            // 11
+            // issue #120 - `/0` on an empty array misses
+            Test {
+                ptr: "/0",
+                data: json!([]),
+                expected_data: json!([]),
+                expected_deleted: None,
+            },
+            // 12
+            // issue #120 - nested `-` on an array misses
+            Test {
+                ptr: "/foo/-",
+                data: json!({"foo": [1, 2]}),
+                expected_data: json!({"foo": [1, 2]}),
+                expected_deleted: None,
+            },
         ]);
     }
     /*
@@ -338,6 +370,22 @@ mod tests {
                 ptr: "/Example",
                 expected_data: toml! {"test" = "test"}.into(),
                 expected_deleted: Some(21.into()),
+            },
+            // 8
+            // issue #120 - `-` on an array must miss rather than panic
+            Test {
+                data: toml! {"foo" = [1, 2, 3]}.into(),
+                ptr: "/foo/-",
+                expected_data: toml! {"foo" = [1, 2, 3]}.into(),
+                expected_deleted: None,
+            },
+            // 9
+            // issue #120 - numeric index equal to the array length misses
+            Test {
+                data: toml! {"foo" = [1, 2, 3]}.into(),
+                ptr: "/foo/3",
+                expected_data: toml! {"foo" = [1, 2, 3]}.into(),
+                expected_deleted: None,
             },
         ]);
     }
