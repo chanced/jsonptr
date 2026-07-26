@@ -206,7 +206,7 @@ impl Pointer {
             .into()
     }
 
-    /// Splits the `Pointer` at the given index if the character at the index is
+    /// Splits the `Pointer` at the given offset if the character at the offset is
     /// a separator slash (`'/'`), returning `Some((head, tail))`. Otherwise,
     /// returns `None`.
     ///
@@ -217,25 +217,41 @@ impl Pointer {
     /// ↑   ↑   ↑
     /// 0   4   8
     /// ```
-    /// All other indices will return `None`.
+    /// All other offsets will return `None`.
     ///
     /// ## Example
     ///
     /// ```rust
     /// # use jsonptr::Pointer;
     /// let ptr = Pointer::from_static("/foo/bar/baz");
-    /// let (head, tail) = ptr.split_at(4).unwrap();
+    /// let (head, tail) = ptr.split_at_offset(4).unwrap();
     /// assert_eq!(head, Pointer::from_static("/foo"));
     /// assert_eq!(tail, Pointer::from_static("/bar/baz"));
-    /// assert_eq!(ptr.split_at(3), None);
+    /// assert_eq!(ptr.split_at_offset(3), None);
     /// ```
-    pub fn split_at(&self, offset: usize) -> Option<(&Self, &Self)> {
+    pub fn split_at_offset(&self, offset: usize) -> Option<(&Self, &Self)> {
         if self.0.as_bytes().get(offset).copied() != Some(b'/') {
             return None;
         }
         let (head, tail) = self.0.split_at(offset);
         // SAFETY: we split at a token boundary, so head and tail are valid pointers
         unsafe { Some((Self::new_unchecked(head), Self::new_unchecked(tail))) }
+    }
+
+    /// Splits the `Pointer` at the given offset if the character at the offset is
+    /// a separator slash (`'/'`), returning `Some((head, tail))`. Otherwise,
+    /// returns `None`.
+    ///
+    /// This method is deprecated in favor of [`Pointer::split_at_offset`]. The
+    /// `split_at` name is being reserved so that it can be reintroduced as a
+    /// position (index) based split by 1.0, matching the rest of the API (e.g.
+    /// [`Pointer::get`]).
+    #[deprecated(
+        since = "0.8.0",
+        note = "renamed to `split_at_offset` - `split_at` will become position (index) based by 1.0"
+    )]
+    pub fn split_at(&self, offset: usize) -> Option<(&Self, &Self)> {
+        self.split_at_offset(offset)
     }
 
     /// Splits the `Pointer` into the parent path and the last `Token`.
@@ -388,7 +404,7 @@ impl Pointer {
             }
             idx += a.encoded().len() + 1;
         }
-        self.split_at(idx).map_or(self, |(head, _)| head)
+        self.split_at_offset(idx).map_or(self, |(head, _)| head)
     }
 
     /// Attempts to delete a `serde_json::Value` based upon the path in this
@@ -1432,6 +1448,34 @@ mod tests {
             unsafe { PointerBuf::new_unchecked(String::from(s)) },
             PointerBuf::parse(s).unwrap()
         );
+    }
+
+    #[test]
+    fn split_at_offset() {
+        let ptr = Pointer::from_static("/foo/bar/baz");
+        // valid separator offsets split into (head, tail)
+        for (offset, head, tail) in [
+            (0, "", "/foo/bar/baz"),
+            (4, "/foo", "/bar/baz"),
+            (8, "/foo/bar", "/baz"),
+        ] {
+            let (h, t) = ptr.split_at_offset(offset).unwrap();
+            assert_eq!(h, Pointer::from_static(head));
+            assert_eq!(t, Pointer::from_static(tail));
+        }
+        // offsets that don't land on a separator return None
+        assert_eq!(ptr.split_at_offset(3), None);
+        // offset past the end returns None rather than panicking
+        assert_eq!(ptr.split_at_offset(ptr.as_str().len()), None);
+        assert_eq!(ptr.split_at_offset(usize::MAX), None);
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn split_at_delegates_to_split_at_offset() {
+        let ptr = Pointer::from_static("/foo/bar/baz");
+        assert_eq!(ptr.split_at(4), ptr.split_at_offset(4));
+        assert_eq!(ptr.split_at(3), None);
     }
 
     #[test]

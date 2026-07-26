@@ -77,7 +77,7 @@ pub trait ResolveMut {
 }
 
 /// Alias for [`Error`].
-#[deprecated(since = "0.7.2", note = "renamed to `Error`")]
+#[deprecated(since = "0.8.0", note = "renamed to `Error`")]
 pub type ResolveError = Error;
 
 /// Indicates that the `Pointer` could not be resolved.
