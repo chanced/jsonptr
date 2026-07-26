@@ -216,6 +216,7 @@ impl Diagnostic for Error {
     }
 
     fn labels(&self, origin: &Self::Subject) -> Option<Box<dyn Iterator<Item = Label>>> {
+        use alloc::format;
         let position = self.position();
         let token = origin.get(position)?;
         let offset = if self.offset() + 1 < origin.as_str().len() {
@@ -264,6 +265,7 @@ mod json {
     use serde_json::{map::Entry, Map, Value};
 
     fn expand(mut remaining: &Pointer, mut value: Value) -> Value {
+        use alloc::vec;
         while let Some((ptr, tok)) = remaining.split_back() {
             remaining = ptr;
             match tok.encoded() {
@@ -430,11 +432,12 @@ mod json {
 mod toml {
     use super::{Assign, Assigned, Error};
     use crate::{Pointer, Token};
-    use alloc::{string::String, vec, vec::Vec};
+    use alloc::{string::String, vec::Vec};
     use core::mem;
     use toml::{map::Entry, map::Map, Value};
 
     fn expand(mut remaining: &Pointer, mut value: Value) -> Value {
+        use alloc::vec;
         while let Some((ptr, tok)) = remaining.split_back() {
             remaining = ptr;
             match tok.encoded() {
@@ -595,6 +598,8 @@ mod toml {
     }
 }
 
+// `Assigned` is only referenced by the `json` and `toml` assignment impls.
+#[cfg(any(feature = "json", feature = "toml"))]
 enum Assigned<'v, V> {
     Done(Option<V>),
     Continue { next_dest: &'v mut V, same_value: V },

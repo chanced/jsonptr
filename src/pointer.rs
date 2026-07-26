@@ -117,7 +117,7 @@ impl Pointer {
     }
 
     /// Returns an iterator of `Token`s in the `Pointer`.
-    pub fn tokens(&self) -> Tokens {
+    pub fn tokens(&self) -> Tokens<'_> {
         let mut s = self.0.split('/');
         // skipping the first '/'
         s.next();
@@ -141,7 +141,7 @@ impl Pointer {
     }
 
     /// Returns the last `Token` in the `Pointer`.
-    pub fn back(&self) -> Option<Token> {
+    pub fn back(&self) -> Option<Token<'_>> {
         self.0
             .rsplit_once('/')
             // SAFETY: pointer is encoded
@@ -151,12 +151,12 @@ impl Pointer {
     /// Returns the last token in the `Pointer`.
     ///
     /// alias for `back`
-    pub fn last(&self) -> Option<Token> {
+    pub fn last(&self) -> Option<Token<'_>> {
         self.back()
     }
 
     /// Returns the first `Token` in the `Pointer`.
-    pub fn front(&self) -> Option<Token> {
+    pub fn front(&self) -> Option<Token<'_>> {
         if self.is_root() {
             return None;
         }
@@ -173,12 +173,12 @@ impl Pointer {
     /// Returns the first `Token` in the `Pointer`.
     ///
     /// alias for `front`
-    pub fn first(&self) -> Option<Token> {
+    pub fn first(&self) -> Option<Token<'_>> {
         self.front()
     }
 
     /// Splits the `Pointer` into the first `Token` and a remainder `Pointer`.
-    pub fn split_front(&self) -> Option<(Token, &Self)> {
+    pub fn split_front(&self) -> Option<(Token<'_>, &Self)> {
         if self.is_root() {
             return None;
         }
@@ -255,7 +255,7 @@ impl Pointer {
     }
 
     /// Splits the `Pointer` into the parent path and the last `Token`.
-    pub fn split_back(&self) -> Option<(&Self, Token)> {
+    pub fn split_back(&self) -> Option<(&Self, Token<'_>)> {
         self.0.rsplit_once('/').map(|(front, back)| {
             (
                 // SAFETY: we split at a token boundary, so front is a valid pointer
@@ -503,7 +503,7 @@ impl Pointer {
     /// assert_eq!(components.next(), Some(Component::Token("b".into())));
     /// assert_eq!(components.next(), None);
     /// ```
-    pub fn components(&self) -> Components {
+    pub fn components(&self) -> Components<'_> {
         self.into()
     }
 
@@ -640,6 +640,7 @@ impl<'de: 'p, 'p> serde::Deserialize<'de> for &'p Pointer {
             where
                 E: Error,
             {
+                use alloc::format;
                 Pointer::parse(v).map_err(|err| {
                     Error::custom(format!("failed to parse json pointer\n\ncaused by:\n{err}"))
                 })
@@ -1022,7 +1023,7 @@ impl PointerBuf {
         &mut self,
         index: usize,
         token: impl Into<Token<'t>>,
-    ) -> Result<Option<Token>, ReplaceError> {
+    ) -> Result<Option<Token<'_>>, ReplaceError> {
         if self.is_root() {
             return Err(ReplaceError {
                 count: self.count(),
@@ -2380,7 +2381,10 @@ mod tests {
 
     #[test]
     fn default_lifetime_is_correct() {
-        // if this compiles, we're good
+        // if this compiles, we're good: `unwrap_or_default` exercises
+        // `<&Pointer as Default>::default()` and must type-check with the
+        // borrowed lifetime (regression test for #111).
+        #[allow(clippy::unnecessary_literal_unwrap)]
         fn or_default(ptr: &Pointer) -> &Pointer {
             Some(ptr).unwrap_or_default()
         }

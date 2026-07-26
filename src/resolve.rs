@@ -36,8 +36,11 @@
 use crate::{
     diagnostic::{diagnostic_url, Diagnostic, Label},
     index::{OutOfBoundsError, ParseIndexError},
-    Pointer, PointerBuf, Token,
+    Pointer, PointerBuf,
 };
+// `Token` is only referenced by the `json`-gated `parse_index`.
+#[cfg(feature = "json")]
+use crate::Token;
 use alloc::{boxed::Box, string::ToString};
 use core::iter::once;
 
@@ -344,6 +347,8 @@ mod json {
         }
     }
 }
+// `parse_index` is only referenced by the `json` resolve impl.
+#[cfg(feature = "json")]
 fn parse_index(
     token: Token,
     array_len: usize,
