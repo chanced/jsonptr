@@ -19,7 +19,7 @@
 //! [`tokens`]: crate::Pointer::tokens
 //! [`components`]: crate::Pointer::components
 //! [`resolve`]: crate::resolve
-//! [`assign`]: crate::asign
+//! [`assign`]: crate::assign
 //! [`delete`]: crate::delete
 //! [`Resolve`]: crate::resolve::Resolve
 //! [`ResolveMut`]: crate::resolve::ResolveMut
@@ -28,8 +28,8 @@
 //! [`serde`]: https://docs.rs/serde/1.0/serde/index
 //! [`serde_json`]: https://docs.rs/serde_json/1.0/serde_json/enum.Value.html
 //! [`serde_json::Value`]: https://docs.rs/serde_json/1.0/serde_json/enum.Value.html
-//! [`toml`]: https://docs.rs/toml/0.8/toml/enum.Value.html
-//! [`toml::Value`]: https://docs.rs/toml/0.8/toml/enum.Value.html
+//! [`toml`]: https://docs.rs/toml/0.9/toml/enum.Value.html
+//! [`toml::Value`]: https://docs.rs/toml/0.9/toml/enum.Value.html
 //! [`Path`]: https://doc.rust-lang.org/std/path/struct.Path.html
 //! [`PathBuf`]: https://doc.rust-lang.org/std/path/struct.PathBuf.html
 
@@ -67,7 +67,7 @@ pub mod diagnostic;
 pub use diagnostic::{Diagnose, Report};
 
 mod pointer;
-pub use pointer::{ParseError, Pointer, PointerBuf, RichParseError};
+pub use pointer::{ParseError, Pointer, PointerBuf, ReplaceError, RichParseError};
 
 mod token;
 pub use token::{EncodingError, InvalidEncoding, Token, Tokens};

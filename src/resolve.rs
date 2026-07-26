@@ -9,7 +9,7 @@
 //! ## Usage
 //! [`Resolve`] and [`ResolveMut`] can be used directly or through the
 //! [`resolve`](Pointer::resolve) and [`resolve_mut`](Pointer::resolve_mut)
-//! methods on [`Pointer`] and [`PointerBuf`](crate::PointerBuf).
+//! methods on [`Pointer`] and [`PointerBuf`].
 //!
 //! ```rust
 //! use jsonptr::{Pointer, Resolve, ResolveMut};
@@ -106,8 +106,8 @@ pub enum Error {
         source: ParseIndexError,
     },
 
-    /// A [`Token`] within the [`Pointer`] contains an [`Index`] which is out of
-    /// bounds.
+    /// A [`Token`] within the [`Pointer`] contains an
+    /// [`Index`](crate::index::Index) which is out of bounds.
     ///
     /// ## Example
     /// ```rust

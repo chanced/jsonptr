@@ -568,10 +568,10 @@ impl Pointer {
         buf
     }
 
-    //  Returns the length of `self` in encoded format.
+    /// Returns the length of `self` in encoded format.
     ///
     /// This length expresses the byte count of the underlying string that
-    /// represents the RFC 6091 Pointer. See also [`std::str::len`].
+    /// represents the RFC 6901 Pointer. See also [`str::len`].
     ///
     /// ## Examples
     /// ```

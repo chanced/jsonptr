@@ -17,7 +17,7 @@ pub trait Diagnostic: Sized {
     /// The docs.rs URL for this error
     fn url() -> &'static str;
 
-    /// Returns the label for the given [`Subject`] if applicable.
+    /// Returns the label for the given [`Subject`](Diagnostic::Subject) if applicable.
     fn labels(&self, subject: &Self::Subject) -> Option<Box<dyn Iterator<Item = Label>>>;
 }
 
@@ -51,8 +51,8 @@ impl From<Label> for miette::LabeledSpan {
 ///
 /// This type serves two roles:
 ///
-/// 1. **[`PointerBuf::parse`]**: Captures the [`ParseError`] along with the
-///    input `String`.
+/// 1. **[`PointerBuf::parse`](crate::PointerBuf::parse)**: Captures the
+///    [`ParseError`](crate::ParseError) along with the input `String`.
 ///
 /// 2. **Reporting:** Provides enriched reporting capabilities, including
 ///    (optional) `miette` integration, for `ParseError` and associated  errors
