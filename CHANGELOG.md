@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+-   `Delete::delete` no longer panics when a pointer's final token resolves to
+    an array index equal to the array's length (e.g. `-` on any array, or a
+    numeric index equal to the length). It now returns `None` and leaves the
+    document unmodified, as documented. Fixes
+    [#120](https://github.com/chanced/jsonptr/issues/120).
 -   `EncodingError` and `ParseIndexError` now implement `Diagnostic`, which
     unifies the API for errors originating from parse-like operations.
 -   Fixes returning an incorrect error type when parsing a `Token` that
