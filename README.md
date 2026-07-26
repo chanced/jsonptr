@@ -234,7 +234,7 @@ dual licensed as above, without any additional terms or conditions.
 [`serde`]: https://docs.rs/serde/1.0/serde/index
 [`serde_json`]: https://docs.rs/serde_json/1.0/serde_json/enum.Value.html
 [`serde_json::Value`]: https://docs.rs/serde_json/1.0/serde_json/enum.Value.html
-[`toml`]: https://docs.rs/toml/0.8/toml/enum.Value.html
-[`toml::Value`]: https://docs.rs/toml/0.8/toml/enum.Value.html
+[`toml`]: https://docs.rs/toml/0.9/toml/enum.Value.html
+[`toml::Value`]: https://docs.rs/toml/0.9/toml/enum.Value.html
 [`Path`]: https://doc.rust-lang.org/std/path/struct.Path.html
 [`PathBuf`]: https://doc.rust-lang.org/std/path/struct.PathBuf.html
