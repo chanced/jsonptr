@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+-   Fixed `Token::from_encoded` accepting a `~` immediately followed by
+    another `~` (e.g. `"~~0"`) as valid, letting safe code build a
+    `PointerBuf` that `Pointer::parse` then rejected on the same bytes. A `~`
+    must now always be followed by `0` or `1`. Resolves
+    [#128](https://github.com/chanced/jsonptr/issues/128).
+
 ## [0.8.1] 2026-07-26
 
 ### Added
