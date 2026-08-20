@@ -85,7 +85,7 @@ impl<'a> Token<'a> {
                         source: InvalidEncoding::Slash,
                     })
                 }
-                ENC_PREFIX => {
+                ENC_PREFIX if !escaped => {
                     escaped = true;
                 }
                 TILDE_ENC | SLASH_ENC if escaped => {
@@ -575,6 +575,16 @@ mod tests {
                 source: InvalidEncoding::Tilde
             }
         );
+        // https://github.com/chanced/jsonptr/issues/128
+        let err = Token::from_encoded("~~0").unwrap_err();
+        assert_eq!(
+            err,
+            EncodingError {
+                offset: 1,
+                source: InvalidEncoding::Tilde
+            }
+        );
+
         let sub = String::from("a~");
         let err = Token::from_encoded(&sub).unwrap_err();
         let labels: Vec<_> = err.labels(&sub).unwrap().collect();
