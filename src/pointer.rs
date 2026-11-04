@@ -287,8 +287,8 @@ impl Pointer {
     pub fn strip_prefix<'a>(&'a self, prefix: &Self) -> Option<&'a Self> {
         self.0
             .strip_prefix(&prefix.0)
-            // SAFETY: the suffix is a valid pointer, so removing it from the
-            // front of another pointer will preserve token boundaries
+            .filter(|s| s.is_empty() || s.starts_with('/'))
+            // SAFETY: the remainder is empty or starts at a token boundary
             .map(|s| unsafe { Self::new_unchecked(s) })
     }
 
@@ -1495,6 +1495,12 @@ mod tests {
             .strip_prefix(Pointer::from_static("/example/pointer"))
             .unwrap();
         assert_eq!(stripped, "/to/some/value");
+    }
+
+    #[test]
+    fn strip_prefix_mid_token() {
+        let p = Pointer::from_static("/fooaé/x");
+        assert_eq!(p.strip_prefix(Pointer::from_static("/foo")), None);
     }
 
     #[test]
